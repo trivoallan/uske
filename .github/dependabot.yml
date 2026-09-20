@@ -1,0 +1,12 @@
+# The demonstration candidate producer/app:2.0 pins golang.org/x/text on a vulnerable version on
+# purpose: it is what Dependency-Track finds on an admitted image.
+# Dependabot must not "fix" it, neither by version updates nor by security updates.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /deploy/kind/candidate-go
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
