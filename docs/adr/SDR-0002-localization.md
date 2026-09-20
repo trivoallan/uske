@@ -71,9 +71,8 @@ coup d'œil.
 quoi réagir, plutôt qu'une page blanche : elle se garde, s'amende ou s'écarte.
 
 **Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée, avec une
-surcharge de plus : `comments: anglais`. Motif de l'écart : les commentaires et les docstrings
-de `uske/` sont déjà en anglais, au plus près de symboles anglais ; les traduire n'apprendrait
-rien à personne. `documentation` et `commits` sont retirées du frontmatter : elles suivent
+surcharge de plus : `comments: anglais`. Ce que l'écart constate : les commentaires et les
+docstrings de `uske/` sont déjà en anglais, au plus près de symboles anglais. `documentation` et `commits` sont retirées du frontmatter : elles suivent
 `default`, donc le français.
 
 - `localization.language.default` : répondue — 2026-09-20
@@ -81,14 +80,15 @@ rien à personne. `documentation` et `commits` sont retirées du frontmatter : e
 - `localization.language.comments` : constatée — `uske/*.py` ; confirmée le 2026-09-20
 
 **Ce qui précède cette décision et s'en écarte** : `README.md`, bilingue et anglais d'abord, et
-le premier message de commit, en anglais. Aucun des deux n'est repris ici.
+deux messages en anglais — le premier commit de `main`, et celui de la branche
+`ci/dependabot-candidate-go`. Le change qui statue cet ADR ne les réécrit pas.
 
 ### Consequences
 
 Un agent sait dans quelle langue écrire chaque support, et la prose du dépôt — ADR, découverte,
 document d'architecture, messages de commit — reste dans la langue de qui décide. Le coût : un
 lecteur non francophone lit le code, pas les décisions ; et `README.md` s'écarte de la règle tant
-qu'un change ne l'a pas repris ou qu'un nouvel ADR n'a pas surchargé `documentation`.
+qu'un change ne l'a pas réécrit ou qu'un nouvel ADR n'a pas surchargé `documentation`.
 
 ## More Information
 

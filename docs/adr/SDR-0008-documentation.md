@@ -91,15 +91,15 @@ service interne avec des guides et peu d'explications ; **ça se lit dans son
 arborescence, ça ne se déclare pas d'avance**.
 
 **Décision de ce dépôt — 2026-09-20.** Deux écarts à la proposition, et leurs motifs.
-`docs.tool: aucun` plutôt que `docusaurus` : le dépôt n'a pas de site, ses pages se lisent sur
-la forge, et il n'a pas de lecteur extérieur. `docs.audience: mono-utilisateur` plutôt
-qu'`équipe` : le dépôt est privé et n'a aujourd'hui qu'un lecteur ; c'est plus étroit que la
-proposition, donc du côté sûr. `docs.root` suit la proposition.
+`docs.tool: aucun` plutôt que `docusaurus` : le dépôt n'a pas de site, et ses pages se lisent
+sur la forge. `docs.audience: mono-utilisateur` plutôt
+qu'`équipe` : le dépôt est privé, et `git log` ne montre qu'un auteur ; c'est plus étroit que la
+proposition. `docs.root` suit la proposition.
 
 - `docs.tool` : constatée — ni `mkdocs.yml` ni `docusaurus.config.*` ; confirmée le 2026-09-20
 - `docs.root` : constatée — `docs/adr/` ; confirmée le 2026-09-20
 - `docs.audience` : répondue — 2026-09-20. `public` a été proposé, au vu de la licence et du but
-  open source, et écarté pour l'instant.
+  open source, et écarté.
 
 ### Consequences
 

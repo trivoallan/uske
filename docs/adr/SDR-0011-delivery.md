@@ -121,7 +121,7 @@ journal des changements ; `release-please` n'est pas installé.
 
 ### Consequences
 
-Fusionner ne met rien devant personne, et un agent le sait. Les versions se déduiront des
+Fusionner ne déploie rien, et un agent le sait. Les versions se déduiront des
 messages de commit : c'est ce qui rend `commitlint` pertinent
 ([`SDR-0006`](SDR-0006-commits.md)). Le coût : l'outil reste à installer ; et la première story
 de `openspec/discovery.md`, qui déploie un screening, nommera une cible — un nouvel ADR dépassera

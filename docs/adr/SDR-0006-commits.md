@@ -84,20 +84,22 @@ inventée à l'adoption vieillit plus mal qu'une liste absente.
 
 **Décision de ce dépôt — 2026-09-20.** `commits.tool` : la proposition de la méthode est
 adoptée, et son présupposé tient — [`SDR-0011`](SDR-0011-delivery.md) retient un outil qui
-engendre les versions depuis les messages. `commits.scopes` : `[]`, le dépôt n'a qu'une zone.
+engendre les versions depuis les messages. `commits.scopes` : `[]` — aucune portée n'est en usage.
 
 - `commits.scopes` : constatée — `git log`, aucune portée dans l'historique ; confirmée le
   2026-09-20
 - `commits.tool` : répondue — 2026-09-20. La première réponse était `aucun` ; elle a été
   révisée le même jour, à la confirmation d'ensemble, une fois `SDR-0011` répondu.
 
-**Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : aucun outil ne tient le format ; la
-relecture seule.
+**Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : aucun outil ne tient le format ;
+seule la relecture le garde.
 
 ### Consequences
 
-Un message hors format ne produira pas une version fausse sans que rien le signale. Le coût :
-`commitlint` reste à installer et à brancher sur la chaîne, et, celle-ci étant `informative`
+Un message hors format sera signalé avant de produire une version fausse. Le coût :
+`commitlint` reste à installer et à brancher sur la chaîne — sur le titre de la demande de
+fusion, puisque sous `squash` ([`SDR-0009`](SDR-0009-branching.md)) c'est lui que lira l'outil
+de release — et, celle-ci étant `informative`
 ([`SDR-0010`](SDR-0010-forge-and-ci.md)), il rapportera sans refuser. `[]` épargne une liste de
 portées inventée ; le jour où le dépôt a deux zones, un nouvel ADR les nomme.
 

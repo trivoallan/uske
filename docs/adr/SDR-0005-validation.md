@@ -135,8 +135,8 @@ pour le langage que déclare [`SDR-0004`](SDR-0004-languages.md).
 
 **Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : sa seule dépendance est `pyyaml` ; les
 politiques, les plans et les arguments sont vérifiés à la main, et aucun fichier de données ne
-porte de schéma. « Valider à la main » a été proposé comme valeur et écarté par la personne qui
-statue.
+porte de schéma. L'option « à la main ; aucun » — ce que le dépôt fait — a été présentée et
+écartée par la personne qui statue.
 
 ### Consequences
 

@@ -80,24 +80,23 @@ vous en ajoutez, **prenez-les dans les onze** : inventer un douzième préfixe i
 créerait une norme concurrente de celle des commits.
 
 **Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée telle
-quelle, avec ses motifs.
+quelle.
 
 - `branching.model` : répondue — 2026-09-20
 - `branching.merge` : répondue — 2026-09-20
 - `branching.prefixes` : répondue — 2026-09-20
 
-**Ce que le dépôt faisait jusqu'ici** : quatre commits poussés droit sur `main`, aucune
-fusion. Le change qui statue cet ADR est le premier à partir sur une branche,
-`docs/onboarding`.
+**Ce que le dépôt faisait jusqu'ici** : quatre commits faits droit sur `main`, dont deux
+poussés ; aucune fusion. Une branche de travail précède cette décision —
+`ci/dependabot-candidate-go`, demande de fusion n° 2, ouverte — et son préfixe, `ci`, est hors
+de la liste retenue. Le change qui statue cet ADR part sur `docs/onboarding`.
 
 ### Consequences
 
 L'historique de `main` se lira comme la liste des changes livrés, et un agent sait nommer sa
 branche sans deviner. Le coût : une demande de fusion même pour un auteur seul, et un message
 de fusion à soigner — c'est lui que lira l'outil de release retenu par
-[`SDR-0011`](SDR-0011-delivery.md). La chaîne étant `informative`
-([`SDR-0010`](SDR-0010-forge-and-ci.md)), rien n'empêche de fusionner au rouge : la relecture
-regarde la chaîne avant de fusionner.
+[`SDR-0011`](SDR-0011-delivery.md).
 
 ## More Information
 

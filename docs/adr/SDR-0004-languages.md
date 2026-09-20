@@ -70,7 +70,7 @@ justification d'écart n'est due.
 - `languages.main.name` : constatée — `pyproject.toml` (`requires-python = ">=3.12"`) ;
   confirmée le 2026-09-20
 
-**Un second langage figure au dépôt sans en être un** : `deploy/kind/candidate-go/` est une
+**Du Go figure au dépôt sans être un langage de `uske`** : `deploy/kind/candidate-go/` est une
 image candidate de démonstration pour le banc local, pas du code de `uske`.
 
 ### Consequences

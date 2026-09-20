@@ -275,7 +275,7 @@ et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un
 | [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
 | [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | **non mesuré** — aucun instrument |
 | [SDR-0008](../adr/SDR-0008-documentation.md) | Outil, racine et audience de la documentation | accepted | 2026-09-20 | Minceur | oui |
-| [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | oui, depuis le change qui l'a statué |
+| [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | en partie — une branche `ci/…` antérieure porte un préfixe hors liste |
 | [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted | 2026-09-20 | Opérabilité | oui |
 | [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
 

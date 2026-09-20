@@ -10,9 +10,9 @@ Preuves relevées le 2026-09-20. Un ADR n'est **constaté** que si toutes ses cl
 | ADR | Clé | Valeurs admises | Preuve dans le dépôt | Valeur proposée | Tas |
 | --- | --- | --- | --- | --- | --- |
 | SDR-0004 | `languages.main.name` | chaîne | `pyproject.toml` : `requires-python = ">=3.12"`, paquet `uske` | `Python` | **constaté** |
-| SDR-0009 | `branching.model` | `github-flow`, `trunk-based`, `gitflow` | `git branch -a` : `main` seule, plus une branche `dependabot/…` ; quatre commits poussés droit sur `main` | `github-flow` (méthode) | à choisir |
+| SDR-0009 | `branching.model` | `github-flow`, `trunk-based`, `gitflow` | `git ls-remote origin` : `main`, une branche `dependabot/…` et une branche de travail `ci/dependabot-candidate-go` (demande de fusion n° 2, ouverte) ; quatre commits faits droit sur `main`, dont deux poussés — *corrigé à la relecture : le premier relevé, fait sans interroger le distant, disait « `main` seule » et « quatre commits poussés »* | `github-flow` (méthode) | à choisir |
 | SDR-0009 | `branching.merge` | `squash`, `merge-commit`, `rebase` | aucune fusion dans l'historique | `squash` (méthode) | à choisir |
-| SDR-0009 | `branching.prefixes` | liste prise parmi les onze types | aucune branche de travail à ce jour | `[feat, fix, docs]` (méthode) | à choisir |
+| SDR-0009 | `branching.prefixes` | liste prise parmi les onze types | une branche de travail, préfixe `ci` — *vue à la relecture seulement* | `[feat, fix, docs]` (méthode) | à choisir |
 | SDR-0002 | `localization.language.default` | `français`, `anglais` | artefacts `openspec/` et ADR en français ; `README.md` bilingue, anglais d'abord | `français` (méthode) | à choisir |
 | SDR-0002 | `…language.code` | idem | `uske/*.py` : symboles en anglais | `anglais` — constatée | à choisir |
 | SDR-0002 | `…language.comments` | idem | `uske/*.py` : commentaires et docstrings en anglais | `anglais` — constatée | à choisir |
@@ -91,8 +91,43 @@ confirmant le récapitulatif, le 2026-09-20.
 **Confirmation reçue le 2026-09-20** : « Oui, avec `commits.tool = commitlint` ». L'écriture
 dans `docs/adr/` commence après cette ligne.
 
-**Cache `npx`** : la personne le purge elle-même ; en attendant, la vérification passe par le
-binaire du cache lancé avec `node`.
+**`npx`** : la vérification est d'abord passée par le binaire lancé avec `node`. Le diagnostic
+d'un cache périmé était faux : la purge n'a rien changé. Cause établie ensuite — le `npm` 10.9.8
+de `~/.local/bin` ne crée pas le lien binaire de ce paquet, le `npm` 11.19.0 de Homebrew le
+crée. Cache reconstruit par ce dernier ; la commande prescrite passe depuis.
+
+## Options présentées
+
+Ce que la personne a eu sous les yeux pour chaque ADR, en plus de `rejected` et de *sans
+réponse*, toujours offerts. C'est ce qui fonde, dans les ADR, les mentions « proposé et écarté ».
+
+| ADR | Option retenue | Autre option présentée |
+| --- | --- | --- |
+| SDR-0004 | `Python` | — |
+| SDR-0009 | `github-flow`, `squash`, `[feat, fix, docs]` | `trunk-based`, `rebase`, `[]` — ce que le dépôt faisait |
+| SDR-0002 | `default: français` ; `code`, `comments` : `anglais` | tout en anglais |
+| SDR-0003 | `hexagonal` ; `arc42` | `monolithic` ; `arc42` |
+| SDR-0005 | `pydantic` ; `json-schema` | « à la main » ; `aucun` — ce que le dépôt fait |
+| SDR-0006 | `[]` ; `aucun`, puis `commitlint` à la confirmation | `[]` ; `commitlint` |
+| SDR-0007 | `90` | `aucun` |
+| SDR-0008 | `aucun` ; `docs/` ; `mono-utilisateur` | `aucun` ; `docs/` ; `public` |
+| SDR-0010 | `github` ; `github-actions` ; `informative` | `github` ; `github-actions` ; `bloquante` |
+| SDR-0011 | `[]` ; `release-please` | `[]` ; `aucun` |
+
+## Relecture indépendante
+
+Le commit des verdicts a été relu par un agent sans le contexte de la session, le 2026-09-20,
+avant toute fusion. Verdict : *à corriger*. Trois constats importants — une affirmation fausse
+dans `SDR-0009` (commits poussés, branche antérieure), deux mentions « proposé et écarté » que
+ce fichier ne fondait pas — et des constats mineurs : des motifs prêtés à la personne, qui n'a
+choisi que des valeurs ; un gain surestimé dans `SDR-0003` ; de la prose. Tous corrigés dans un
+commit à part, sur la branche ; aucune valeur de `traits:` n'a changé.
+
+**Reste à la personne** : dire si `ci` entre dans `branching.prefixes`. La branche
+`ci/dependabot-candidate-go` précède la décision ; la liste retenue ne la couvre pas.
+
+**Deux provenances citent une commande plutôt qu'un fichier** — `git log` (`SDR-0006`),
+`git remote get-url origin` (`SDR-0010`) : aucun fichier suivi ne fixe ces valeurs.
 
 ## Tableau final
 

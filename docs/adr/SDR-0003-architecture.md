@@ -73,9 +73,8 @@ taille moyenne. Sous 500 lignes, ou pour un dépôt qui n'est pas un service,
 `monolithic` est souvent la réponse honnête — et si la question n'a pas d'objet
 ici, statuez `rejected`.
 
-**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée, avec son
-motif : un domaine qui ne dépend d'aucune entrée-sortie, qu'un agent écrit et teste sans
-environnement qui tourne. `monolithic`, que ce fichier dit souvent honnête pour un petit dépôt,
+**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée telle quelle.
+`monolithic`, que ce fichier dit souvent honnête pour un petit dépôt,
 a été proposé et écarté par la personne qui statue.
 
 - `architecture.pattern` : répondue — 2026-09-20
@@ -83,17 +82,18 @@ a été proposé et écarté par la personne qui statue.
   même change
 
 **Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : `uske/` compte dix modules à plat,
-environ mille lignes ; les règles — classer un verdict, décider ce qui est dû, retirer du plan ce
-qui est refusé — y côtoient la lecture des fichiers et les appels aux outils voisins. Le code
-n'est pas hexagonal. Cet ADR dit où il va, pas où il est.
+environ mille lignes. Deux d'entre eux, `gate.py` et `outcomes.py`, ne font aucune
+entrée-sortie et se testent déjà seuls ; mais rien dans l'arborescence ne dit ce qui a le droit
+de dépendre de quoi, et `cli.py` mêle la lecture des arguments, les fichiers et les règles. Le
+code n'est pas organisé en ports et adaptateurs. Cet ADR dit où il va, pas où il est.
 
 ### Consequences
 
-Les règles d'un screening deviennent testables sans registre ni outil voisin, ce qui sert la
-sûreté et l'opérabilité de `openspec/discovery.md`. Le coût : le code existant reste à
+Les règles d'un screening restent testables sans registre ni outil voisin, et cela devient une
+règle de structure plutôt qu'un état de fait : c'est ce que demandent les objectifs de sûreté et
+d'opérabilité que déclare `openspec/discovery.md`. Le coût : le code existant reste à
 rapprocher, change après change, et d'ici là un agent lit une arborescence qui contredit cet
-ADR — il suit l'ADR pour le code nouveau. Le document d'architecture bouge dans la même demande
-de fusion que ce qui le déplace.
+ADR — il suit l'ADR pour le code nouveau.
 
 ## More Information
 
