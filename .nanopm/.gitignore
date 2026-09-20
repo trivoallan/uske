@@ -1,0 +1,8 @@
+raw/
+search.db
+wiki/index.md
+wiki/log.md
+wiki/.lock
+wiki/.last-lint
+wiki/entities/*/INDEX.md
+wiki/entities/*/LOG.md

@@ -1,0 +1,15 @@
+{
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "ponytail@ponytail": true,
+    "nanopm@nanopm": true
+  },
+  "extraKnownMarketplaces": {
+    "ponytail": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/DietrichGebert/ponytail.git"
+      }
+    }
+  }
+}
