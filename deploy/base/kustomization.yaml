@@ -1,0 +1,11 @@
+# Images are logical names here (git, orchestrator, regis, knock); an overlay pins each one
+# by digest in the internal registry.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - storage-and-access.yaml
+  - workflowtemplate.yaml
+  - cronworkflow.yaml
+  - dt-sync.yaml
+configurations:
+  - kustomizeconfig.yaml

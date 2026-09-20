@@ -1,0 +1,26 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# A reproducible build: its creation date is pinned to 1970 (Q-09).
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: hub-distroless
+  labels:
+    admission-track: standard
+    major: "12"
+    cao: cao-plateforme
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/distroless-static
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-plateforme
+      tags:
+        includeRegex: "^nonroot$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: hub
+          repository: distroless-static

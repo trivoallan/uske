@@ -1,0 +1,26 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# Official redis 7, like policies/hub/redis-7.yaml without its transformations.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: hub-redis-7
+  labels:
+    admission-track: standard
+    major: "7"
+    cao: cao-data
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/redis
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-data
+      tags:
+        includeRegex: "^7\\.4-alpine$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: hub
+          repository: redis

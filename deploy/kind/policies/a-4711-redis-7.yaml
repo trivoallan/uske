@@ -1,0 +1,28 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# The same image under derogation, like policies/projets/a-4711/redis-7.yaml: same technical verdict, another governance.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: a-4711-redis-7
+  labels:
+    admission-track: derogation
+    major: "7"
+    cao: cao-data
+    project: a-4711
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/redis
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-data
+        - group:default/a-4711
+      tags:
+        includeRegex: "^7\\.4-alpine$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: a-4711
+          repository: redis

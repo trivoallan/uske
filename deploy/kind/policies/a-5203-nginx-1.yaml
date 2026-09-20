@@ -1,0 +1,28 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# Project a-5203, under the web CAO.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: a-5203-nginx-1
+  labels:
+    admission-track: derogation
+    major: "1"
+    cao: cao-web
+    project: a-5203
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/nginx
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-web
+        - group:default/a-5203
+      tags:
+        includeRegex: "^1\\.27-alpine$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: a-5203
+          repository: nginx

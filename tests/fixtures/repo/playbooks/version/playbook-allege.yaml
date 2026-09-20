@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://trivoallan.github.io/regis/schemas/playbook/v1alpha1/playbook.schema.json
+#
+# Tier allégé — régimes DÉROGATOIRE et REDISTRIBUTION (D-05, D-19).
+# D-05 le définit mot pour mot : « rédhibitoires réduits à secrets et licence,
+# `cve-critical` et `no-root` informatifs ».
+#
+# Ce fichier est le second jeu de règles de version. Le job d'orchestration
+# choisit lequel appliquer en lisant `admission-track` dans la politique ;
+# ni `regis` ni `knock` n'ont à connaître le régime (spécification §8.9).
+#
+# Pas de tier « transformation requise » : les deux régimes qui emploient ce
+# fichier sont en voie copie seulement (D-19 pour la redistribution ; la
+# politique dérogatoire d'exemple ne déclare aucun `transform`).
+apiVersion: regis.io/v1alpha1
+kind: Playbook
+metadata:
+  name: evaluation-version-allege
+  title: Évaluation d'une version — tier allégé
+  labels:
+    app.kubernetes.io/version: "1.0.0"
+
+spec:
+  # Deux issues. Premier tier vrai l'emporte.
+  # Rien n'est réparable ici : sans transformation déclarée, la classe
+  # « réparable » est vide (spécification §8.8.1a).
+  tiers:
+    - name: Placement direct
+      condition:
+        and:
+          - { var: rules.no-secret.passed }
+          - { var: rules.no-licence-toxique.passed }
+
+    - name: Quarantaine
+      condition:
+        or:
+          - { "!": [{ var: rules.no-secret.passed }] }
+          - { "!": [{ var: rules.no-licence-toxique.passed }] }
+
+  rules:
+    # ===== RÉDHIBITOIRE : les deux seuls, et ils portent toute la décision =====
+    - provider: secrets
+      criterion: verified-secrets
+      slug: no-secret
+      level: critical
+      tags: [version, allege, redhibitoire]
+
+    - provider: sbom
+      criterion: license-blocklist
+      slug: no-licence-toxique
+      level: critical
+      tags: [version, allege, redhibitoire]
+      options:
+        # Identifiants SPDX courants. `GPL-2.0` et `GPL-3.0` sont dépréciés
+        # depuis SPDX 3.0 : écrits ainsi, on ne sait pas si la règle ne
+        # correspond à rien ou si elle correspond à tout.
+        #
+        # PÉRIMÈTRE À ARBITRER — spécification DEBT-13. Cette liste met en
+        # quarantaine toute image dont Syft remonte une licence GPL : c'est le
+        # cas des paquets apk d'Alpine (busybox en GPL-2.0-only). Sur l'image
+        # Ubuntu de Hasura (regis/2026-09-07/), Syft ne remonte aucune licence
+        # deb et la règle ne voit rien. La question n'est pas technique : elle
+        # est de savoir ce qu'une redistribution *interne* engage réellement.
+        blocklist:
+          - GPL-2.0-only
+          - GPL-2.0-or-later
+          - GPL-3.0-only
+          - GPL-3.0-or-later
+          - AGPL-3.0-only
+          - AGPL-3.0-or-later
+          - SSPL-1.0
+
+    # ===== INFORMATIF : affichés, jamais bloquants (D-05) =====
+    # C'est là toute la différence avec le playbook complet, où le couple
+    # cve-critical / cve-fixable décide de la quarantaine.
+    - provider: cve
+      criterion: cve-count
+      slug: cve-critical
+      level: warning
+      tags: [version, allege, informatif]
+      options: { level: critical, max_count: 0 }
+
+    - provider: cve
+      criterion: fix-available
+      slug: cve-fixable
+      level: warning
+      tags: [version, allege, informatif]
+
+    - provider: oci
+      criterion: user-blacklist
+      slug: no-root
+      level: warning
+      tags: [version, allege, informatif]
+
+    - provider: freshness
+      criterion: age
+      slug: freshness
+      level: warning
+      tags: [version, allege, informatif]
+      options: { max_days: 90 }
+
+    - provider: cve
+      criterion: cve-count
+      slug: cve-high
+      level: warning
+      tags: [version, allege, informatif]
+      options: { level: high, max_count: 10 }
+
+    - provider: secrets
+      criterion: secret-scan
+      slug: secrets-non-verifies
+      level: warning
+      tags: [version, allege, informatif]
+
+    - provider: dockle
+      criterion: severity-count
+      slug: bonnes-pratiques
+      level: warning
+      tags: [version, allege, informatif]

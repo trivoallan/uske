@@ -1,0 +1,26 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# A platform brick under the official regime.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: hub-coredns-1
+  labels:
+    admission-track: standard
+    major: "1"
+    cao: cao-plateforme
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/coredns
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-plateforme
+      tags:
+        includeRegex: "^v1\\.12\\.0$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: hub
+          repository: coredns

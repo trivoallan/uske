@@ -1,0 +1,12 @@
+# Every 5 minutes, one screening at a time. The cadence leaves room under the 15-minute median of
+# O1 KR3; revisit with knock's polling cadence (Q-06).
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: orchestrator
+spec:
+  schedules: ["*/5 * * * *"]
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    workflowTemplateRef:
+      name: orchestrator-screening

@@ -1,0 +1,8 @@
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: fixture-unknown
+  labels:
+    admission-track: experimental
+spec:
+  imports: []

@@ -1,0 +1,22 @@
+# A redistribution policy for the kind environment: producer/app is shared into shared-test/app.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: kind-redistribution
+  labels:
+    admission-track: redistribution
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: producer/app
+  imports:
+    - name: shared
+      owners:
+        - group:default/ttc
+      tags:
+        includeRegex: ".*"
+      destinations:
+        - registry: local
+          project: shared-test
+          repository: app

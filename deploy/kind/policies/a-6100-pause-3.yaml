@@ -1,0 +1,28 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# A third project.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: a-6100-pause-3
+  labels:
+    admission-track: derogation
+    major: "3"
+    cao: cao-plateforme
+    project: a-6100
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/pause
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-plateforme
+        - group:default/a-6100
+      tags:
+        includeRegex: "^3\\.10$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: a-6100
+          repository: pause

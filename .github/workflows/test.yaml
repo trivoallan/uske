@@ -1,0 +1,27 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # ponytail: a venv rather than a setup-python action, one dependency
+      - run: |
+          python3 -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet pyyaml==6.0.2
+          /tmp/venv/bin/python -m unittest discover tests -t .
+      # The workflow as an overlay renders it (the base leaves `repository` to overlays).
+      - run: |
+          curl -sfL -o /tmp/argo.gz https://github.com/argoproj/argo-workflows/releases/download/v4.1.4/argo-linux-amd64.gz
+          echo "2c8ef41d53593f2ee64d85fb69b631c89a0fc2c57e6ce011422caa525a97ec58  /tmp/argo.gz" | sha256sum -c -
+          gunzip /tmp/argo.gz && chmod +x /tmp/argo
+          kubectl kustomize deploy/kind > /tmp/uske.yaml
+          /tmp/argo lint --offline /tmp/uske.yaml

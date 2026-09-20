@@ -1,0 +1,13 @@
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: fixture-standard
+  labels:
+    admission-track: standard
+spec:
+  artifactType: image
+  source: {registry: docker.io, repository: library/example}
+  imports:
+    - name: v1
+      tags: {includeRegex: "^1\\."}
+      destinations: [{registry: harbor, project: hub, repository: example}]
