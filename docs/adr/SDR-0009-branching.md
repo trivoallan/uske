@@ -10,7 +10,7 @@ traits:
   branching:
     model: github-flow
     merge: squash
-    prefixes: [feat, fix, docs]
+    prefixes: [feat, fix, docs, ci]
 ---
 
 # Branching
@@ -79,17 +79,19 @@ n'ayez rien à aller chercher :
 vous en ajoutez, **prenez-les dans les onze** : inventer un douzième préfixe ici
 créerait une norme concurrente de celle des commits.
 
-**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée telle
-quelle.
+**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée pour
+`branching.model` et `branching.merge`. `branching.prefixes` s'en écarte d'un préfixe : `ci`,
+pris parmi les onze types de commit. Ce que l'écart constate : une branche `ci/…` existe déjà.
 
 - `branching.model` : répondue — 2026-09-20
 - `branching.merge` : répondue — 2026-09-20
-- `branching.prefixes` : répondue — 2026-09-20
+- `branching.prefixes` : répondue — 2026-09-20. La première réponse était `[feat, fix, docs]` ;
+  `ci` a été ajouté le même jour, avant la fusion, une fois la branche existante constatée.
 
 **Ce que le dépôt faisait jusqu'ici** : quatre commits faits droit sur `main`, dont deux
 poussés ; aucune fusion. Une branche de travail précède cette décision —
-`ci/dependabot-candidate-go`, demande de fusion n° 2, ouverte — et son préfixe, `ci`, est hors
-de la liste retenue. Le change qui statue cet ADR part sur `docs/onboarding`.
+`ci/dependabot-candidate-go`, demande de fusion n° 2, ouverte ; la liste retenue couvre son
+préfixe. Le change qui statue cet ADR part sur `docs/onboarding`.
 
 ### Consequences
 

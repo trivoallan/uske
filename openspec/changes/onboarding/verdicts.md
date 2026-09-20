@@ -50,7 +50,7 @@ verdicts `accepted`, aucun `rejected`, aucun *sans réponse*.
 | --- | --- | --- | --- | --- |
 | SDR-0009 | accepted | `branching.model` | `github-flow` | répondue — 2026-09-20 |
 | SDR-0009 | accepted | `branching.merge` | `squash` | répondue — 2026-09-20 |
-| SDR-0009 | accepted | `branching.prefixes` | `[feat, fix, docs]` | répondue — 2026-09-20 |
+| SDR-0009 | accepted | `branching.prefixes` | `[feat, fix, docs, ci]` | répondue — 2026-09-20 ; `ci` ajouté le même jour, après la relecture |
 | SDR-0002 | accepted | `localization.language.default` | `français` | répondue — 2026-09-20 |
 | SDR-0002 | accepted | `localization.language.code` | `anglais` | constatée — `uske/*.py` ; confirmée le 2026-09-20 |
 | SDR-0002 | accepted | `localization.language.comments` | `anglais` | constatée — `uske/*.py` ; confirmée le 2026-09-20 |
@@ -123,8 +123,9 @@ ce fichier ne fondait pas — et des constats mineurs : des motifs prêtés à l
 choisi que des valeurs ; un gain surestimé dans `SDR-0003` ; de la prose. Tous corrigés dans un
 commit à part, sur la branche ; aucune valeur de `traits:` n'a changé.
 
-**Reste à la personne** : dire si `ci` entre dans `branching.prefixes`. La branche
-`ci/dependabot-candidate-go` précède la décision ; la liste retenue ne la couvre pas.
+**Question posée à la personne, et sa réponse** : `ci` entre-t-il dans `branching.prefixes`,
+la branche `ci/dependabot-candidate-go` précédant la décision ? Réponse reçue le 2026-09-20 :
+oui. `SDR-0009` porte `[feat, fix, docs, ci]`, corrigé avant la fusion.
 
 **Deux provenances citent une commande plutôt qu'un fichier** — `git log` (`SDR-0006`),
 `git remote get-url origin` (`SDR-0010`) : aucun fichier suivi ne fixe ces valeurs.
@@ -144,6 +145,6 @@ Vérification de `docs/adr/` après écriture, le 2026-09-20 : `✓ No violation
 | [SDR-0006](../../../docs/adr/SDR-0006-commits.md) | commits | `scopes: []` ; `tool: commitlint` | accepted |
 | [SDR-0007](../../../docs/adr/SDR-0007-tests.md) | tests | `coverage_target: 90` | accepted |
 | [SDR-0008](../../../docs/adr/SDR-0008-documentation.md) | documentation | `tool: aucun` ; `root: docs/` ; `audience: mono-utilisateur` | accepted |
-| [SDR-0009](../../../docs/adr/SDR-0009-branching.md) | branches | `github-flow` ; `squash` ; `[feat, fix, docs]` | accepted |
+| [SDR-0009](../../../docs/adr/SDR-0009-branching.md) | branches | `github-flow` ; `squash` ; `[feat, fix, docs, ci]` | accepted |
 | [SDR-0010](../../../docs/adr/SDR-0010-forge-and-ci.md) | forge et CI | `host: github` ; `tool: github-actions` ; `gate: informative` | accepted |
 | [SDR-0011](../../../docs/adr/SDR-0011-delivery.md) | livraison | `environments: []` ; `release.tool: release-please` | accepted |
