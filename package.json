@@ -1,0 +1,144 @@
+{
+  "name": "uske",
+  "version": "1.0.0",
+  "description": "> `regis` dit si. `knock` fait. `uske` bat la mesure, et enregistre. > > *`regis` says whether. `knock` does. `uske` beats time, and records.*",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trivoallan/uske.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/trivoallan/uske/issues"
+  },
+  "homepage": "https://github.com/trivoallan/uske#readme",
+  "devDependencies": {
+    "surdesrails": "github:trivoallan/surdesrails#semver:^0"
+  },
+  "skills": {
+    "acceptance-test-authoring": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/acceptance-test-authoring"
+    },
+    "arc42-lint": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-lint"
+    },
+    "arc42-review": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-review"
+    },
+    "arc42-section-01": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-01"
+    },
+    "arc42-section-02": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-02"
+    },
+    "arc42-section-03": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-03"
+    },
+    "arc42-section-04": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-04"
+    },
+    "arc42-section-05": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-05"
+    },
+    "arc42-section-06": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-06"
+    },
+    "arc42-section-07": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-07"
+    },
+    "arc42-section-08": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-08"
+    },
+    "arc42-section-09": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-09"
+    },
+    "arc42-section-10": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-10"
+    },
+    "arc42-section-11": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-11"
+    },
+    "arc42-section-12": {
+      "source": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-12"
+    },
+    "architectural-decision-records": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/architectural-decision-records"
+    },
+    "c4-diagrams": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/c4-diagrams"
+    },
+    "devops-engineer": {
+      "source": "Jeffallan/claude-skills#882ef55e377dbf9a4dbe496bb41ac6ccd0e555cf",
+      "path": "skills/devops-engineer"
+    },
+    "diataxis": {
+      "source": "rlespinasse/agent-skills#79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "path": "skills/diataxis"
+    },
+    "discovery": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/discovery"
+    },
+    "doc-coauthoring": {
+      "source": "anthropics/skills#0a64e398ec6bb34a494f0c347e8ccae53a862f8e",
+      "path": "skills/doc-coauthoring"
+    },
+    "french-language": {
+      "source": "rlespinasse/agent-skills#79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "path": "skills/french-language"
+    },
+    "gherkin-authoring": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/gherkin-authoring"
+    },
+    "glossary": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/glossary"
+    },
+    "grill-me": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/grill-me"
+    },
+    "openspec-git-discipline": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/openspec-git-discipline"
+    },
+    "prompt-architect": {
+      "source": "ckelsoe/prompt-architect#6c7a2c7b5a15cbb918828c7878c226a592985702",
+      "path": "skills/prompt-architect"
+    },
+    "spec-as-source": {
+      "source": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/spec-as-source"
+    },
+    "verify-readme-features": {
+      "source": "rlespinasse/agent-skills#79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "path": "skills/verify-readme-features"
+    }
+  }
+}
