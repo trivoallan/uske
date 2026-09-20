@@ -116,41 +116,41 @@ mention « sans réponse, fichier intact ».
 
 ## 4. Statuer les dix ADR
 
-- [ ] 4.1 Procédure V sur `docs/adr/SDR-0009-branching.md` — clés `branching.model`,
+- [x] 4.1 Procédure V sur `docs/adr/SDR-0009-branching.md` — clés `branching.model`,
   `branching.merge`, `branching.prefixes`. Puis `CHECK 2>&1 | grep -c SDR-0009` imprime `0`.
-- [ ] 4.2 Procédure V sur `docs/adr/SDR-0002-localization.md` — clés
+- [x] 4.2 Procédure V sur `docs/adr/SDR-0002-localization.md` — clés
   `localization.language.default`, `.documentation`, `.commits`, `.code`, `.comments`. Puis
   `CHECK 2>&1 | grep -c SDR-0002` imprime `0`.
-- [ ] 4.3 Procédure V sur `docs/adr/SDR-0003-architecture.md` — clés `architecture.pattern`,
+- [x] 4.3 Procédure V sur `docs/adr/SDR-0003-architecture.md` — clés `architecture.pattern`,
   `architecture.document`. Puis `CHECK 2>&1 | grep -c SDR-0003` imprime `0`.
-- [ ] 4.4 Procédure V sur `docs/adr/SDR-0004-languages.md` — clé `languages.main.name`,
+- [x] 4.4 Procédure V sur `docs/adr/SDR-0004-languages.md` — clé `languages.main.name`,
   provenance « constatée — `pyproject.toml` ». Puis `CHECK 2>&1 | grep -c SDR-0004` imprime `0`.
-- [ ] 4.5 Procédure V sur `docs/adr/SDR-0005-validation.md` — clés `validation.boundary`,
+- [x] 4.5 Procédure V sur `docs/adr/SDR-0005-validation.md` — clés `validation.boundary`,
   `validation.data_files`. Puis `CHECK 2>&1 | grep -c SDR-0005` imprime `0`.
-- [ ] 4.6 Procédure V sur `docs/adr/SDR-0006-commits.md` — clés `commits.scopes`,
+- [x] 4.6 Procédure V sur `docs/adr/SDR-0006-commits.md` — clés `commits.scopes`,
   `commits.tool`. Puis `CHECK 2>&1 | grep -c SDR-0006` imprime `0`.
-- [ ] 4.7 Procédure V sur `docs/adr/SDR-0007-tests.md` — clé `tests.coverage_target`. Puis
+- [x] 4.7 Procédure V sur `docs/adr/SDR-0007-tests.md` — clé `tests.coverage_target`. Puis
   `CHECK 2>&1 | grep -c SDR-0007` imprime `0`.
-- [ ] 4.8 Procédure V sur `docs/adr/SDR-0008-documentation.md` — clés `docs.tool`, `docs.root`,
+- [x] 4.8 Procédure V sur `docs/adr/SDR-0008-documentation.md` — clés `docs.tool`, `docs.root`,
   `docs.audience`. Puis `CHECK 2>&1 | grep -c SDR-0008` imprime `0`.
-- [ ] 4.9 Procédure V sur `docs/adr/SDR-0010-forge-and-ci.md` — clés `forge.host`, `ci.tool`,
+- [x] 4.9 Procédure V sur `docs/adr/SDR-0010-forge-and-ci.md` — clés `forge.host`, `ci.tool`,
   `ci.gate`. Puis `CHECK 2>&1 | grep -c SDR-0010` imprime `0`.
-- [ ] 4.10 Procédure V sur `docs/adr/SDR-0011-delivery.md` — clés `deploy.environments`,
+- [x] 4.10 Procédure V sur `docs/adr/SDR-0011-delivery.md` — clés `deploy.environments`,
   `release.tool`. Puis `CHECK 2>&1 | grep -c SDR-0011` imprime `0`.
-- [ ] 4.11 Vérifier l'ensemble. `CHECK` : attendu `0` écart si tout a reçu une réponse ; sinon,
+- [x] 4.11 Vérifier l'ensemble. `CHECK` : attendu `0` écart si tout a reçu une réponse ; sinon,
   les seuls fichiers nommés sont ceux portés *sans réponse* au récapitulatif — comparer les
   deux listes, elles doivent être identiques. Puis
   `grep -l 'Tout ce qui suit disparaît' docs/adr/*.md` ne liste que ces mêmes fichiers, et
   `git diff --stat -- docs/adr/SDR-0001-record-architecture-decisions.md` n'imprime rien.
-- [ ] 4.12 (F2) Relire `git diff -- docs/adr/` fichier par fichier : la proposition de la
+- [x] 4.12 (F2) Relire `git diff -- docs/adr/` fichier par fichier : la proposition de la
   méthode en tête de `## Decision Outcome` est toujours là ; `## More Information` est intact ;
   la coupe s'arrête avant `### Consequences` ; chaque clé a sa ligne de provenance ; un
   `rejected` n'a plus de `traits:` et dit ce qui en tient lieu.
-- [ ] 4.13 Écrire le tableau final dans `openspec/changes/onboarding/verdicts.md`, section
+- [x] 4.13 Écrire le tableau final dans `openspec/changes/onboarding/verdicts.md`, section
   `## Tableau final`, quatre colonnes : `ADR` (lien relatif vers le fichier) `| Thème |
   Décisions | Statut`. Les dix ADR y figurent ; un ADR resté `proposed` porte *sans réponse*
   dans la colonne Décisions. L'afficher à la personne.
-- [ ] 4.14 Commit :
+- [x] 4.14 Commit :
   `git add docs/adr openspec/changes/onboarding/verdicts.md && git commit -m "docs: verdicts des ADR hérités"`.
 
 ## 5. Le document d'architecture

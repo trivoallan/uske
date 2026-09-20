@@ -2,14 +2,14 @@
 adr: SDR-0005
 slug: validation
 title: Validation
-status: proposed
-date:
-authors: []
+status: accepted
+date: 2026-09-20
+authors: [Tristan Rivoallan]
 supersedes: []
 traits:
   validation:
-    boundary:
-    data_files:
+    boundary: pydantic
+    data_files: json-schema
 ---
 
 # Validation
@@ -127,70 +127,23 @@ quoi diverger. Là où les deux coexistent — un fichier lu par un modèle —
 **c'est le modèle qui fait foi**, et le schéma s'en dérive ou s'aligne à la main
 dans la même merge request.
 
-**Tout ce qui suit disparaît quand vous statuez** — de cette phrase-ci
-**jusqu'au titre** **Consequences**, ce titre non compris.
+**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée telle quelle,
+pour le langage que déclare [`SDR-0004`](SDR-0004-languages.md).
 
-**Comment statuer : cinq gestes, tous dans ce fichier.** Lisez-les tous
-avant d'en faire un seul — le dernier efface les quatre autres —, et faites-les
-en **un seul acte, dans une seule merge request**.
+- `validation.boundary` : répondue — 2026-09-20
+- `validation.data_files` : répondue — 2026-09-20
 
-1. **Écrire la valeur de chaque clé** dans le `traits:` du frontmatter — ou,
-   si vous statuez `rejected`, **retirer le bloc `traits:` en entier**.
-2. **Passer `status:`** de `proposed` à `accepted`, ou à `rejected`.
-3. **Renseigner `date:` et `authors:`** — `date:` au format `AAAA-MM-JJ`, le
-   jour où vous statuez ; `authors:`, les noms des personnes qui ont décidé,
-   sans adresse courriel.
-4. **Écrire deux ou trois lignes sous le titre Consequences**, à la place du
-   commentaire qui s'y trouve : ce que votre décision facilite, et ce qu'elle
-   coûte.
-5. **En dernier seulement, supprimer ce bloc**, de sa première phrase
-   jusqu'au titre Consequences non compris. À sa place : le motif de ce que
-   vous avez décidé, partout où vous vous écartez de la proposition ; ou, si
-   vous l'adoptez telle quelle, une ligne qui le dit.
-
-**Le premier geste est celui qu'on oublie** : une décision écrite seulement en
-prose laisse un agent deviner. **Le titre Consequences n'est pas écrit en
-code, et c'est voulu** : la chaîne qui borne la coupe ne doit apparaître
-qu'une fois dans ce fichier, sinon qui la cherche coupe au premier faux
-positif.
-
-**Ce qui reste**, et rien de tout cela ne s'efface : la proposition de la
-méthode et ses motifs, en tête de cette section ; le titre **Consequences** et
-ce que vous y écrivez au geste 4 ; et `## More Information`, qui décrit les clés
-et sert encore après.
-
-**Cette proposition survit à la coupe** : la perdre appauvrirait cet ADR. Si
-vous décidez autrement, remplacez-la par votre décision et son motif.
-
-**Voici à quoi ressemble ce frontmatter une fois rempli.** C'est la seule
-part de ce fichier qu'un agent lit sans l'interpréter :
-
-```yaml
----
-adr: SDR-0005
-slug: validation
-title: Validation
-status: accepted
-date: 2026-03-14
-authors: []
-supersedes: []
-traits:
-  validation:
-    boundary: pydantic
-    data_files: json-schema
----
-```
-
-**`## Considered Options` ci-dessus est une proposition de l'amont, pas
-votre délibération.** La méthode a pesé ces options sans connaître votre
-contexte. La confrontation au vôtre reste à faire, et c'est elle qui
-distingue une décision d'un défaut accepté.
+**Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : sa seule dépendance est `pyyaml` ; les
+politiques, les plans et les arguments sont vérifiés à la main, et aucun fichier de données ne
+porte de schéma. « Valider à la main » a été proposé comme valeur et écarté par la personne qui
+statue.
 
 ### Consequences
 
-<!-- Ce que votre décision facilite, et ce qu'elle coûte. Deux ou trois lignes
-     suffisent — par exemple sur la dépendance qu'ajoute la bibliothèque
-     retenue, ou sur le schéma de plus à tenir à jour quand le fichier bouge. -->
+Un champ absent d'une politique ou d'un plan devient une erreur nommée plutôt qu'un défaut
+silencieux : c'est la sûreté, premier objectif de `openspec/discovery.md`. Le coût : une
+dépendance de plus, contre la minceur — le rang des objectifs tranche — et des frontières
+existantes qui restent à porter, change après change.
 
 ## More Information
 

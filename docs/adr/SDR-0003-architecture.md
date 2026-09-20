@@ -2,14 +2,14 @@
 adr: SDR-0003
 slug: software-architecture
 title: Software Architecture
-status: proposed
-date:
-authors: []
+status: accepted
+date: 2026-09-20
+authors: [Tristan Rivoallan]
 supersedes: []
 traits:
   architecture:
-    pattern:
-    document:
+    pattern: hexagonal
+    document: arc42
 ---
 
 # Software Architecture
@@ -73,70 +73,27 @@ taille moyenne. Sous 500 lignes, ou pour un dépôt qui n'est pas un service,
 `monolithic` est souvent la réponse honnête — et si la question n'a pas d'objet
 ici, statuez `rejected`.
 
-**Tout ce qui suit disparaît quand vous statuez** — de cette phrase-ci
-**jusqu'au titre** **Consequences**, ce titre non compris.
+**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée, avec son
+motif : un domaine qui ne dépend d'aucune entrée-sortie, qu'un agent écrit et teste sans
+environnement qui tourne. `monolithic`, que ce fichier dit souvent honnête pour un petit dépôt,
+a été proposé et écarté par la personne qui statue.
 
-**Comment statuer : cinq gestes, tous dans ce fichier.** Lisez-les tous
-avant d'en faire un seul — le dernier efface les quatre autres —, et faites-les
-en **un seul acte, dans une seule merge request**.
+- `architecture.pattern` : répondue — 2026-09-20
+- `architecture.document` : répondue — 2026-09-20 ; `docs/architecture/arc42.md` est créé par le
+  même change
 
-1. **Écrire la valeur de chaque clé** dans le `traits:` du frontmatter — ou,
-   si vous statuez `rejected`, **retirer le bloc `traits:` en entier**.
-2. **Passer `status:`** de `proposed` à `accepted`, ou à `rejected`.
-3. **Renseigner `date:` et `authors:`** — `date:` au format `AAAA-MM-JJ`, le
-   jour où vous statuez ; `authors:`, les noms des personnes qui ont décidé,
-   sans adresse courriel.
-4. **Écrire deux ou trois lignes sous le titre Consequences**, à la place du
-   commentaire qui s'y trouve : ce que votre décision facilite, et ce qu'elle
-   coûte.
-5. **En dernier seulement, supprimer ce bloc**, de sa première phrase
-   jusqu'au titre Consequences non compris. À sa place : le motif de ce que
-   vous avez décidé, partout où vous vous écartez de la proposition ; ou, si
-   vous l'adoptez telle quelle, une ligne qui le dit.
-
-**Le premier geste est celui qu'on oublie** : une décision écrite seulement en
-prose laisse un agent deviner. **Le titre Consequences n'est pas écrit en
-code, et c'est voulu** : la chaîne qui borne la coupe ne doit apparaître
-qu'une fois dans ce fichier, sinon qui la cherche coupe au premier faux
-positif.
-
-**Ce qui reste**, et rien de tout cela ne s'efface : la proposition de la
-méthode et ses motifs, en tête de cette section ; le titre **Consequences** et
-ce que vous y écrivez au geste 4 ; et `## More Information`, qui décrit les clés
-et sert encore après.
-
-**Cette proposition survit à la coupe** : la perdre appauvrirait cet ADR. Si
-vous décidez autrement, remplacez-la par votre décision et son motif.
-
-**Voici à quoi ressemble ce frontmatter une fois rempli.** C'est la seule
-part de ce fichier qu'un agent lit sans l'interpréter :
-
-```yaml
----
-adr: SDR-0003
-slug: software-architecture
-title: Software Architecture
-status: accepted
-date: 2026-03-14
-authors: []
-supersedes: []
-traits:
-  architecture:
-    pattern: hexagonal
-    document: arc42
----
-```
-
-**`## Considered Options` ci-dessus est une proposition de l'amont, pas
-votre délibération.** La méthode a pesé ces options sans connaître votre
-contexte. La confrontation au vôtre reste à faire, et c'est elle qui
-distingue une décision d'un défaut accepté.
+**Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : `uske/` compte dix modules à plat,
+environ mille lignes ; les règles — classer un verdict, décider ce qui est dû, retirer du plan ce
+qui est refusé — y côtoient la lecture des fichiers et les appels aux outils voisins. Le code
+n'est pas hexagonal. Cet ADR dit où il va, pas où il est.
 
 ### Consequences
 
-<!-- Ce que votre décision facilite, et ce qu'elle coûte. Deux ou trois lignes
-     suffisent — par exemple sur l'arborescence qu'elle impose, ou sur ce qu'un
-     changement de pattern coûterait plus tard. -->
+Les règles d'un screening deviennent testables sans registre ni outil voisin, ce qui sert la
+sûreté et l'opérabilité de `openspec/discovery.md`. Le coût : le code existant reste à
+rapprocher, change après change, et d'ici là un agent lit une arborescence qui contredit cet
+ADR — il suit l'ADR pour le code nouveau. Le document d'architecture bouge dans la même demande
+de fusion que ce qui le déplace.
 
 ## More Information
 

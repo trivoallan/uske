@@ -93,3 +93,22 @@ dans `docs/adr/` commence après cette ligne.
 
 **Cache `npx`** : la personne le purge elle-même ; en attendant, la vérification passe par le
 binaire du cache lancé avec `node`.
+
+## Tableau final
+
+Vérification de `docs/adr/` après écriture, le 2026-09-20 : `✓ No violations found` — contre
+53 écarts dans 10 fichiers au départ. Aucun ADR n'est resté *sans réponse*.
+
+| ADR | Thème | Décisions | Statut |
+| --- | --- | --- | --- |
+| [SDR-0001](../../../docs/adr/SDR-0001-record-architecture-decisions.md) | consigner les décisions | format `MADR`, limite `500` — arrivé statué, non touché | accepted |
+| [SDR-0002](../../../docs/adr/SDR-0002-localization.md) | langues | `default: français` ; `code: anglais` ; `comments: anglais` | accepted |
+| [SDR-0003](../../../docs/adr/SDR-0003-architecture.md) | architecture | `pattern: hexagonal` ; `document: arc42` | accepted |
+| [SDR-0004](../../../docs/adr/SDR-0004-languages.md) | langage principal | `Python` | accepted |
+| [SDR-0005](../../../docs/adr/SDR-0005-validation.md) | validation | `boundary: pydantic` ; `data_files: json-schema` | accepted |
+| [SDR-0006](../../../docs/adr/SDR-0006-commits.md) | commits | `scopes: []` ; `tool: commitlint` | accepted |
+| [SDR-0007](../../../docs/adr/SDR-0007-tests.md) | tests | `coverage_target: 90` | accepted |
+| [SDR-0008](../../../docs/adr/SDR-0008-documentation.md) | documentation | `tool: aucun` ; `root: docs/` ; `audience: mono-utilisateur` | accepted |
+| [SDR-0009](../../../docs/adr/SDR-0009-branching.md) | branches | `github-flow` ; `squash` ; `[feat, fix, docs]` | accepted |
+| [SDR-0010](../../../docs/adr/SDR-0010-forge-and-ci.md) | forge et CI | `host: github` ; `tool: github-actions` ; `gate: informative` | accepted |
+| [SDR-0011](../../../docs/adr/SDR-0011-delivery.md) | livraison | `environments: []` ; `release.tool: release-please` | accepted |

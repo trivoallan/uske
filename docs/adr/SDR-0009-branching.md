@@ -2,15 +2,15 @@
 adr: SDR-0009
 slug: branching
 title: Branching
-status: proposed
-date:
-authors: []
+status: accepted
+date: 2026-09-20
+authors: [Tristan Rivoallan]
 supersedes: []
 traits:
   branching:
-    model:
-    merge:
-    prefixes:
+    model: github-flow
+    merge: squash
+    prefixes: [feat, fix, docs]
 ---
 
 # Branching
@@ -79,71 +79,25 @@ n'ayez rien à aller chercher :
 vous en ajoutez, **prenez-les dans les onze** : inventer un douzième préfixe ici
 créerait une norme concurrente de celle des commits.
 
-**Tout ce qui suit disparaît quand vous statuez** — de cette phrase-ci
-**jusqu'au titre** **Consequences**, ce titre non compris.
+**Décision de ce dépôt — 2026-09-20.** La proposition de la méthode est adoptée telle
+quelle, avec ses motifs.
 
-**Comment statuer : cinq gestes, tous dans ce fichier.** Lisez-les tous
-avant d'en faire un seul — le dernier efface les quatre autres —, et faites-les
-en **un seul acte, dans une seule merge request**.
+- `branching.model` : répondue — 2026-09-20
+- `branching.merge` : répondue — 2026-09-20
+- `branching.prefixes` : répondue — 2026-09-20
 
-1. **Écrire la valeur de chaque clé** dans le `traits:` du frontmatter — ou,
-   si vous statuez `rejected`, **retirer le bloc `traits:` en entier**.
-2. **Passer `status:`** de `proposed` à `accepted`, ou à `rejected`.
-3. **Renseigner `date:` et `authors:`** — `date:` au format `AAAA-MM-JJ`, le
-   jour où vous statuez ; `authors:`, les noms des personnes qui ont décidé,
-   sans adresse courriel.
-4. **Écrire deux ou trois lignes sous le titre Consequences**, à la place du
-   commentaire qui s'y trouve : ce que votre décision facilite, et ce qu'elle
-   coûte.
-5. **En dernier seulement, supprimer ce bloc**, de sa première phrase
-   jusqu'au titre Consequences non compris. À sa place : le motif de ce que
-   vous avez décidé, partout où vous vous écartez de la proposition ; ou, si
-   vous l'adoptez telle quelle, une ligne qui le dit.
-
-**Le premier geste est celui qu'on oublie** : une décision écrite seulement en
-prose laisse un agent deviner. **Le titre Consequences n'est pas écrit en
-code, et c'est voulu** : la chaîne qui borne la coupe ne doit apparaître
-qu'une fois dans ce fichier, sinon qui la cherche coupe au premier faux
-positif.
-
-**Ce qui reste**, et rien de tout cela ne s'efface : la proposition de la
-méthode et ses motifs, en tête de cette section ; le titre **Consequences** et
-ce que vous y écrivez au geste 4 ; et `## More Information`, qui décrit les clés
-et sert encore après.
-
-**Cette proposition survit à la coupe** : la perdre appauvrirait cet ADR. Si
-vous décidez autrement, remplacez-la par votre décision et son motif.
-
-**Voici à quoi ressemble ce frontmatter une fois rempli.** C'est la seule
-part de ce fichier qu'un agent lit sans l'interpréter :
-
-```yaml
----
-adr: SDR-0009
-slug: branching
-title: Branching
-status: accepted
-date: 2026-03-14
-authors: []
-supersedes: []
-traits:
-  branching:
-    model: github-flow
-    merge: squash
-    prefixes: [feat, fix, docs]
----
-```
-
-**`## Considered Options` ci-dessus est une proposition de l'amont, pas
-votre délibération.** La méthode a pesé ces options sans connaître votre
-contexte. La confrontation au vôtre reste à faire, et c'est elle qui
-distingue une décision d'un défaut accepté.
+**Ce que le dépôt faisait jusqu'ici** : quatre commits poussés droit sur `main`, aucune
+fusion. Le change qui statue cet ADR est le premier à partir sur une branche,
+`docs/onboarding`.
 
 ### Consequences
 
-<!-- Ce que votre décision facilite, et ce qu'elle coûte. Deux ou trois lignes
-     suffisent — par exemple sur ce que `squash` fait perdre de l'historique
-     détaillé, ou sur ce qu'une branche de référence protégée impose. -->
+L'historique de `main` se lira comme la liste des changes livrés, et un agent sait nommer sa
+branche sans deviner. Le coût : une demande de fusion même pour un auteur seul, et un message
+de fusion à soigner — c'est lui que lira l'outil de release retenu par
+[`SDR-0011`](SDR-0011-delivery.md). La chaîne étant `informative`
+([`SDR-0010`](SDR-0010-forge-and-ci.md)), rien n'empêche de fusionner au rouge : la relecture
+regarde la chaîne avant de fusionner.
 
 ## More Information
 
