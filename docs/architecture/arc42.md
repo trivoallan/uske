@@ -326,11 +326,12 @@ et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un
 
 ## Écarts ouverts
 
-Cinq décisions disent où le dépôt va, pas où il est. Chacune écrit son écart sous son titre
-*Consequences* ; aucun n'est réglé par le change qui a statué. **Chacun porte un identifiant dès
-maintenant, avant que *Risks and Technical Debts* existe** : un écart sans nom ne se referme pas,
-il s'oublie. Ces identifiants sont stables — un écart réglé se marque *Closed* et garde son
-numéro, il ne disparaît pas de la table.
+Cinq décisions disent où le dépôt va, pas où il est ; chacune écrit son écart sous son titre
+*Consequences*, et aucun n'est réglé par le change qui a statué. Un sixième ne vient d'aucune
+décision — il a été relevé en revue. **Tous portent un identifiant dès maintenant, avant que
+*Risks and Technical Debts* existe** : un écart sans nom ne se referme pas, il s'oublie. Ces
+identifiants sont stables — un écart réglé se marque *Closed* et garde son numéro, il ne
+disparaît pas de la table.
 
 | ID | Écart | Décision qui l'ouvre | Ce qui le referme |
 |----|-------|----------------------|-------------------|
@@ -339,10 +340,23 @@ numéro, il ne disparaît pas de la table.
 | DEBT-03 | Le format des messages de commit n'est tenu par rien ; un message hors format passe | [`SDR-0006`](../adr/SDR-0006-commits.md) | `commitlint` installé et branché sur le titre de la demande de fusion |
 | DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | [`SDR-0007`](../adr/SDR-0007-tests.md) | Un instrument branché, et une première mesure prise |
 | DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | [`SDR-0011`](../adr/SDR-0011-delivery.md) | L'outil de release installé — il dépend de DEBT-03 |
+| DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | aucune — relevé en revue le 2026-09-20 | Le contrôle ajouté à `.github/workflows/test.yaml`, ou dit manuel dans un ADR qui dépasse [`SDR-0010`](../adr/SDR-0010-forge-and-ci.md) |
 
-**Ces cinq lignes sont la matière de *Risks and Technical Debts***, qui les reprendra telles
+**`DEBT-06` n'a pas la même provenance que les cinq autres, et c'est le plus intéressant.** Les
+cinq premiers sont déclarés par la décision qui les crée : quelqu'un a statué, et a écrit ce que
+sa décision coûtait. Le sixième n'est déclaré nulle part — il a fallu une revue pour le voir.
+Vérifié le 2026-09-20 : `mdschema` n'est nommé que dans son propre fichier de configuration ; ni
+la chaîne, ni un script, ni un crochet ne le lance. La méthode livre l'instrument, le dépôt ne le
+branche pas.
+
+**Il partage ce motif avec `DEBT-03`** : deux vérifications décidées, aucune des deux
+automatisée. C'est le seul motif qui se répète dans cette table, et c'est donc lui qu'il faut
+surveiller — un dépôt qui décide des contrôles sans les brancher finit par croire ses décisions
+tenues.
+
+**Ces six lignes sont la matière de *Risks and Technical Debts***, qui les reprendra telles
 quelles avec leur probabilité et leur impact quand un change l'écrira. D'ici là, elles vivent
-ici : c'est le seul endroit du dépôt où les cinq se lisent ensemble.
+ici : c'est le seul endroit du dépôt où les six se lisent ensemble.
 
 **La colonne « Le dépôt s'y conforme ? » du journal ci-dessus dit la même chose en prose.** Le
 jour où *Risks and Technical Debts* existe, c'est vers ces `DEBT-nn` qu'elle renverra, au lieu
