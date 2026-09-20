@@ -180,17 +180,17 @@ mention « sans réponse, fichier intact ».
 
 ## 6. Mener l'arrivant aux décisions, et clore
 
-- [ ] 6.1 (F5) Dans `README.md`, ajouter avant `## Test` une section `## Decisions`, dans la
+- [x] 6.1 (F5) Dans `README.md`, ajouter avant `## Test` une section `## Decisions`, dans la
   langue que `SDR-0002` donne à la documentation (`anglais` par défaut si *sans réponse* : le
   `README.md` l'est déjà en majorité). Trois lignes, trois liens : `docs/adr/` — les décisions
   et leur verdict ; `docs/architecture/arc42.md` — les objectifs et les décisions en un lieu ;
   `openspec/discovery.md` — les personas, les objectifs qualité ordonnés, les stories.
-- [ ] 6.2 Vérifier les liens : `ls docs/adr docs/architecture/arc42.md openspec/discovery.md`
+- [x] 6.2 Vérifier les liens : `ls docs/adr docs/architecture/arc42.md openspec/discovery.md`
   ne rapporte aucune erreur.
-- [ ] 6.3 Vérifier le périmètre : `git diff --stat main -- uske deploy tests .github` n'imprime
+- [x] 6.3 Vérifier le périmètre : `git diff --stat main -- uske deploy tests .github` n'imprime
   rien (sur `main` : `git diff --stat cffa75a -- uske deploy tests .github`).
-- [ ] 6.4 `openspec validate onboarding --type change --strict`. Attendu :
+- [x] 6.4 `openspec validate onboarding --type change --strict`. Attendu :
   `Change 'onboarding' is valid`.
-- [ ] 6.5 Commit : `git add README.md && git commit -m "docs: mener aux décisions depuis le README"`.
+- [x] 6.5 Commit : `git add README.md && git commit -m "docs: mener aux décisions depuis le README"`.
   Sur une branche : ne pas pousser, ne pas ouvrir la merge request — le proposer à la personne,
   avec le tableau final en description.
