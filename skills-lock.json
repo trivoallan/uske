@@ -1,0 +1,237 @@
+{
+  "lockfileVersion": 1,
+  "skills": {
+    "acceptance-test-authoring": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/acceptance-test-authoring",
+      "integrity": "sha256-9ZAT6LF/lA080QY2knXl2X4WCwrgHr9KYp4/AfS43No="
+    },
+    "arc42-lint": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-lint",
+      "integrity": "sha256-VGbtQ913j8b/1Nz3oGIiY54xh504cdPHZRyotwspqm0="
+    },
+    "arc42-review": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-review",
+      "integrity": "sha256-i7wpuxKo3odQ4OuSgqLBIDIUUi/++qoQMPKtYtV54+Q="
+    },
+    "arc42-section-01": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-01",
+      "integrity": "sha256-9v5iOQUjDwnIv89KidRD1D3F8ae82J3CGNVdsE1d+vQ="
+    },
+    "arc42-section-02": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-02",
+      "integrity": "sha256-wzhKnq5YIYZoYLFfIbhzbX3/59HOyv3WOc+AYBfT4sg="
+    },
+    "arc42-section-03": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-03",
+      "integrity": "sha256-EKg0WYrLNsKRrL0qFkD2qOvx2PJXuJRrCBW+BG9z6RA="
+    },
+    "arc42-section-04": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-04",
+      "integrity": "sha256-EeZrUDOKnj1BIxMuH267SbcEtKw9rSra7UQNO+5Ln5U="
+    },
+    "arc42-section-05": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-05",
+      "integrity": "sha256-INmhGYfg97/S0BODgdJbxhlO57m49m7ZyUms1ZyJHmQ="
+    },
+    "arc42-section-06": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-06",
+      "integrity": "sha256-xCfbdwnW04F7GcR4sMCsDl3HMgYh3ZBd9Do94KEcNJg="
+    },
+    "arc42-section-07": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-07",
+      "integrity": "sha256-qmL/bxupnyzv2OduAk7++pLOz2Skb63nLNeq+yPGwPI="
+    },
+    "arc42-section-08": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-08",
+      "integrity": "sha256-oxPX/YNjJmYLuS3t6QU3kJEo9uRvoZiXoMwl3meM5Ko="
+    },
+    "arc42-section-09": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-09",
+      "integrity": "sha256-p7zR8vxaCSssiTDqjcak0sYiHbqNFcZZzxglHPlVDhw="
+    },
+    "arc42-section-10": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-10",
+      "integrity": "sha256-B6cveqZUfX4ksMsahQ2iddbEunAAe/HGTHVJgNZv6Gk="
+    },
+    "arc42-section-11": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-11",
+      "integrity": "sha256-rEg4NR+unJjKqPaXeZipYzw/ILuRt/6M4hO6rrwpP1Q="
+    },
+    "arc42-section-12": {
+      "spec": "MSiccDev/arc42-toolkit#97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "resolved": "https://github.com/MSiccDev/arc42-toolkit.git",
+      "ref": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "commit": "97492c34cdbdb87dc6ea97ae6edbd9673167aed5",
+      "path": "skills/arc42-section-12",
+      "integrity": "sha256-LAaGSrWofkUExbrVSEITHP6959WEWucgb/UzMD/VjJk="
+    },
+    "architectural-decision-records": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/architectural-decision-records",
+      "integrity": "sha256-PPQsIQyR0uJU9dbw3Te8lr2Q8vfKXak/WQSAY4SiqPI="
+    },
+    "c4-diagrams": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/c4-diagrams",
+      "integrity": "sha256-FGSz44xI5TXK7QGWfr2iIkjsTKCDCaXRY/aQkT9Luwo="
+    },
+    "devops-engineer": {
+      "spec": "Jeffallan/claude-skills#882ef55e377dbf9a4dbe496bb41ac6ccd0e555cf",
+      "resolved": "https://github.com/Jeffallan/claude-skills.git",
+      "ref": "882ef55e377dbf9a4dbe496bb41ac6ccd0e555cf",
+      "commit": "882ef55e377dbf9a4dbe496bb41ac6ccd0e555cf",
+      "path": "skills/devops-engineer",
+      "integrity": "sha256-5da8PndIBbswNxFAT/GxqgYX1NOgygxbgBPZyuOhndo="
+    },
+    "diataxis": {
+      "spec": "rlespinasse/agent-skills#79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "resolved": "https://github.com/rlespinasse/agent-skills.git",
+      "ref": "79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "commit": "79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "path": "skills/diataxis",
+      "integrity": "sha256-QEU4GjtsTA1SD5SIRnFXU9Fq+2p+Nq+uajSHVvil5hw="
+    },
+    "discovery": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/discovery",
+      "integrity": "sha256-8jKLgySF8a4QDo7EiE8/xUsMDbg2pekiE2LrAEJ6yrk="
+    },
+    "doc-coauthoring": {
+      "spec": "anthropics/skills#0a64e398ec6bb34a494f0c347e8ccae53a862f8e",
+      "resolved": "https://github.com/anthropics/skills.git",
+      "ref": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e",
+      "path": "skills/doc-coauthoring",
+      "integrity": "sha256-/YMlyxmcRdU3kun7wUTXKDKQDHeqMbw7eBCZ1cvoEmY="
+    },
+    "french-language": {
+      "spec": "rlespinasse/agent-skills#79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "resolved": "https://github.com/rlespinasse/agent-skills.git",
+      "ref": "79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "commit": "79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "path": "skills/french-language",
+      "integrity": "sha256-BcPFgNqtKgNcJIQPysHysP3AxyrQJMC81+xXoST7Sbo="
+    },
+    "gherkin-authoring": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/gherkin-authoring",
+      "integrity": "sha256-ybt2a/OW16CDMJKtQ71OfS0kBhikBdZ4FAs70HVBO5A="
+    },
+    "glossary": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/glossary",
+      "integrity": "sha256-4B4hoZrS6TvFNAMi8jQLzf/RwGXUzvjOgrbWEwUSu2s="
+    },
+    "grill-me": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/grill-me",
+      "integrity": "sha256-D+MOIpGm+ZClQU+FIFU1vAZRliK/YEmAUR18EdrTJ+A="
+    },
+    "openspec-git-discipline": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/openspec-git-discipline",
+      "integrity": "sha256-gAxNdU7lBHXc2vTe3blqdXpBcfZKZvG8i9oDzrxRXcc="
+    },
+    "prompt-architect": {
+      "spec": "ckelsoe/prompt-architect#6c7a2c7b5a15cbb918828c7878c226a592985702",
+      "resolved": "https://github.com/ckelsoe/prompt-architect.git",
+      "ref": "6c7a2c7b5a15cbb918828c7878c226a592985702",
+      "commit": "6c7a2c7b5a15cbb918828c7878c226a592985702",
+      "path": "skills/prompt-architect",
+      "integrity": "sha256-Iw3ap8/dcK/oO7JrVkAvtlS3bZ3aTV06dvOm8sCVCsk="
+    },
+    "spec-as-source": {
+      "spec": "intent-driven-dev/skills#053dfff41b572714f868a34ce36248c86df099d9",
+      "resolved": "https://github.com/intent-driven-dev/skills.git",
+      "ref": "053dfff41b572714f868a34ce36248c86df099d9",
+      "commit": "053dfff41b572714f868a34ce36248c86df099d9",
+      "path": ".agents/skills/spec-as-source",
+      "integrity": "sha256-JmhiKcR9UxoN9v+mWseVNuiOCohSnUH5huFitLp8a9k="
+    },
+    "verify-readme-features": {
+      "spec": "rlespinasse/agent-skills#79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "resolved": "https://github.com/rlespinasse/agent-skills.git",
+      "ref": "79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "commit": "79483bbc72e33b1f595541ab6fdc4c39944a53c0",
+      "path": "skills/verify-readme-features",
+      "integrity": "sha256-/b764sJdUdyfLH1UJww7AeMV2MUuKDYkAqwtSWisZbE="
+    }
+  }
+}
