@@ -2,3 +2,7 @@ __pycache__/
 .venv/
 dist/
 uv.lock
+.claude/skills
+.claude/commands
+node_modules
+.serena
