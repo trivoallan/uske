@@ -2,16 +2,16 @@
 adr: SDR-0010
 slug: forge-and-ci
 title: Forge and continuous integration
-status: proposed
-date:
-authors: []
+status: accepted
+date: 2026-09-20
+authors: [Tristan Rivoallan]
 supersedes: []
 traits:
   forge:
-    host:
+    host: github
   ci:
-    tool:
-    gate:
+    tool: github-actions
+    gate: informative
 ---
 
 # Forge and continuous integration
@@ -82,72 +82,24 @@ descend pas jusqu'à vous : elle tient parce que ce dépôt ne porte pas de code
 exécutable. Un dépôt qui en porte n'est pas dans ce cas, et c'est pour ça que la
 proposition ci-dessus est `bloquante` et non « aucune ».
 
-**Tout ce qui suit disparaît quand vous statuez** — de cette phrase-ci
-**jusqu'au titre** **Consequences**, ce titre non compris.
+**Décision de ce dépôt — 2026-09-20.** `forge.host: github`, admis à égalité, sans
+justification due ; `ci.tool` en découle. `ci.gate: informative` s'écarte de la proposition,
+`bloquante`. Motif : la protection de branche n'est pas disponible pour ce dépôt — privé, sur un
+plan qui ne l'offre pas ; l'API a répondu 403 le 2026-09-20. Écrire `bloquante` affirmerait un
+contrôle qui n'existe pas.
 
-**Comment statuer : cinq gestes, tous dans ce fichier.** Lisez-les tous
-avant d'en faire un seul — le dernier efface les quatre autres —, et faites-les
-en **un seul acte, dans une seule merge request**.
+- `forge.host` : constatée — `git remote get-url origin` ; confirmée le 2026-09-20
+- `ci.tool` : constatée — `.github/workflows/test.yaml` ; confirmée le 2026-09-20
+- `ci.gate` : répondue — 2026-09-20
 
-1. **Écrire la valeur de chaque clé** dans le `traits:` du frontmatter — ou,
-   si vous statuez `rejected`, **retirer le bloc `traits:` en entier**.
-2. **Passer `status:`** de `proposed` à `accepted`, ou à `rejected`.
-3. **Renseigner `date:` et `authors:`** — `date:` au format `AAAA-MM-JJ`, le
-   jour où vous statuez ; `authors:`, les noms des personnes qui ont décidé,
-   sans adresse courriel.
-4. **Écrire deux ou trois lignes sous le titre Consequences**, à la place du
-   commentaire qui s'y trouve : ce que votre décision facilite, et ce qu'elle
-   coûte.
-5. **En dernier seulement, supprimer ce bloc**, de sa première phrase
-   jusqu'au titre Consequences non compris. À sa place : le motif de ce que
-   vous avez décidé, partout où vous vous écartez de la proposition ; ou, si
-   vous l'adoptez telle quelle, une ligne qui le dit.
-
-**Le premier geste est celui qu'on oublie** : une décision écrite seulement en
-prose laisse un agent deviner. **Le titre Consequences n'est pas écrit en
-code, et c'est voulu** : la chaîne qui borne la coupe ne doit apparaître
-qu'une fois dans ce fichier, sinon qui la cherche coupe au premier faux
-positif.
-
-**Ce qui reste**, et rien de tout cela ne s'efface : la proposition de la
-méthode et ses motifs, en tête de cette section ; le titre **Consequences** et
-ce que vous y écrivez au geste 4 ; et `## More Information`, qui décrit les clés
-et sert encore après.
-
-**Cette proposition survit à la coupe** : la perdre appauvrirait cet ADR. Si
-vous décidez autrement, remplacez-la par votre décision et son motif.
-
-**Voici à quoi ressemble ce frontmatter une fois rempli.** C'est la seule
-part de ce fichier qu'un agent lit sans l'interpréter :
-
-```yaml
----
-adr: SDR-0010
-slug: forge-and-ci
-title: Forge and continuous integration
-status: accepted
-date: 2026-03-14
-authors: []
-supersedes: []
-traits:
-  forge:
-    host: gitlab
-  ci:
-    tool: gitlab-ci
-    gate: bloquante
----
-```
-
-**`## Considered Options` ci-dessus est une proposition de l'amont, pas
-votre délibération.** La méthode a pesé ces options sans connaître votre
-contexte. La confrontation au vôtre reste à faire, et c'est elle qui
-distingue une décision d'un défaut accepté.
+**Vocabulaire** : sur cette forge, la demande de fusion s'appelle *pull request*.
 
 ### Consequences
 
-<!-- Ce que votre décision facilite, et ce qu'elle coûte. Deux ou trois lignes
-     suffisent — par exemple sur ce qu'une chaîne bloquante impose quand elle
-     devient instable, ou sur ce qu'une forge impose à qui doit y accéder. -->
+Un agent sait où part sa demande de fusion et ce qu'un rouge vaut : un rapport. Le coût est
+celui que ce fichier annonce — un rouge signalé se néglige —, donc la relecture regarde la
+chaîne avant de fusionner. Le jour où la protection de branche devient possible, un nouvel ADR
+passe la porte à `bloquante`.
 
 ## More Information
 
