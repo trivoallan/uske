@@ -155,27 +155,27 @@ mention « sans réponse, fichier intact ».
 
 ## 5. Le document d'architecture
 
-- [ ] 5.1 `mkdir -p docs/architecture && cp node_modules/surdesrails/resources/docs/arc42/index.md docs/architecture/arc42.md`.
+- [x] 5.1 `mkdir -p docs/architecture && cp node_modules/surdesrails/resources/docs/arc42/index.md docs/architecture/arc42.md`.
   Attendu : `grep -c '^# ' docs/architecture/arc42.md` imprime `12` ou plus.
-- [ ] 5.2 Invoquer la skill `arc42-section-01` sur `docs/architecture/arc42.md`, source
+- [x] 5.2 Invoquer la skill `arc42-section-01` sur `docs/architecture/arc42.md`, source
   `openspec/discovery.md`. La section `# Introduction and Goals` porte : l'aperçu des exigences
   (le périmètre de la découverte) ; sous `## Quality Goals`, les quatre objectifs **dans cet
   ordre** — Sûreté, Contestabilité, Opérabilité, Minceur — chacun avec son renoncement ; sous
   `## Stakeholders`, les trois personas avec leurs attentes. Aucune technologie qu'un ADR
   statué ne décide.
-- [ ] 5.3 Invoquer la skill `arc42-section-09` sur le même fichier, source : les seuls ADR
+- [x] 5.3 Invoquer la skill `arc42-section-09` sur le même fichier, source : les seuls ADR
   `accepted` ou `rejected` du tableau final, plus `SDR-0001`. La section
   `# Architecture Decisions` renvoie à chacun par un lien relatif `../adr/<fichier>`. Un ADR
   *sans réponse* n'y est pas présenté comme une décision.
-- [ ] 5.4 Invoquer la skill `arc42-review` sur `docs/architecture/arc42.md`. Corriger
+- [x] 5.4 Invoquer la skill `arc42-review` sur `docs/architecture/arc42.md`. Corriger
   sur-le-champ tout constat critique, avec la skill de la section concernée. Attendu : aucun
   constat critique restant. Les dix sections non rédigées gardent le texte du gabarit : le
   noter au rapport, ne pas les remplir.
-- [ ] 5.5 Contrôler l'accord avec la découverte :
+- [x] 5.5 Contrôler l'accord avec la découverte :
   `grep -n 'Sûreté\|Contestabilité\|Opérabilité\|Minceur' docs/architecture/arc42.md` imprime
   les quatre noms, dans cet ordre de lignes. Et, si `SDR-0003` est `accepted` :
   `grep -n 'document:' docs/adr/SDR-0003-architecture.md` imprime `document: arc42`.
-- [ ] 5.6 Commit :
+- [x] 5.6 Commit :
   `git add docs/architecture/arc42.md && git commit -m "docs: document d'architecture, sections 1 et 9"`.
 
 ## 6. Mener l'arrivant aux décisions, et clore
