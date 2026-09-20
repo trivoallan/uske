@@ -1,0 +1,113 @@
+# The rapprochement's feed (D-20): every image knock placed and signed goes to Dependency-Track
+# with its verified CycloneDX SBOM; a version whose image left the registry is made inactive.
+# Separate from the admission screening: neither waits on the other. Change `dt-sync`.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dt-sync
+spec:
+  serviceAccountName: orchestrator
+  entrypoint: sync
+  # ponytail: one step at a time, the per-run volume is ReadWriteOnce (as for the screening)
+  parallelism: 1
+  arguments:
+    parameters:
+      - name: repository  # host/path of this repository, set by the overlay
+      - name: policies
+        value: policies/pilote
+  volumeClaimTemplates:
+    - metadata:
+        name: work
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 100Mi
+  volumes:
+    - name: knock-key  # knock's public key: what dt-publish verifies with
+      secret: {secretName: orchestrator-knock-key, items: [{key: cosign.pub, path: cosign.pub}]}
+
+  templates:
+    - name: sync
+      failFast: false  # every image is tried; one failure fails the run, the next run retries it
+      steps:
+        - - name: checkout  # for the policies: owners and regime
+            templateRef: {name: orchestrator-screening, template: checkout}
+        - - name: inventory
+            template: knock-audit
+        - - name: plan
+            template: dt
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    dt-plan --audit /work/audit.json
+                    --policies /work/repo/{{workflow.parameters.policies}}
+        - - name: publish
+            template: dt
+            withParam: "{{=toJson(jsonpath(steps.plan.outputs.result, '$.send'))}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    dt-publish --ref {{item.ref}} --digest {{item.digest}}
+                    --project {{item.project}} --version {{item.version}}
+                    --tags '{{item.tags}}' --uuid {{item.uuid}}
+          - name: retire
+            template: dt
+            withParam: "{{=toJson(jsonpath(steps.plan.outputs.result, '$.retire'))}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: dt-retire --uuid {{item.uuid}}
+
+    - name: knock-audit
+      retryStrategy: &retry
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff:
+          duration: 10s
+          factor: "2"
+      container:
+        image: knock
+        command: [sh, -c]
+        # To a file: Argo bounds a step's stdout, and the fleet can outgrow it.
+        args: ["knock audit --signed --sbom > /work/audit.json"]
+        env:
+          - {name: KNOCK_LOG_FORMAT, value: json}
+        envFrom:
+          - secretRef: {name: orchestrator-knock}  # the roster and the registry credentials
+        volumeMounts:
+          - {name: work, mountPath: /work}
+
+    - name: dt
+      retryStrategy: *retry
+      inputs:
+        parameters:
+          - name: args
+      container:
+        image: orchestrator
+        command: [sh, -c]
+        args: ["python -m uske {{inputs.parameters.args}}"]
+        workingDir: /app
+        env:
+          - {name: HOME, value: /tmp}  # cosign keeps a cache under $HOME; the image runs as 65532
+        envFrom:
+          - secretRef: {name: orchestrator-dt}  # DT_URL, DT_API_KEY
+          - secretRef: {name: orchestrator-harbor}  # registry credentials for cosign
+        volumeMounts:
+          - {name: work, mountPath: /work}
+          - {name: knock-key, mountPath: /keys, readOnly: true}
+---
+# Every 15 minutes, one run at a time (D-27): Dependency-Track re-analyses on its own, this only
+# has to catch new placements and departures.
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: dt-sync
+spec:
+  schedules: ["*/15 * * * *"]
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    workflowTemplateRef:
+      name: dt-sync

@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=https://trivoallan.github.io/regis/schemas/playbook/v1alpha1/playbook.schema.json
+apiVersion: regis.io/v1alpha1
+kind: Playbook
+metadata:
+  name: evaluation-version
+  title: Évaluation d'une version
+  labels:
+    app.kubernetes.io/version: "1.0.0"
+
+spec:
+  # Trois issues. Premier tier vrai l'emporte. La distinction
+  # réparable / rédhibitoire sur les failles repose entièrement sur `cve-fixable`.
+  tiers:
+    - name: Placement direct
+      condition:
+        and:
+          - { var: rules.cve-critical.passed }
+          - { var: rules.no-secret.passed }
+          - { var: rules.no-licence-toxique.passed }
+          - { var: rules.no-root.passed }
+          - { var: rules.freshness.passed }
+
+    - name: Transformation requise puis placement
+      condition:
+        and:
+          - { var: rules.no-secret.passed }
+          - { var: rules.no-licence-toxique.passed }
+          # Une faille critique est acceptable ICI si et seulement si
+          # un correctif existe : la transformation l'appliquera.
+          - or:
+              - { var: rules.cve-critical.passed }
+              - { var: rules.cve-fixable.passed }
+
+    - name: Quarantaine
+      condition:
+        or:
+          - { "!": [{ var: rules.no-secret.passed }] }
+          - { "!": [{ var: rules.no-licence-toxique.passed }] }
+          - and:
+              - { "!": [{ var: rules.cve-critical.passed }] }
+              - { "!": [{ var: rules.cve-fixable.passed }] }
+
+  rules:
+    # ===== RÉDHIBITOIRE : rien ne les répare =====
+    # Un secret présent dans une couche d'origine survit à la
+    # reconstruction : la couche est conservée telle quelle.
+    - provider: secrets
+      criterion: verified-secrets
+      slug: no-secret
+      level: critical
+      tags: [version, redhibitoire]
+
+    - provider: sbom
+      criterion: license-blocklist
+      slug: no-licence-toxique
+      level: critical
+      tags: [version, redhibitoire]
+      options:
+        # Identifiants SPDX actuels, comme au tier allégé : `GPL-2.0` et `GPL-3.0`,
+        # dépréciés depuis SPDX 3.0, ne correspondaient à rien de ce que Syft
+        # remonte (essai du 19 septembre 2026 : redis:7.4-alpine placé en officiel,
+        # mis en quarantaine en dérogation). Le périmètre reste à arbitrer : DEBT-13.
+        blocklist:
+          - GPL-2.0-only
+          - GPL-2.0-or-later
+          - GPL-3.0-only
+          - GPL-3.0-or-later
+          - AGPL-3.0-only
+          - AGPL-3.0-or-later
+          - SSPL-1.0
+
+    # ===== LE COUPLE QUI DÉCIDE =====
+    # cve-critical dit qu'il y a un problème.
+    # cve-fixable dit si on peut le corriger à la mise à disposition.
+    - provider: cve
+      criterion: cve-count
+      slug: cve-critical
+      level: critical
+      tags: [version, discriminant]
+      options: { level: critical, max_count: 0 }
+
+    - provider: cve
+      criterion: fix-available
+      slug: cve-fixable
+      level: warning
+      tags: [version, discriminant]
+
+    # ===== RÉPARABLE : les transformations déclarées les corrigent =====
+    - provider: oci
+      criterion: user-blacklist
+      slug: no-root
+      level: critical
+      tags: [version, reparable]
+      # La brique qui fixe l'utilisateur est À LIVRER.
+      # Tant qu'elle n'existe pas, ce critère est de fait informatif.
+
+    - provider: freshness
+      criterion: age
+      slug: freshness
+      level: warning
+      tags: [version, reparable]
+      options: { max_days: 90 }
+
+    # ===== INFORMATIF =====
+    - provider: cve
+      criterion: cve-count
+      slug: cve-high
+      level: warning
+      tags: [version, informatif]
+      options: { level: high, max_count: 10 }
+
+    - provider: secrets
+      criterion: secret-scan
+      slug: secrets-non-verifies
+      level: warning
+      tags: [version, informatif]
+
+    - provider: dockle
+      criterion: severity-count
+      slug: bonnes-pratiques
+      level: warning
+      tags: [version, informatif]

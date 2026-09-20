@@ -1,0 +1,8 @@
+# One screening, started by hand (the CronWorkflow is suspended in kind).
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: orchestrator-screening-
+spec:
+  workflowTemplateRef:
+    name: orchestrator-screening

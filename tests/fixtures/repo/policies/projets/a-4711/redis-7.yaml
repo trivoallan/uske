@@ -1,0 +1,40 @@
+# D-redis7 — politique DÉROGATOIRE « redis 7 » du projet A-4711 (spécification §6, D-05, D-06 ;
+# scénarios D1-b, D4).
+#
+# Ce que le régime dérogatoire change, et rien d'autre (D-05) :
+#   - la destination : l'espace du projet, pas `hub/` ;
+#   - le jeu de règles : allégé (tier du playbook version) — hors de ce fichier ;
+#   - l'avis SSI : absent — hors de ce fichier.
+# Pas de `transform` : voie copie. Marquage, inventaire et mesure sont identiques à l'officielle.
+# Demandée et confirmée par l'équipe projet elle-même (demandeur habilité pour son espace) ;
+# la CAO du projet reste porteuse (D-16).
+#
+# À LIVRER (spécification DEBT-06) : à la promotion, la politique officielle qui remplace
+# celle-ci doit pouvoir être nommée ici, pour que la consigne de bascule ait une cible.
+# Le champ n'existe pas encore dans knock ; l'intention, en label, en attendant :
+#   replaced-by: hub-redis-7
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: a-4711-redis-7
+  labels:
+    admission-track: derogation
+    major: "7"
+    cao: cao-data
+    project: a-4711
+spec:
+  artifactType: image
+  source:
+    registry: docker.io
+    repository: library/redis
+  imports:
+    - name: v7
+      owners:
+        - group:default/cao-data       # la CAO porteuse, et elle seule (D-38) :
+                                       # le consommateur est la destination, a-4711
+      tags:
+        includeRegex: "^7\\."
+      destinations:
+        - registry: harbor
+          project: a-4711              # l'espace du projet — plus de hub_private, plus de réplication
+          repository: redis

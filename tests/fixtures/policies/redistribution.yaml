@@ -1,0 +1,13 @@
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: fixture-redistribution
+  labels:
+    admission-track: redistribution
+spec:
+  artifactType: image
+  source: {registry: harbor, repository: producer/app}
+  imports:
+    - name: shared
+      tags: {includeRegex: ".*"}
+      destinations: [{registry: harbor, project: shared-test, repository: app}]

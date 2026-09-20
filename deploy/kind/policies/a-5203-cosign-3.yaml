@@ -1,0 +1,28 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# The same project under a second CAO.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: a-5203-cosign-3
+  labels:
+    admission-track: derogation
+    major: "3"
+    cao: cao-plateforme
+    project: a-5203
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/cosign
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-plateforme
+        - group:default/a-5203
+      tags:
+        includeRegex: "^v3\\.1\\.1$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: a-5203
+          repository: cosign

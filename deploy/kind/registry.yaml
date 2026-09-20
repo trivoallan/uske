@@ -1,0 +1,57 @@
+# A throwaway registry standing in for Harbor: Zot, over TLS with a self-signed CA made by up.sh, with its web UI (the `ui` and
+# `search` extensions) on the registry port itself, as in knock's local overlay. It shows what
+# arrived and what was placed — repos, tags, annotations, referrers:
+#   kubectl -n orchestrator port-forward svc/registry 8082:5000   # then https://localhost:8082
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-config
+data:
+  config.json: |
+    {
+      "storage": {"rootDirectory": "/var/lib/registry"},
+      "http": {"address": "0.0.0.0", "port": "5000", "compat": ["docker2s2"],
+               "tls": {"cert": "/etc/zot/tls/tls.crt", "key": "/etc/zot/tls/tls.key"}},
+      "log": {"level": "info"},
+      "extensions": {"search": {"enable": true}, "ui": {"enable": true},
+                     "trust": {"enable": true, "cosign": true, "notation": false}}
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+spec:
+  selector:
+    matchLabels: {app: registry}
+  template:
+    metadata:
+      labels: {app: registry}
+    spec:
+      containers:
+        - name: registry
+          # up.sh swaps the architecture for the node's
+          image: ghcr.io/project-zot/zot-linux-arm64:v2.1.21
+          args: [serve, /etc/zot/config.json]
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - {name: config, mountPath: /etc/zot}
+            - {name: tls, mountPath: /etc/zot/tls, readOnly: true}
+            - {name: data, mountPath: /var/lib/registry}
+      volumes:
+        - name: config
+          configMap: {name: registry-config}
+        - name: data
+          emptyDir: {}
+        - name: tls
+          secret: {secretName: registry-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+spec:
+  selector: {app: registry}
+  ports:
+    - port: 5000

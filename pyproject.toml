@@ -1,0 +1,16 @@
+[project]
+name = "uske"
+version = "0.0.0"
+description = "Beats time between regis, which says whether, and knock, which does — and records."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["pyyaml>=6.0.2"]
+
+[project.scripts]
+uske = "uske.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

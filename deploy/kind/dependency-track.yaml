@@ -1,0 +1,32 @@
+# PostgreSQL for Dependency-Track (`up.sh dt`). Throwaway: no volume, the data dies with the pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+spec:
+  selector:
+    matchLabels: {app: postgresql}
+  template:
+    metadata:
+      labels: {app: postgresql}
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:17-alpine
+          env:
+            - {name: POSTGRES_DB, value: dtrack}
+            - {name: POSTGRES_USER, valueFrom: {secretKeyRef: {name: dt-db, key: username}}}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: dt-db, key: password}}}
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec: {command: [pg_isready, -U, dtrack]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+spec:
+  selector: {app: postgresql}
+  ports:
+    - port: 5432

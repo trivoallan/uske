@@ -1,0 +1,28 @@
+# Demonstration policy for the kind environment (change politiques-de-demonstration).
+# An image with no distribution package: one of the few the licence rule lets through (DEBT-13).
+# No `major` label: hello-world publishes no versioned tag.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: a-7300-hello-world
+  labels:
+    admission-track: derogation
+    cao: cao-outillage
+    project: a-7300
+spec:
+  artifactType: image
+  source:
+    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/hello-world
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-outillage
+        - group:default/a-7300
+      tags:
+        includeRegex: "^latest$"
+        semverOnly: false
+      destinations:
+        - registry: local
+          project: a-7300
+          repository: hello-world

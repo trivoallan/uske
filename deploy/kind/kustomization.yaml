@@ -1,0 +1,87 @@
+# Local environment: kind, Zot (TLS, self-signed CA, with its UI) for Harbor, the published regis
+# and knock. Every tool trusts the CA through SSL_CERT_FILE (a bundle: public CAs plus ours).
+# `up.sh` creates the cluster, the images and the secrets, then applies this.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orchestrator
+resources:
+  - ../base
+  - registry.yaml
+images:
+  - {name: orchestrator, newName: orchestrator, newTag: dev}
+  - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:95fc4bbdb87e77726c3d79f4977ed3c8d80c4141017797d031b1ba0f03783f5a"}  # 0.38.1-full
+  - {name: knock, newName: ghcr.io/trivoallan/knock, digest: "sha256:2381703b01eb791ebf2d4f91dc2dc403f759b52bd1db0913904f6d0d3e77087d"}  # 0.12.0
+patches:
+  # Rounds are started by hand here.
+  - target: {kind: CronWorkflow, name: orchestrator}
+    patch: |-
+      - op: add
+        path: /spec/suspend
+        value: true
+  - target: {kind: WorkflowTemplate, name: orchestrator-screening}
+    patch: |-
+      - op: replace
+        path: /spec/arguments/parameters/0/value
+        value: local
+      - op: replace
+        path: /spec/arguments/parameters/1/value
+        value: deploy/kind/policies
+      # The rule sets this repository carries for its tests.
+      - op: replace
+        path: /spec/arguments/parameters/2/value
+        value: tests/fixtures/repo/playbooks
+      # The repository is mounted from the host (kind extraMounts), not cloned.
+      - op: add
+        path: /spec/volumes/-
+        value: {name: repository, hostPath: {path: /repository, type: Directory}}
+      - op: replace
+        path: /spec/templates/3/container
+        value:
+          image: orchestrator
+          command: [sh, -c]
+          args: ["rm -rf /work/repo && cp -r /repository /work/repo"]
+          volumeMounts:
+            - {name: work, mountPath: /work}
+            - {name: repository, mountPath: /repository, readOnly: true}
+      # The CA bundle for regis and knock, and knock's test signing key.
+      - op: add
+        path: /spec/volumes/-
+        value: {name: registry-ca, secret: {secretName: registry-ca}}
+      - op: add
+        path: /spec/volumes/-
+        value: {name: knock-key, secret: {secretName: orchestrator-knock-key}}
+      - op: add
+        path: /spec/templates/6/container/volumeMounts/-
+        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+      - op: add
+        path: /spec/templates/7/container/volumeMounts/-
+        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+      - op: add
+        path: /spec/templates/7/container/volumeMounts/-
+        value: {name: knock-key, mountPath: /keys, readOnly: true}
+  # dt-sync (change `dt-sync`): passes started by hand, the same checkout, CA and policies.
+  - target: {kind: CronWorkflow, name: dt-sync}
+    patch: |-
+      - op: add
+        path: /spec/suspend
+        value: true
+  - target: {kind: WorkflowTemplate, name: dt-sync}
+    patch: |-
+      - op: replace
+        path: /spec/arguments/parameters/0/value
+        value: local
+      - op: replace
+        path: /spec/arguments/parameters/1/value
+        value: deploy/kind/policies
+      - op: add
+        path: /spec/volumes/-
+        value: {name: repository, hostPath: {path: /repository, type: Directory}}
+      - op: add
+        path: /spec/volumes/-
+        value: {name: registry-ca, secret: {secretName: registry-ca}}
+      - op: add
+        path: /spec/templates/1/container/volumeMounts/-
+        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+      - op: add
+        path: /spec/templates/2/container/volumeMounts/-
+        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}

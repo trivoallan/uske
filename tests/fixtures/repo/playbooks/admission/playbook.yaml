@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://trivoallan.github.io/regis/schemas/playbook/v1alpha1/playbook.schema.json
+apiVersion: regis.io/v1alpha1
+kind: Playbook
+metadata:
+  name: admission-politique
+  title: Admission d'une politique d'import
+  labels:
+    app.kubernetes.io/version: "1.0.0"
+
+spec:
+  # Premier tier dont la condition est vraie l'emporte : l'ordre compte.
+  tiers:
+    - name: Politique admissible
+      condition:
+        and:
+          - { var: rules.registry-source-approuvee.passed }
+          - { var: rules.no-latest.passed }
+    - name: Admissible avec réserves
+      condition: { var: rules.registry-source-approuvee.passed }
+    - name: Arbitrage requis
+      condition: { "!": [{ var: rules.registry-source-approuvee.passed }] }
+
+  rules:
+    # --- La source elle-même : rédhibitoire ---
+    - provider: core
+      criterion: registry-domain-whitelist
+      slug: registry-source-approuvee
+      level: critical
+      tags: [politique, redhibitoire]
+      options:
+        whitelist:
+          - docker.io
+          - ghcr.io
+          - gcr.io
+          - registry.k8s.io
+          - quay.io
+          - mcr.microsoft.com
+          - public.ecr.aws
+          - registry.access.redhat.com
+          - nvcr.io
+          # registres internes : à compléter
+
+    # --- La règle de sélection : rédhibitoire ---
+    # Une politique qui suit `latest` n'est pas traçable :
+    # on ne sait jamais quelle version est réellement entrée.
+    - provider: oci
+      criterion: tag-blacklist
+      slug: no-latest
+      level: critical
+      tags: [politique, redhibitoire]
+
+    # --- Qualité de la source : informatif, jamais bloquant ---
+    - provider: scorecarddev
+      criterion: min-score
+      slug: scorecard
+      level: warning
+      tags: [politique, informatif]
+      options: { min_score: 5.0 }
+
+    - provider: sbom
+      criterion: has-sbom
+      slug: has-sbom-amont
+      level: warning
+      tags: [politique, informatif]
+
+    # Popularité et provenance d'amont : les analyseurs existent (`popularity`,
+    # `provenance`) et leurs données sont dans le rapport, mais aucun critère
+    # packagé ne les évalue. À LIVRER côté regis (§11.3).

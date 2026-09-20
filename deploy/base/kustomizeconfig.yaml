@@ -1,0 +1,4 @@
+# Let overlays pin the images of the workflow steps: kustomize only knows pod specs by default.
+images:
+  - path: spec/templates/container/image
+    kind: WorkflowTemplate

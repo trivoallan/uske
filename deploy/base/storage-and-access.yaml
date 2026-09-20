@@ -1,0 +1,37 @@
+# Results outlive screenings: one append-only file per policy, written by `record` only.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orchestrator-results
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi  # the journal, plus one regis HTML report per decision (up to 5.6 MiB each)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchestrator
+---
+# What the Argo executor needs to report step outputs; nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orchestrator-executor
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orchestrator-executor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: orchestrator-executor
+subjects:
+  - kind: ServiceAccount
+    name: orchestrator

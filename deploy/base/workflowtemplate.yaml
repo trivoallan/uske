@@ -1,0 +1,263 @@
+# One screening: every policy, one after the other; for each, knock plans, regis judges the plan's
+# digests, and knock applies only the approved operations (D-30, knock's gate).
+# Change `socle-amorce-orchestrateur`, design decisions 3 and 6 to 10.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: orchestrator-screening
+spec:
+  serviceAccountName: orchestrator
+  entrypoint: screening
+  # ponytail: one step at a time, the per-run volume is ReadWriteOnce; widen with RWX storage
+  parallelism: 1
+  arguments:
+    parameters:
+      - name: repository  # host/path of this repository, set by the overlay
+      - name: policies
+        value: policies/pilote
+      - name: playbooks  # in that repository too
+        value: playbooks
+  volumeClaimTemplates:
+    - metadata:
+        name: work
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
+  volumes:
+    - name: results
+      persistentVolumeClaim:
+        claimName: orchestrator-results
+
+  templates:
+    - name: screening
+      steps:
+        - - name: checkout
+            template: checkout
+        - - name: list
+            template: orchestrator
+            arguments:
+              parameters:
+                - name: args
+                  value: list --policies /work/repo/{{workflow.parameters.policies}}
+        - - name: policy
+            template: policy
+            withParam: "{{steps.list.outputs.result}}"
+            arguments:
+              parameters:
+                - name: name
+                  value: "{{item.name}}"
+                - name: path
+                  value: "{{item.path}}"
+
+    - name: policy
+      inputs:
+        parameters:
+          - name: name
+          - name: path
+      synchronization:
+        mutexes:
+          - name: "policy-{{inputs.parameters.name}}"
+      steps:
+        - - name: prepare
+            template: orchestrator
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    prepare --policy {{inputs.parameters.path}}
+                    --out /work/policies/{{inputs.parameters.name}}/policy.yaml
+        - - name: plan  # knock's gate, step 1: place nothing, write every operation (D-30)
+            template: knock
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    reconcile /work/policies/{{inputs.parameters.name}}
+                    --plan-out /work/plans/{{inputs.parameters.name}}.json
+        - - name: pending
+            template: orchestrator
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    pending --policy {{inputs.parameters.path}}
+                    --plan /work/plans/{{inputs.parameters.name}}.json --results /results
+          - name: resolve
+            template: orchestrator
+            arguments:
+              parameters:
+                - name: args
+                  value: resolve --policy {{inputs.parameters.path}} --playbooks /work/repo/{{workflow.parameters.playbooks}}
+        - - name: evaluate
+            template: evaluate
+            withParam: "{{steps.pending.outputs.result}}"
+            when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') != nil}}"
+            arguments:
+              parameters:
+                - {name: policy, value: "{{inputs.parameters.name}}"}
+                - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
+                - {name: ref, value: "{{item.ref}}"}
+                - {name: digest, value: "{{item.digest}}"}
+                - {name: target, value: "{{item.target}}"}
+                - {name: key, value: "{{item.key}}"}
+          - name: unevaluated  # unknown regime: never sent to regis (D-21)
+            template: classify
+            withParam: "{{steps.pending.outputs.result}}"
+            when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') == nil}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: classify --ref {{item.ref}} --digest {{item.digest}}
+                - {name: out, value: "/work/lines/{{inputs.parameters.name}}/{{item.key}}.json"}
+        - - name: record
+            template: orchestrator
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{inputs.parameters.path}} --results /results
+                    --lines /work/lines/{{inputs.parameters.name}}
+        - - name: approve
+            template: orchestrator
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    approve --policy {{inputs.parameters.path}} --results /results
+                    --plan /work/plans/{{inputs.parameters.name}}.json
+                    --out /work/plans/{{inputs.parameters.name}}.approved.json
+        - - name: place  # knock's gate, step 2: apply only what was approved; admit signs only that
+            template: knock
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    reconcile /work/policies/{{inputs.parameters.name}}
+                    --apply-plan /work/plans/{{inputs.parameters.name}}.approved.json
+
+    - name: evaluate
+      inputs:
+        parameters: [{name: policy}, {name: playbook}, {name: ref}, {name: digest}, {name: target}, {name: key}]
+      steps:
+        - - name: regis
+            template: regis-analyze
+            continueOn:
+              failed: true  # a failed evaluation is recorded inconclusive, not lost (D-23)
+            arguments:
+              parameters:
+                - {name: target, value: "{{inputs.parameters.target}}"}
+                - {name: playbook, value: "{{inputs.parameters.playbook}}"}
+                - {name: key, value: "{{inputs.parameters.key}}"}
+        - - name: classify
+            template: classify
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    classify --playbook {{inputs.parameters.playbook}}
+                    --ref {{inputs.parameters.ref}} --digest {{inputs.parameters.digest}}
+                    --report /work/reports/{{inputs.parameters.key}}/report.json
+                    --report-link /results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html
+                    --regis-exit {{steps.regis.exitCode}}
+                - {name: out, value: "/work/lines/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
+                - {name: html, value: "/work/reports/{{inputs.parameters.key}}/report.html"}
+                - {name: link, value: "/results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html"}
+
+    - name: checkout
+      # Container steps only: a retry on a steps template would replay the whole policy.
+      retryStrategy: &retry
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff:
+          duration: 10s
+          factor: "2"
+      container:
+        image: git
+        command: [sh, -c]
+        args:
+          - >-
+            rm -rf /work/repo &&
+            git clone --depth 1 "https://oauth2:${TOKEN}@{{workflow.parameters.repository}}" /work/repo
+        env:
+          - name: TOKEN
+            valueFrom:
+              secretKeyRef: {name: orchestrator-repository, key: token}
+        volumeMounts:
+          - {name: work, mountPath: /work}
+
+    - name: orchestrator
+      retryStrategy: *retry
+      inputs:
+        parameters:
+          - name: args
+      container:
+        image: orchestrator
+        command: [sh, -c]
+        args: ["python -m uske {{inputs.parameters.args}}"]
+        workingDir: /app
+        volumeMounts:
+          - {name: work, mountPath: /work}
+          - {name: results, mountPath: /results}
+
+    - name: classify
+      retryStrategy: *retry
+      inputs:
+        parameters:
+          - name: args
+          - name: out
+          # Empty for an unknown regime: no regis, no report (D-21).
+          - {name: html, value: ""}  # where regis wrote it, on the screening's volume
+          - {name: link, value: ""}  # where it survives, next to the journal
+      container:
+        image: orchestrator
+        command: [sh, -c]
+        args:
+          # The report outlives the screening: its volume goes, /results stays (change
+          # `rapport-durable-dans-le-journal`). Copied before the line that points at it is written.
+          - >-
+            set -o pipefail && mkdir -p "$(dirname {{inputs.parameters.out}})" &&
+            if [ -f "{{inputs.parameters.html}}" ]; then
+              mkdir -p "$(dirname {{inputs.parameters.link}})" &&
+              cp "{{inputs.parameters.html}}" "{{inputs.parameters.link}}";
+            fi &&
+            python -m uske {{inputs.parameters.args}} | tee {{inputs.parameters.out}}
+        workingDir: /app
+        volumeMounts:
+          - {name: work, mountPath: /work}
+          - {name: results, mountPath: /results}
+
+    - name: regis-analyze
+      retryStrategy: *retry
+      inputs:
+        parameters: [{name: target}, {name: playbook}, {name: key}]
+      container:
+        image: regis
+        command: [sh, -c]
+        args:
+          - >-
+            regis analyze "{{inputs.parameters.target}}"
+            --playbook "{{inputs.parameters.playbook}}"
+            ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"}
+            -D /work/reports/{{inputs.parameters.key}} -o "report.{format}" --html
+        envFrom:
+          - secretRef: {name: orchestrator-harbor}
+        volumeMounts:
+          - {name: work, mountPath: /work}
+
+    - name: knock
+      retryStrategy: *retry
+      inputs:
+        parameters:
+          - name: args
+      container:
+        image: knock
+        command: [sh, -c]  # the executor needs a command: it does not read an image's entrypoint
+        # --plan-out does not create its parent directory
+        args: ["mkdir -p /work/plans && knock {{inputs.parameters.args}}"]
+        envFrom:
+          - secretRef: {name: orchestrator-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
+        volumeMounts:
+          - {name: work, mountPath: /work}
