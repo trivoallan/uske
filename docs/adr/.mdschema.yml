@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/jackchuka/mdschema/main/schema.json
+#
+# Schéma des ADR de CE dépôt. Copié depuis la méthode à la pose.
+#
+# Il affirme l'INVERSE des schémas que l'amont garde pour ses gabarits : ici, un
+# ADR conforme est un ADR QUI PORTE SON VERDICT.
+#
+# Se lance DEPUIS CE RÉPERTOIRE — la découverte du schéma remonte depuis le
+# répertoire courant, jamais depuis le fichier vérifié :
+#
+#   cd docs/adr && npx @jackchuka/mdschema@0.15.1 check '*.md'
+#
+# C'EST LUI QUI VOUS ACCUSE quand un trait est resté vide. Les `enum` sont
+# `optional` : une clé ABSENTE passe — vos propres ADR n'exposent pas de traits —
+# mais une clé PRÉSENTE et NULLE est refusée en la nommant. Mesuré le 2026-08-19
+# sur mdschema 0.15.1.
+frontmatter:
+  fields:
+    - { name: "adr", type: string }
+    - { name: "title", type: string }
+    - { name: "status", enum: [accepted, rejected] }
+    - { name: "date", format: date }
+    - { name: "authors", type: array }
+    - { name: "supersedes", type: array }
+    - { name: "traits", type: object, optional: true }
+    - { name: "traits.adr.tool", type: string, optional: true }
+    - { name: "traits.adr.traits", type: boolean, optional: true }
+    - { name: "traits.languages.main.name", type: string, optional: true }
+    - { name: "traits.localization.language.default", enum: [français, anglais], optional: true }
+    - { name: "traits.localization.language.documentation", enum: [français, anglais], optional: true }
+    - { name: "traits.localization.language.commits", enum: [français, anglais], optional: true }
+    - { name: "traits.localization.language.code", enum: [français, anglais], optional: true }
+    - { name: "traits.localization.language.comments", enum: [français, anglais], optional: true }
+    - { name: "traits.tests.coverage_target", optional: true }
+    - { name: "traits.commits.scopes", type: array, optional: true }
+    - { name: "traits.commits.tool", enum: [commitlint, hook, aucun], optional: true }
+    - { name: "traits.docs.tool", enum: [docusaurus, mkdocs, aucun], optional: true }
+    - { name: "traits.docs.root", type: string, optional: true }
+    - { name: "traits.docs.audience", enum: [mono-utilisateur, équipe, LS, groupe, public], optional: true }
+    - { name: "traits.architecture.pattern", enum: [event-driven, hexagonal, layered, microservices, monolithic, soa], optional: true }
+    - { name: "traits.architecture.document", enum: [arc42, ailleurs, aucun], optional: true }
+    - { name: "traits.record-architecture-decisions.format", enum: [MADR], optional: true }
+    - { name: "traits.record-architecture-decisions.limit", optional: true }
+    - { name: "traits.forge.host", type: string, optional: true }
+    - { name: "traits.ci.tool", type: string, optional: true }
+    - { name: "traits.ci.gate", enum: [bloquante, informative, aucune], optional: true }
+    - { name: "traits.branching.model", enum: [github-flow, trunk-based, gitflow], optional: true }
+    - { name: "traits.branching.merge", enum: [squash, merge-commit, rebase], optional: true }
+    - { name: "traits.branching.prefixes", type: array, optional: true }
+    - { name: "traits.deploy.environments", type: array, optional: true }
+    - { name: "traits.release.tool", type: string, optional: true }
+    - { name: "traits.validation.boundary", type: string, optional: true }
+    - { name: "traits.validation.data_files", type: string, optional: true }
+structure:
+  - heading:
+      pattern: "^# .+"
+    children:
+      - heading: "## Context and Problem Statement"
+      - heading: "## Decision Drivers"
+        optional: true
+      - heading: "## Considered Options"
+      - heading: "## Decision Outcome"
+        forbidden_text: ["Tout ce qui suit disparaît quand vous statuez"]
+        children:
+          - heading: "### Consequences"
+          - heading: "### Confirmation"
+            optional: true
+      - heading: "## Pros and Cons of the Options"
+        optional: true
+        allow_additional: true
+      - heading: "## More Information"
+        optional: true
