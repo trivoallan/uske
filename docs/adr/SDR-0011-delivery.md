@@ -2,15 +2,15 @@
 adr: SDR-0011
 slug: delivery
 title: Delivery
-status: proposed
-date:
-authors: []
+status: accepted
+date: 2026-09-20
+authors: [Tristan Rivoallan]
 supersedes: []
 traits:
   deploy:
-    environments:
+    environments: []
   release:
-    tool:
+    tool: release-please
 ---
 
 # Delivery
@@ -107,75 +107,25 @@ une corrective, une rupture une majeure. C'est une **norme de la méthode**, pas
 une question ouverte : il n'y a pas de clé pour elle parce qu'il n'y a rien à
 décider. Choisir `calver` serait une déviation, à écrire dans un ADR à vous.
 
-**Tout ce qui suit disparaît quand vous statuez** — de cette phrase-ci
-**jusqu'au titre** **Consequences**, ce titre non compris.
+**Décision de ce dépôt — 2026-09-20.** `deploy.environments: []` s'écarte de la paire
+proposée : rien n'est servi — `README.md` dit « Not deployed anywhere yet », et aucun flux ne
+publie l'image. `release.tool: release-please` suit la proposition pour la forge que déclare
+[`SDR-0010`](SDR-0010-forge-and-ci.md). `aucun` a été proposé et écarté par la personne qui
+statue.
 
-**Comment statuer : cinq gestes, tous dans ce fichier.** Lisez-les tous
-avant d'en faire un seul — le dernier efface les quatre autres —, et faites-les
-en **un seul acte, dans une seule merge request**.
+- `deploy.environments` : constatée — `README.md` ; confirmée le 2026-09-20
+- `release.tool` : répondue — 2026-09-20
 
-1. **Écrire la valeur de chaque clé** dans le `traits:` du frontmatter — ou,
-   si vous statuez `rejected`, **retirer le bloc `traits:` en entier**.
-2. **Passer `status:`** de `proposed` à `accepted`, ou à `rejected`.
-3. **Renseigner `date:` et `authors:`** — `date:` au format `AAAA-MM-JJ`, le
-   jour où vous statuez ; `authors:`, les noms des personnes qui ont décidé,
-   sans adresse courriel.
-4. **Écrire deux ou trois lignes sous le titre Consequences**, à la place du
-   commentaire qui s'y trouve : ce que votre décision facilite, et ce qu'elle
-   coûte.
-5. **En dernier seulement, supprimer ce bloc**, de sa première phrase
-   jusqu'au titre Consequences non compris. À sa place : le motif de ce que
-   vous avez décidé, partout où vous vous écartez de la proposition ; ou, si
-   vous l'adoptez telle quelle, une ligne qui le dit.
-
-**Le premier geste est celui qu'on oublie** : une décision écrite seulement en
-prose laisse un agent deviner. **Le titre Consequences n'est pas écrit en
-code, et c'est voulu** : la chaîne qui borne la coupe ne doit apparaître
-qu'une fois dans ce fichier, sinon qui la cherche coupe au premier faux
-positif.
-
-**Ce qui reste**, et rien de tout cela ne s'efface : la proposition de la
-méthode et ses motifs, en tête de cette section ; le titre **Consequences** et
-ce que vous y écrivez au geste 4 ; et `## More Information`, qui décrit les clés
-et sert encore après.
-
-**Cette proposition survit à la coupe** : la perdre appauvrirait cet ADR. Si
-vous décidez autrement, remplacez-la par votre décision et son motif.
-
-**Voici à quoi ressemble ce frontmatter une fois rempli.** C'est la seule
-part de ce fichier qu'un agent lit sans l'interpréter :
-
-```yaml
----
-adr: SDR-0011
-slug: delivery
-title: Delivery
-status: accepted
-date: 2026-03-14
-authors: []
-supersedes: []
-traits:
-  deploy:
-    environments:
-      - name: staging
-        trigger: merge
-      - name: production
-        trigger: tag
-  release:
-    tool: manuel
----
-```
-
-**`## Considered Options` ci-dessus est une proposition de l'amont, pas
-votre délibération.** La méthode a pesé ces options sans connaître votre
-contexte. La confrontation au vôtre reste à faire, et c'est elle qui
-distingue une décision d'un défaut accepté.
+**Ce que le dépôt fait aujourd'hui, et qui s'en écarte** : version `0.0.0`, aucun tag, aucun
+journal des changements ; `release-please` n'est pas installé.
 
 ### Consequences
 
-<!-- Ce que votre décision facilite, et ce qu'elle coûte. Deux ou trois lignes
-     suffisent — par exemple sur ce qu'un déploiement sur tag ajoute comme geste,
-     ou sur ce qu'un déploiement manuel suppose de disponibilité. -->
+Fusionner ne déploie rien, et un agent le sait. Les versions se déduiront des
+messages de commit : c'est ce qui rend `commitlint` pertinent
+([`SDR-0006`](SDR-0006-commits.md)). Le coût : l'outil reste à installer ; et la première story
+de `openspec/discovery.md`, qui déploie un screening, nommera une cible — un nouvel ADR dépassera
+alors celui-ci pour l'écrire.
 
 ## More Information
 

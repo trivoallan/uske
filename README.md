@@ -51,6 +51,17 @@ deploy/kind/up.sh down
 [`deploy/base`](deploy/base) is the workflow; an overlay pins the images and names the repository to
 check out. In the manifests the role keeps its name — `orchestrator` — whatever tool fills it.
 
+## Décisions
+
+La prose de ce dépôt s'écrit en français, le code en anglais : c'est l'une des décisions ci-dessous.
+
+- [`docs/adr/`](docs/adr/) — les décisions d'architecture, une par fichier, chacune avec son verdict
+  et la provenance de ses valeurs.
+- [`docs/architecture/arc42.md`](docs/architecture/arc42.md) — les objectifs qualité et le journal des
+  décisions, en un lieu.
+- [`openspec/discovery.md`](openspec/discovery.md) — les personas, les objectifs qualité ordonnés,
+  et les stories à venir.
+
 ## Test
 
 ```bash
