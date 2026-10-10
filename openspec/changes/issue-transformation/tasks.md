@@ -918,6 +918,6 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 - [x] 10.8 Valider le change : `openspec validate issue-transformation --type change --strict`.
   Attendu : `Change 'issue-transformation' is valid`.
 - [x] 10.9 Commit : `git add README.md docs/ openspec/discovery.md && git commit -m "docs: le screening en deux portes, et les décisions qui le tiennent"`.
-- [ ] 10.10 Ouvrir la demande de fusion du workflow, du banc et des écrits : titre `feat: le
+- [x] 10.10 Ouvrir la demande de fusion du workflow, du banc et des écrits : titre `feat: le
   screening fait juger ce que knock reconstruit avant de le promouvoir`. Sa description porte les
   résultats des tâches 1.1, 9.5 et 9.9.
