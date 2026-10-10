@@ -386,6 +386,47 @@ class Rebuild(Workdir):
                 value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
                 self.assertEqual(self.approve(value)[1], ["1.0"])
 
+    def judge_held(self, source: str, held: str, value) -> list[dict]:
+        path = self.write(f"held-{held[-4:]}.json", value)
+        code, lines = run("classify", "--playbook", str(FULL), "--ref", self.HELD, "--digest", held,
+                          "--report", path, "--source-ref", self.SOURCE, "--source-digest", source)
+        self.assertEqual(code, 0)
+        return lines
+
+    def test_a_repaired_image_is_promoted_and_closes_nothing(self):
+        self.judge_source(D1, self.REPAIR)
+        lines = self.judge_held(D1, S1, report("Placement direct"))
+        self.assertEqual([(l["digest"], l["state"], l["source"]) for l in lines],
+                         [(S1, "direct-placement", D1)])
+        self.record("held.json", lines)
+        value = staged(self.NAME, [("1.0", D1, S1), ("1.1", D2, S2)])
+        result, kept = self.approve_held(value)
+        self.assertEqual(result, {"approved": 1})
+        self.assertEqual(kept, [value["entries"][0]])  # handed back exactly as knock wrote it
+
+    def test_a_refused_rebuild_closes_its_source(self):
+        self.judge_source(D1, self.REPAIR)
+        lines = self.judge_held(D1, S1, self.REPAIR)
+        held, closing = lines
+        self.assertEqual((held["digest"], held["state"], held["source"]), (S1, "transformation-required", D1))
+        self.assertEqual((closing["digest"], closing["ref"], closing["state"], closing["reason"]),
+                         (D1, self.SOURCE, "quarantine", "uske/rebuild-refused"))
+        self.assertEqual((closing["rebuilt"], closing["ruleset"], closing["report"]),
+                         (S1, held["ruleset"], held["report"]))
+        self.assertEqual(self.record("held.json", lines), 2)
+        self.assertEqual(self.record("held-again.json", lines), 0)  # replaying the second gate adds nothing
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit"),
+                         ({"approved": 0, "discarded": {"refused": 1}}, []))
+        todo = run("pending", "--policy", self.POLICY, "--plan", self.write("plan.json", rebuilt),
+                   "--results", str(self.results))[1]
+        self.assertEqual(todo, [])  # a closed source is not judged again
+
+    def test_a_first_gate_line_is_untouched(self):
+        line = self.classify(FULL, self.SOURCE, D1, self.REPAIR)
+        self.assertIsInstance(line, dict)
+        self.assertNotIn("source", line)
+
 
 class NothingHardcoded(unittest.TestCase):
     def test_no_fixture_identifier_in_code(self):

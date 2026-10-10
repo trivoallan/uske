@@ -7,6 +7,7 @@ Exit 1 is a technical failure (Argo retries it), exit 2 a usage error (argparse)
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import os
@@ -114,7 +115,18 @@ def cmd_classify(args) -> None:
         # what a human opens, when the workflow kept it; else what was read, for a local run
         report=(args.report_link or str(report_path)) if report is not None else None,
     )
-    _json(line.to_dict())
+    if not args.source_digest:  # first gate; Argo passes an empty string
+        _json(line.to_dict())
+        return
+    lines = [dataclasses.replace(line, source=args.source_digest).to_dict()]
+    if outcome in (outcomes.Outcome.TRANSFORMATION_REQUIRED, outcomes.Outcome.QUARANTINE):
+        # the rebuild was judged and refused: close the source, one attempt only
+        lines.append(results.ResultLine(
+            ts=line.ts, ref=args.source_ref, digest=args.source_digest,
+            state=outcomes.Outcome.QUARANTINE.value, ruleset=ruleset,
+            reason=gate.REBUILD_REFUSED, report=line.report, rebuilt=args.digest,
+        ).to_dict())
+    _json(lines)
 
 
 def cmd_record(args) -> None:
@@ -272,6 +284,8 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--report", help="the regis report read to judge")
     s.add_argument("--report-link", help="where that report survives the screening; recorded instead of --report")
     s.add_argument("--regis-exit", type=int, default=0)
+    s.add_argument("--source-ref", default="", help="for a held image: the source it was built from")
+    s.add_argument("--source-digest", default="", help="for a held image: that source's digest")
     s.set_defaults(run=cmd_classify)
 
     s = sub.add_parser("record", help="append this screening's lines")

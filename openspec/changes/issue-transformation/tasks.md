@@ -418,7 +418,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
 **Fichiers** : `uske/cli.py`, `tests/test_orchestrator.py`.
 
-- [ ] 6.1 Écrire le test qui échoue, dans `class Rebuild` :
+- [x] 6.1 Écrire le test qui échoue, dans `class Rebuild` :
 
   ```python
       def judge_held(self, source: str, held: str, value) -> list[dict]:
@@ -462,8 +462,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
           self.assertIsInstance(line, dict)
           self.assertNotIn("source", line)
   ```
-- [ ] 6.2 Lancer la commande de test. Attendu : `error: unrecognized arguments: --source-ref`.
-- [ ] 6.3 Dans `uske/cli.py`, ajouter `import dataclasses` avec les imports de la bibliothèque
+- [x] 6.2 Lancer la commande de test. Attendu : `error: unrecognized arguments: --source-ref`.
+- [x] 6.3 Dans `uske/cli.py`, ajouter `import dataclasses` avec les imports de la bibliothèque
   standard, et remplacer la dernière ligne de `cmd_classify`, `_json(line.to_dict())`, par :
 
   ```python
@@ -487,8 +487,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
       s.add_argument("--source-ref", default="", help="for a held image: the source it was built from")
       s.add_argument("--source-digest", default="", help="for a held image: that source's digest")
   ```
-- [ ] 6.4 Lancer la commande de test. Attendu : `OK`.
-- [ ] 6.5 Commit : `git add uske/cli.py tests/test_orchestrator.py && git commit -m "feat: classify consigne une image retenue et clôt la source d'une reconstruction refusée"`.
+- [x] 6.4 Lancer la commande de test. Attendu : `OK`.
+- [x] 6.5 Commit : `git add uske/cli.py tests/test_orchestrator.py && git commit -m "feat: classify consigne une image retenue et clôt la source d'une reconstruction refusée"`.
 
 ## 7. Les essais bornés, la réouverture, et ce que la clôture ne dit pas
 
