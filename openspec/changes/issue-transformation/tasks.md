@@ -112,6 +112,32 @@ de fusion du groupe 9.
   rien. Le banc `kind` remonté sur les noms d'après a joué un screening `Succeeded`, 83 étapes,
   en 38 minutes : c'est la durée de référence de la tâche 9.5.
 
+**Ce que le banc a montré le 2026-10-10**, sur les deux politiques de réparation seules (nœud
+`arm64`, `knock` 0.13.0, `regis` 0.38.1) :
+
+- *Le chemin refusé tient en entier* (9.7, 9.8). `hub-refusee` (`redis:7.2.0`) : source à réparer,
+  reconstruite, retenue, jugée `transformation-required` sur `cve/cve-count`, source close par
+  `uske/rebuild-refused` avec `rebuilt`, rien de promu. Au screening suivant, `place` est sauté et
+  le journal n'a pas de ligne de plus. `{{steps.place.status}}` vaut bien `Skipped` : le point
+  d'Argo que la revue n'avait pas pu vérifier (finding 16) tient.
+- *La panne de construction aussi* (une moitié de 9.9). Deux passages ont eu leurs constructions
+  en échec : la seconde porte a tourné, rien n'a été promu, la politique a fini en échec.
+- *La réparation marche, et n'est pas encore promue* (9.6 non tenue). `hub-reparable`
+  (`alpine:3.18.0`) passe de 5 failles critiques à 0. `regis` 0.38.1 ne lit pas la date de
+  création d'une image sans variante `linux/amd64` : la fraîcheur reste *incomplete*. Avec
+  `trivoallan/regis#870` monté sur l'image publiée, la même image retenue sort en « Placement
+  direct ». La tâche 9.6 attend une version de `regis` qui le porte, puis sa nouvelle épingle.
+- *Une règle incomplète ne clôt plus* (ajout au groupe 6). Rouverte à la main par une ligne
+  `uske/reopened`, la source d'Alpine a été rejugée et reconstruite ; son image retenue est
+  consignée `inconclusive`, raison `freshness/age`, sans clôture.
+- *Trois réglages du banc*, absents du plan : le miroir de paquets est l'hôte seul, parce que
+  `knock` garde le chemin ; le miroir apt est en HTTP, l'image Debian n'ayant pas de certificats ;
+  `KNOCK_BUILD_PLATFORM` suit l'architecture du nœud, parce que l'inventaire de `knock` cherche
+  la plateforme de la machine. La seconde politique s'appelle `hub-refusee`, pas `hub-en-root` :
+  `no-root` ne tombe sur aucune candidate.
+- *Restent à faire* : 9.5 (la durée du banc complet avec les deux politiques), 9.6, et l'autre
+  moitié de 9.9 (un déploiement sans transit).
+
 ## 2. Dans `knock` : dire ce qu'il reconstruit — première demande de fusion, autre dépôt
 
 Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses propres règles
@@ -572,14 +598,14 @@ et ces tests le montrent.
 tâches 1.3 et 1.5. Les noms ci-dessous sont ceux d'après le renommage (`uske`) ; si le fichier
 porte encore `orchestrator`, ce groupe attend.
 
-- [ ] 8.1 Ajouter le paramètre, **en dernier** dans `spec.arguments.parameters` (le banc patche
+- [x] 8.1 Ajouter le paramètre, **en dernier** dans `spec.arguments.parameters` (le banc patche
   les trois premiers par index) :
 
   ```yaml
         - name: transit  # a name of KNOCK_REGISTRIES: where rebuilt images are held until judged
           value: transit
   ```
-- [ ] 8.2 Dans le gabarit `policy`, à l'étape `approve`, ajouter `--transit` aux arguments :
+- [x] 8.2 Dans le gabarit `policy`, à l'étape `approve`, ajouter `--transit` aux arguments :
 
   ```yaml
                     approve --policy {{inputs.parameters.path}} --results /results
@@ -587,7 +613,7 @@ porte encore `orchestrator`, ce groupe attend.
                     --out /work/plans/{{inputs.parameters.name}}.approved.json
                     --transit {{workflow.parameters.transit}}
   ```
-- [ ] 8.3 Remplacer l'étape `place` par ces trois étapes :
+- [x] 8.3 Remplacer l'étape `place` par ces trois étapes :
 
   ```yaml
         - - name: place  # knock's gate, step 2: copies are placed, rebuilds are held in the transit
@@ -616,7 +642,7 @@ porte encore `orchestrator`, ce groupe attend.
             template: fail
             when: "{{steps.place.status}} == Failed || {{steps.place.status}} == Error"
   ```
-- [ ] 8.4 Dans le gabarit `evaluate`, remplacer la ligne `parameters: [...]` de ses entrées et
+- [x] 8.4 Dans le gabarit `evaluate`, remplacer la ligne `parameters: [...]` de ses entrées et
   l'étape `classify` par :
 
   ```yaml
@@ -655,9 +681,9 @@ porte encore `orchestrator`, ce groupe attend.
 
   Les guillemets autour des deux paramètres de source sont nécessaires : vides, ils
   disparaîtraient de la ligne de commande et `argparse` sortirait en erreur d'usage.
-- [ ] 8.5 Dans le gabarit `knock`, créer aussi le répertoire des images retenues :
+- [x] 8.5 Dans le gabarit `knock`, créer aussi le répertoire des images retenues :
   `args: ["mkdir -p /work/plans /work/staged && knock {{inputs.parameters.args}}"]`.
-- [ ] 8.6 Ajouter **à la fin** de `spec.templates` (le banc patche les gabarits 3, 6 et 7 par
+- [x] 8.6 Ajouter **à la fin** de `spec.templates` (le banc patche les gabarits 3, 6 et 7 par
   index) :
 
   ```yaml
@@ -735,7 +761,7 @@ porte encore `orchestrator`, ce groupe attend.
   ```
 
   Reprendre du gabarit `knock` le nom exact du secret et du gabarit `uske` ; ne pas les deviner.
-- [ ] 8.7 Dans `deploy/kind/kustomization.yaml`, donner au gabarit `knock-once` (index 9) les
+- [x] 8.7 Dans `deploy/kind/kustomization.yaml`, donner au gabarit `knock-once` (index 9) les
   mêmes montages que `knock` (index 7), à la suite des patches existants :
 
   ```yaml
@@ -746,7 +772,7 @@ porte encore `orchestrator`, ce groupe attend.
           path: /spec/templates/9/container/volumeMounts/-
           value: {name: knock-key, mountPath: /keys, readOnly: true}
   ```
-- [ ] 8.8 Vérifier les manifestes :
+- [x] 8.8 Vérifier les manifestes :
 
   ```bash
   kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline /tmp/uske.yaml
@@ -754,9 +780,9 @@ porte encore `orchestrator`, ce groupe attend.
 
   Attendu : `no linting errors found!`. Si `deploy/example` existe, le rendre et le linter de la
   même façon, après lui avoir ajouté `transit` dans son bloc de paramètres.
-- [ ] 8.9 Vérifier que le montage a suivi : `grep -c "registry-ca" /tmp/uske.yaml`. Attendu : un
+- [x] 8.9 Vérifier que le montage a suivi : `grep -c "registry-ca" /tmp/uske.yaml`. Attendu : un
   de plus qu'avant ce groupe.
-- [ ] 8.10 Commit : `git add deploy/ && git commit -m "feat: le screening retient ce que knock reconstruit, le fait juger, puis promouvoir"`.
+- [x] 8.10 Commit : `git add deploy/ && git commit -m "feat: le screening retient ce que knock reconstruit, le fait juger, puis promouvoir"`.
 
 ## 9. Le banc : une réparation qui réussit, une qui est refusée
 
@@ -764,9 +790,9 @@ porte encore `orchestrator`, ce groupe attend.
 (créé), deux fichiers sous `deploy/kind/policies/` (créés). Après la tâche 1.1 : les deux images
 sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous.
 
-- [ ] 9.1 Dans `deploy/kind/up.sh` et `deploy/kind/kustomization.yaml`, remplacer l'empreinte de
+- [x] 9.1 Dans `deploy/kind/up.sh` et `deploy/kind/kustomization.yaml`, remplacer l'empreinte de
   `knock` par celle de la tâche 1.3, avec son numéro de version en commentaire.
-- [ ] 9.2 Créer `deploy/kind/buildkitd.yaml` : un `Deployment` et un `Service` `buildkitd`, port
+- [x] 9.2 Créer `deploy/kind/buildkitd.yaml` : un `Deployment` et un `Service` `buildkitd`, port
   1234, image `moby/buildkit:v0.30.0-rootless`, repris de
   `../knock/deploy/components/buildkitd/deployment.yaml`. Deux écarts : pas de port de métriques,
   et un `buildkitd.toml` qui fait confiance à l'autorité du banc :
@@ -778,7 +804,7 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 
   avec le secret `registry-ca` monté sur `/etc/registry-ca`. L'ajouter à `resources:` dans
   `deploy/kind/kustomization.yaml`.
-- [ ] 9.3 Dans `deploy/kind/up.sh`, à la création du secret de `knock`, donner à la liste une
+- [x] 9.3 Dans `deploy/kind/up.sh`, à la création du secret de `knock`, donner à la liste une
   entrée de transit, un miroir et l'adresse de BuildKit :
 
   ```bash
@@ -789,7 +815,7 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 
   La dernière ligne emploie ce que la tâche 1.4 a trouvé. Ajouter après le déploiement du
   registre : `kubectl -n "$NS" rollout status deploy/buildkitd --timeout=180s`.
-- [ ] 9.4 Créer `deploy/kind/policies/hub-reparable.yaml` et `deploy/kind/policies/hub-en-root.yaml`,
+- [x] 9.4 Créer `deploy/kind/policies/hub-reparable.yaml` et `deploy/kind/policies/hub-en-root.yaml`,
   sur le modèle de `deploy/kind/policies/hub-redis-7.yaml`, label `admission-track: standard`,
   une seule étiquette sélectionnée chacune, et :
 
@@ -815,11 +841,11 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
   Attendu : le dépôt existe dans la destination ; le journal porte une ligne
   `transformation-required` sur la source, puis une ligne `direct-placement` avec une clé
   `source`. `deploy/kind/attestations.sh` sur l'image placée rend sa signature.
-- [ ] 9.7 Vérifier la réparation refusée : le même `cat` sur `/results/hub-en-root.jsonl`.
+- [x] 9.7 Vérifier la réparation refusée : le même `cat` sur `/results/hub-en-root.jsonl`.
   Attendu : trois lignes — la source en `transformation-required`, l'image retenue avec `source`,
   puis la source en `quarantine`, raison `uske/rebuild-refused`, avec `rebuilt`. Le dépôt existe
   sous `/var/lib/registry/transit/hub/` et pas sous `/var/lib/registry/hub/`.
-- [ ] 9.8 Lancer un second screening : `argo -n uske submit deploy/kind/screening.yaml --wait`.
+- [x] 9.8 Lancer un second screening : `argo -n uske submit deploy/kind/screening.yaml --wait`.
   Attendu : le journal de `hub-en-root` n'a pas de ligne de plus, et l'étape `second-gate` de
   cette politique est `Skipped`.
 - [ ] 9.9 Éprouver les pannes à la main (finding 9), chacune sur un banc remonté :
@@ -831,7 +857,7 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 
   Noter les deux résultats. Si `{{steps.place.status}}` ne se résout pas quand `place` est
   `Skipped`, le dire : c'est le point d'Argo que la revue n'a pas pu vérifier (finding 16).
-- [ ] 9.10 Commit : `git add deploy/kind && git commit -m "feat: le banc local montre une réparation réussie et une refusée"`.
+- [x] 9.10 Commit : `git add deploy/kind && git commit -m "feat: le banc local montre une réparation réussie et une refusée"`.
 
 ## 10. Écrire, décider, auditer
 

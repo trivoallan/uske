@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$ROOT/deploy/kind"
 CLUSTER=uske
 NS=uske
-KNOCK="ghcr.io/trivoallan/knock@sha256:2381703b01eb791ebf2d4f91dc2dc403f759b52bd1db0913904f6d0d3e77087d"  # 0.12.0
+KNOCK="ghcr.io/trivoallan/knock@sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9"  # 0.13.0
 REGISTRY="registry.$NS.svc.cluster.local:5000"
 
 if [[ "${1:-}" == "down" ]]; then
@@ -151,8 +151,14 @@ if ! kubectl -n "$NS" get secret registry-tls >/dev/null 2>&1; then
     --from-file=cosign.key="$tls/cosign.key" --from-file=cosign.pub="$tls/cosign.pub"
   rm -rf "$tls"
 fi
+# knock rebuilds for the node's architecture: syft and regis then read the image where they run.
+# The apt mirror is plain HTTP: a Debian image without ca-certificates cannot verify HTTPS.
+build_platform="linux/$(docker exec "$CLUSTER-control-plane" uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')"
 kubectl -n "$NS" create secret generic uske-knock \
-  --from-literal=KNOCK_REGISTRIES="{\"local\": {\"host\": \"$REGISTRY\"}}" \
+  --from-literal=KNOCK_REGISTRIES="{\"local\": {\"host\": \"$REGISTRY\"}, \"transit\": {\"host\": \"$REGISTRY/transit\"}}" \
+  --from-literal=KNOCK_TRANSFORM_PACKAGE_MIRRORS='{"bench": {"apt": "http://deb.debian.org", "apk": "https://dl-cdn.alpinelinux.org"}}' \
+  --from-literal=KNOCK_BUILD_PLATFORM="$build_platform" \
+  --from-literal=BUILDKIT_HOST=tcp://buildkitd:1234 \
   --from-literal=KNOCK_ATTEST_SIGNER=key --from-literal=KNOCK_ATTEST_KEY_REF=/keys/cosign.key \
   --from-literal=COSIGN_PASSWORD= --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --from-literal=KNOCK_SBOM_FORMATS='["spdx-json","cyclonedx-json"]' \
@@ -161,10 +167,13 @@ kubectl -n "$NS" create secret generic uske-harbor \
   --from-literal=HARBOR_HOST="$REGISTRY" --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 5. The uske and the registry (Zot, for the node's architecture).
+# 5. uske, the registry (Zot, for the node's architecture) and buildkitd, which knock drives to
+#    rebuild. The transit where rebuilds are held is a prefix of that same registry: it stands in
+#    for a private Harbor project, and Zot does not close it.
 arch="$(docker exec "$CLUSTER-control-plane" uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')"
 kubectl kustomize "$HERE" | sed "s/zot-linux-arm64/zot-linux-$arch/" | kubectl apply -n "$NS" -f -
 kubectl -n "$NS" rollout status deploy/registry --timeout=120s
+kubectl -n "$NS" rollout status deploy/buildkitd --timeout=180s
 
 # knock's public key becomes Zot's only trusted cosign key: a green badge then means "signed at
 # admission by knock", nothing else (design, decision 13).
@@ -204,7 +213,9 @@ gcr.io/distroless/static-debian12@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef3
 docker.io/library/nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 mirror/nginx:1.27-alpine
 ghcr.io/sigstore/cosign/cosign@sha256:6bbe0d281d955c79f85b325f0f7e651c1bcab5a4fa4ad4903d74955178a3b2eb mirror/cosign:v3.1.1
 registry.k8s.io/pause@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a mirror/pause:3.10
-docker.io/library/hello-world@sha256:5e23090353324d887c48ad5e5c56d294eab81588df9605b07d1afe895f9cc8f8 mirror/hello-world:latest"
+docker.io/library/hello-world@sha256:5e23090353324d887c48ad5e5c56d294eab81588df9605b07d1afe895f9cc8f8 mirror/hello-world:latest
+docker.io/library/alpine@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11 mirror/alpine:3.18.0
+docker.io/library/redis@sha256:c45b9ac48fde5e7ffc59e785719165511b1327151c392c891c2f552a83446847 mirror/redis-repair:7.2.0"
 script='while read -r src dst; do
   [ -n "$src" ] || continue
   if crane digest "$REGISTRY/$dst" >/dev/null 2>&1; then echo "present $dst"; else crane copy "$src" "$REGISTRY/$dst" && echo "copied $dst"; fi
