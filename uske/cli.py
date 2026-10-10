@@ -144,8 +144,15 @@ def cmd_record(args) -> None:
     for f in files:
         value = _read_json(str(f))
         lines.extend(value if isinstance(value, list) else [value])
-    written = results.append(results.path_for(args.results, policy.name), lines)
-    _json({"written": written})
+    for line in lines:
+        try:
+            datetime.strptime(line["ts"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise Failure(f"{line.get('digest')}: ts must be %Y-%m-%dT%H:%M:%SZ, got {line.get('ts')!r}") from exc
+    written, stale = results.append(results.path_for(args.results, policy.name), lines)
+    for message in stale:
+        print(message, file=sys.stderr)
+    _json({"written": written, **({"stale": len(stale)} if stale else {})})
 
 
 def cmd_approve(args) -> None:

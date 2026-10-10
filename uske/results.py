@@ -57,19 +57,25 @@ def attempts(lines: list[dict], source: str) -> int:
     return count
 
 
-def append(path: Path, new_lines: list[dict]) -> int:
-    """Append in a single write. A line that repeats a digest's last state is dropped (D-27), and so is
-    a line older than that digest's last line: the journal only moves forward, so replaying a step
-    never reopens a decision."""
-    last = {line["digest"]: (line["ts"], line["state"]) for line in read(path)}
-    kept = []
+def append(path: Path, new_lines: list[dict]) -> tuple[int, list[str]]:
+    """Append in a single write; returns (written, stale). A line that repeats a digest's last state is
+    dropped (D-27), and so is a line older than that digest's newest line: the journal only moves
+    forward, so replaying a step never reopens a decision. `stale` describes the lines dropped for age."""
+    last: dict[str, tuple[str, str]] = {}  # digest -> (newest ts, state of the last line)
+    for line in read(path):
+        ts = max(line.get("ts") or "", last.get(line["digest"], ("", ""))[0])
+        last[line["digest"]] = (ts, line["state"])
+    kept, stale = [], []
     for line in new_lines:
-        ts, state = last.get(line["digest"], ("", None))
-        if line["ts"] >= ts and line["state"] != state:
+        newest, state = last.get(line["digest"], ("", None))
+        # ponytail: second resolution — a replay inside the same second as the newer line is not caught; the workflow never does that
+        if line["ts"] < newest:
+            stale.append(f"stale: {line['digest']} {line['ts']} is older than {newest}")
+        elif line["state"] != state:
             kept.append(line)
             last[line["digest"]] = (line["ts"], line["state"])
     if kept:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as out:
             out.write("".join(json.dumps(line, ensure_ascii=False) + "\n" for line in kept))
-    return len(kept)
+    return len(kept), stale

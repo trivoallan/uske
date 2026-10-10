@@ -223,6 +223,39 @@ class Record(Workdir):
         self.assertTrue(after.startswith(before))
         self.assertEqual(len(after.splitlines()), 2)
 
+    def record_lines(self, lines) -> tuple[int, object]:
+        return run("record", "--policy", str(FIXTURES / "standard.yaml"), "--results", str(self.results),
+                   "--lines", self.write("in.json", lines))
+
+    def test_a_legacy_line_without_ts_is_the_oldest(self):
+        self.results.mkdir(exist_ok=True)
+        journal = self.results / "fixture-standard.jsonl"
+        journal.write_text(json.dumps({"digest": D1, "state": "inconclusive"}) + "\n")
+        line = {"ts": now(), "ref": "r:1", "digest": D1, "state": "quarantine", "ruleset": "x"}
+        self.assertEqual(self.record_lines([line]), (0, {"written": 1}))
+
+    def test_a_new_line_with_an_unreadable_ts_is_refused(self):
+        self.results.mkdir(exist_ok=True)
+        journal = self.results / "fixture-standard.jsonl"
+        journal.write_text(json.dumps({"ts": "2026-01-01T00:00:00Z", "digest": D1, "state": "inconclusive"}) + "\n")
+        before = journal.read_text()
+        for bad in ("2026-10-10", None, "2026-10-10T00:00:00.5Z", "2026-10-10T00:00:00+00:00"):
+            line = {"ts": bad, "ref": "r:1", "digest": D1, "state": "quarantine", "ruleset": "x"}
+            self.assertEqual(self.record_lines([line])[0], 1)
+            self.assertEqual(journal.read_text(), before)
+        self.assertEqual(self.record_lines([{"ref": "r:1", "digest": D1, "state": "quarantine"}])[0], 1)
+
+    def test_the_guard_compares_with_the_newest_ts_not_the_last_line(self):
+        self.results.mkdir(exist_ok=True)
+        journal = self.results / "fixture-standard.jsonl"
+        rows = [{"ts": "2026-03-01T00:00:00Z", "digest": D1, "state": "transformation-required"},
+                {"ts": "2026-05-01T00:00:00Z", "digest": D1, "state": "quarantine"},
+                {"ts": "2026-01-01T00:00:00Z", "digest": D1, "state": "abandoned"}]  # added by hand, backdated
+        journal.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        replay = {**rows[0], "ref": "r:1", "ruleset": "x"}
+        self.assertEqual(self.record_lines([replay]), (0, {"written": 0, "stale": 1}))
+        self.assertEqual(len(journal.read_text().splitlines()), 3)
+
 
 class Screening(Workdir):
     """A screening as the CronWorkflow runs it: knock's plan in, the approved plan out."""
@@ -470,6 +503,8 @@ class Rebuild(Workdir):
         self.record("src.json", original)
         self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
         self.assertEqual(self.record("src-again.json", original), 0)
+        self.assertEqual(run("record", "--policy", self.POLICY, "--results", str(self.results),
+                             "--lines", self.write("src-again.json", original))[1], {"written": 0, "stale": 1})
         self.assertEqual(self.journal()[-1]["reason"], "uske/rebuild-refused")
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
         self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], [])
