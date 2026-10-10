@@ -168,7 +168,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
 **Fichiers** : `uske/gate.py`, `uske/cli.py`, `tests/test_orchestrator.py`.
 
-- [ ] 4.1 Dans `tests/test_orchestrator.py`, donner au constructeur de plan un champ de plus.
+- [x] 4.1 Dans `tests/test_orchestrator.py`, donner au constructeur de plan un champ de plus.
   Remplacer la fonction `plan` par :
 
   ```python
@@ -181,13 +181,13 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
            "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": digest, **extra}
           for tag, digest in ops]}
   ```
-- [ ] 4.2 `approve` va rendre une clé de plus. Dans `Screening.screening`, remplacer la dernière
+- [x] 4.2 `approve` va rendre une clé de plus. Dans `Screening.screening`, remplacer la dernière
   ligne `return calls, approved, applied` par :
 
   ```python
           return calls, {"approved": approved["approved"]}, applied
   ```
-- [ ] 4.3 Écrire le test qui échoue, avant `class NothingHardcoded` :
+- [x] 4.3 Écrire le test qui échoue, avant `class NothingHardcoded` :
 
   ```python
   class Rebuild(Workdir):
@@ -233,9 +233,9 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
                   value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
                   self.assertEqual(self.approve(value)[1], ["1.0"])
   ```
-- [ ] 4.4 Lancer la commande de test. Attendu : `error: unrecognized arguments: --transit` puis
+- [x] 4.4 Lancer la commande de test. Attendu : `error: unrecognized arguments: --transit` puis
   des échecs sur `discarded`.
-- [ ] 4.5 Dans `uske/gate.py`, remplacer l'import `from uske.results import last_states` par
+- [x] 4.5 Dans `uske/gate.py`, remplacer l'import `from uske.results import last_states` par
   `from uske.results import attempts, last_states`, ajouter après les imports :
 
   ```python
@@ -274,7 +274,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
               discarded[cause] = discarded.get(cause, 0) + 1
       return {**plan, "operations": kept}, discarded
   ```
-- [ ] 4.6 Dans `uske/cli.py`, remplacer le corps de `cmd_approve` par :
+- [x] 4.6 Dans `uske/cli.py`, remplacer le corps de `cmd_approve` par :
 
   ```python
   def cmd_approve(args) -> None:
@@ -292,8 +292,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
   ```python
       s.add_argument("--transit", help="the registry rebuilds are held in; without it, no source to repair is approved")
   ```
-- [ ] 4.7 Lancer la commande de test. Attendu : `OK`.
-- [ ] 4.8 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: approve rend une source à réparer quand knock la reconstruit et qu'un transit est nommé"`.
+- [x] 4.7 Lancer la commande de test. Attendu : `OK`.
+- [x] 4.8 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: approve rend une source à réparer quand knock la reconstruit et qu'un transit est nommé"`.
 
 ## 5. Les images retenues : dues, puis filtrées
 

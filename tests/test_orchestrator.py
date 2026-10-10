@@ -147,11 +147,13 @@ class Classify(Workdir):
                     self.assertIn(tier["name"], outcomes.TIERS)
 
 
-def plan(policy: str, ops: list[tuple[str, str]], kind: str = "import") -> dict:
+def plan(policy: str, ops: list[tuple[str, str]], kind: str = "import",
+         transformed: bool | None = None) -> dict:
     """A ReconcilePlan as `knock reconcile --plan-out` writes it: (tag, source digest) per op."""
+    extra = {} if transformed is None else {"transformed": transformed}
     return {"apiVersion": "knock.io/v1alpha1", "kind": "ReconcilePlan", "operations": [
         {"policy": policy, "kind": kind, "destination": "harbor.example/shared-test/app", "tag": tag,
-         "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": digest}
+         "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": digest, **extra}
         for tag, digest in ops]}
 
 
@@ -231,7 +233,7 @@ class Screening(Workdir):
         _, approved = run("approve", "--policy", policy, "--plan", plan_file, "--results", str(self.results),
                           "--out", str(out))
         applied = [op["tag"] for op in json.loads(out.read_text())["operations"]]
-        return calls, approved, applied
+        return calls, {"approved": approved["approved"]}, applied
 
     def results_of(self, name: str) -> list[dict]:
         path = self.results / f"{name}.jsonl"
@@ -302,6 +304,50 @@ class Attempts(unittest.TestCase):
         line = results.ResultLine(ts="t", ref="r", digest=D1, state="quarantine", ruleset="x",
                                   source=D2, rebuilt=S1)
         self.assertEqual((line.to_dict()["source"], line.to_dict()["rebuilt"]), (D2, S1))
+
+
+class Rebuild(Workdir):
+    """The second gate: a source to repair is rebuilt, its output judged, then promoted or closed."""
+
+    POLICY = str(FIXTURES / "standard.yaml")
+    NAME = "fixture-standard"
+    SOURCE = "harbor.example/producer/app:1.0"
+    HELD = "harbor.example/transit/shared-test/app:1.0"
+    REPAIR = report("Transformation requise puis placement")
+
+    def record(self, name: str, lines) -> int:
+        return run("record", "--policy", self.POLICY, "--results", str(self.results),
+                   "--lines", self.write(name, lines))[1]["written"]
+
+    def judge_source(self, digest: str, value) -> None:
+        self.record(f"src-{digest[-4:]}.json", self.classify(FULL, self.SOURCE, digest, value))
+
+    def approve(self, value: dict, *extra: str) -> tuple[dict, list[str]]:
+        out = self.tmp / "approved.json"
+        _, result = run("approve", "--policy", self.POLICY, "--plan", self.write("plan.json", value),
+                        "--results", str(self.results), "--out", str(out), *extra)
+        return result, [op["tag"] for op in json.loads(out.read_text())["operations"]]
+
+    def journal(self) -> list[dict]:
+        path = self.results / f"{self.NAME}.jsonl"
+        return [json.loads(l) for l in path.read_text().splitlines()]
+
+    def test_a_source_to_repair_needs_a_rebuild_and_a_transit(self):
+        self.judge_source(D1, self.REPAIR)
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+        self.assertEqual(self.approve(rebuilt), ({"approved": 0, "discarded": {"no-transit": 1}}, []))
+        copied = plan(self.NAME, [("1.0", D1)], transformed=False)
+        self.assertEqual(self.approve(copied, "--transit", "transit")[0]["discarded"], {"not-rebuilt": 1})
+        silent = plan(self.NAME, [("1.0", D1)])
+        self.assertEqual(self.approve(silent, "--transit", "transit")[0]["discarded"], {"not-rebuilt": 1})
+
+    def test_a_sound_source_is_approved_rebuilt_or_not(self):
+        self.judge_source(D1, report("Placement direct"))
+        for transformed in (True, False, None):
+            with self.subTest(transformed=transformed):
+                value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
+                self.assertEqual(self.approve(value)[1], ["1.0"])
 
 
 class NothingHardcoded(unittest.TestCase):

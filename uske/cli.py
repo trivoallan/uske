@@ -128,11 +128,11 @@ def cmd_record(args) -> None:
 def cmd_approve(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
-    approved = gate.approve(_read_json(args.plan), policy, lines)
+    approved, discarded = gate.approve(_read_json(args.plan), policy, lines, args.transit)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(approved, indent=2))
-    _json({"approved": len(approved["operations"])})
+    _json({"approved": len(approved["operations"]), "discarded": discarded})
 
 
 def _dependency_track() -> dtsync.DependencyTrack:
@@ -270,6 +270,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--plan", required=True)
     s.add_argument("--results", required=True)
     s.add_argument("--out", required=True)
+    s.add_argument("--transit", help="the registry rebuilds are held in; without it, no source to repair is approved")
     s.set_defaults(run=cmd_approve)
 
     s = sub.add_parser("dt-plan", help="the placed fleet vs Dependency-Track: what to send, what to retire")
