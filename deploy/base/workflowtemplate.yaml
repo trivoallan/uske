@@ -1,5 +1,7 @@
 # One screening: every policy, one after the other; for each, knock plans, regis judges the plan's
-# digests, and knock applies only the approved operations (D-30, knock's gate).
+# digests, and knock applies only the approved operations (D-30, knock's gate). What knock rebuilds
+# is held in a transit registry, judged there by its own digest, and promoted only if it is sound
+# (change `issue-transformation`).
 # Change `socle-amorce-orchestrateur`, design decisions 3 and 6 to 10.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -17,6 +19,8 @@ spec:
         value: policies/pilote
       - name: playbooks  # in that repository too
         value: playbooks
+      - name: transit  # a name of KNOCK_REGISTRIES: where rebuilt images are held until judged
+        value: transit
   volumeClaimTemplates:
     - metadata:
         name: work
@@ -128,19 +132,47 @@ spec:
                     approve --policy {{inputs.parameters.path}} --results /results
                     --plan /work/plans/{{inputs.parameters.name}}.json
                     --out /work/plans/{{inputs.parameters.name}}.approved.json
-        - - name: place  # knock's gate, step 2: apply only what was approved; admit signs only that
-            template: knock
+                    --transit {{workflow.parameters.transit}}
+        - - name: place  # knock's gate, step 2: copies are placed, rebuilds are held in the transit
+            template: knock-once
             when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            continueOn:  # one failed build must not withhold the images that were held
+              failed: true
+              error: true
             arguments:
               parameters:
                 - name: args
                   value: >-
                     reconcile /work/policies/{{inputs.parameters.name}}
                     --apply-plan /work/plans/{{inputs.parameters.name}}.approved.json
+                    --stage-to {{workflow.parameters.transit}}
+                    --staged-out /work/staged/{{inputs.parameters.name}}.json
+        - - name: second-gate
+            template: staged
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            arguments:
+              parameters:
+                - {name: name, value: "{{inputs.parameters.name}}"}
+                - {name: path, value: "{{inputs.parameters.path}}"}
+                - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
+        - - name: place-failed  # the failure stays visible once everything held has been handled
+            template: fail
+            when: "{{steps.place.status}} == Failed || {{steps.place.status}} == Error"
 
     - name: evaluate
       inputs:
-        parameters: [{name: policy}, {name: playbook}, {name: ref}, {name: digest}, {name: target}, {name: key}]
+        parameters:
+          - {name: policy}
+          - {name: playbook}
+          - {name: ref}
+          - {name: digest}
+          - {name: target}
+          - {name: key}
+          # A held image names its source and writes its lines apart: read with the first
+          # gate's, the source's own line would be replayed after its closure.
+          - {name: source-ref, value: ""}
+          - {name: source-digest, value: ""}
+          - {name: lines, value: lines}
       steps:
         - - name: regis
             template: regis-analyze
@@ -162,7 +194,9 @@ spec:
                     --report /work/reports/{{inputs.parameters.key}}/report.json
                     --report-link /results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html
                     --regis-exit {{steps.regis.exitCode}}
-                - {name: out, value: "/work/lines/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
+                    --source-ref "{{inputs.parameters.source-ref}}"
+                    --source-digest "{{inputs.parameters.source-digest}}"
+                - {name: out, value: "/work/{{inputs.parameters.lines}}/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
                 - {name: html, value: "/work/reports/{{inputs.parameters.key}}/report.html"}
                 - {name: link, value: "/results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html"}
 
@@ -256,8 +290,80 @@ spec:
         image: knock
         command: [sh, -c]  # the executor needs a command: it does not read an image's entrypoint
         # --plan-out does not create its parent directory
-        args: ["mkdir -p /work/plans && knock {{inputs.parameters.args}}"]
+        args: ["mkdir -p /work/plans /work/staged && knock {{inputs.parameters.args}}"]
         envFrom:
           - secretRef: {name: uske-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
         volumeMounts:
           - {name: work, mountPath: /work}
+
+    - name: staged  # the second gate: judge what knock built, then promote what is sound
+      inputs:
+        parameters: [{name: name}, {name: path}, {name: playbook}]
+      steps:
+        - - name: pending
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    pending --policy {{inputs.parameters.path}}
+                    --staged /work/staged/{{inputs.parameters.name}}.json --results /results
+        - - name: evaluate
+            template: evaluate
+            withParam: "{{steps.pending.outputs.result}}"
+            arguments:
+              parameters:
+                - {name: policy, value: "{{inputs.parameters.name}}"}
+                - {name: playbook, value: "{{inputs.parameters.playbook}}"}
+                - {name: ref, value: "{{item.ref}}"}
+                - {name: digest, value: "{{item.digest}}"}
+                - {name: target, value: "{{item.target}}"}
+                - {name: key, value: "{{item.key}}"}
+                - {name: source-ref, value: "{{item.sourceRef}}"}
+                - {name: source-digest, value: "{{item.source}}"}
+                - {name: lines, value: staged-lines}
+        - - name: record
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{inputs.parameters.path}} --results /results
+                    --lines /work/staged-lines/{{inputs.parameters.name}}
+        - - name: approve
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    approve --policy {{inputs.parameters.path}} --results /results
+                    --staged /work/staged/{{inputs.parameters.name}}.json
+                    --out /work/staged/{{inputs.parameters.name}}.approved.json
+        - - name: promote  # the prepared policy, with admit: promote signs what it places
+            template: knock
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    promote /work/policies/{{inputs.parameters.name}}
+                    --staged /work/staged/{{inputs.parameters.name}}.approved.json
+
+    - name: knock-once  # no retry: a retried apply rebuilds every held image under a new digest
+      inputs:
+        parameters:
+          - name: args
+      container:
+        image: knock
+        command: [sh, -c]
+        args: ["mkdir -p /work/plans /work/staged && knock {{inputs.parameters.args}}"]
+        envFrom:
+          - secretRef: {name: uske-knock}
+        volumeMounts:
+          - {name: work, mountPath: /work}
+
+    - name: fail  # no retry either
+      container:
+        image: uske
+        command: [sh, -c]
+        args: ["echo 'knock reconcile --apply-plan failed for this policy' >&2; exit 1"]

@@ -1,0 +1,30 @@
+# Demonstration policy for the kind environment (change issue-transformation).
+# A source the full playbook sends to repair ("Transformation requise", measured with regis on
+# 2026-10-10): knock rebuilds it in the transit, regis judges what it built.
+# What the bench expects of it: refused, then its source closed: its findings sit in its own binary, which upgradePackages cannot touch.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: hub-refusee
+  labels:
+    admission-track: standard
+    cao: cao-plateforme
+spec:
+  artifactType: image
+  source:
+    registry: registry.uske.svc.cluster.local:5000  # a host; destinations name the roster
+    repository: mirror/redis-repair
+  imports:
+    - name: demo
+      owners:
+        - group:default/cao-plateforme
+      tags:
+        includeRegex: "^7\\.2\\.0$"
+        semverOnly: false
+      transform:
+        - rewritePackageSources: { mirror: bench }
+        - upgradePackages: { epoch: "2026-10-10" }
+      destinations:
+        - registry: local
+          project: hub
+          repository: redis-repair
