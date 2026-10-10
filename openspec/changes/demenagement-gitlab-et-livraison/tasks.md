@@ -76,13 +76,13 @@ Le renommage ne touche que `deploy/`, trois textes de `uske/`, une valeur de `us
 phrase du `README.md`. Il ne touche **ni** `openspec/changes/archive/`, **ni** `CONTEXT.md`, où le
 mot désigne l'histoire et non une ressource.
 
-- [ ] 2.1 Créer la branche.
+- [x] 2.1 Créer la branche.
 
 ```bash
 git switch -c chore/renommer-orchestrator-en-uske
 ```
 
-- [ ] 2.2 Renommer dans `deploy/` — ressources, secrets, namespace, nom logique d'image, et le nom
+- [x] 2.2 Renommer dans `deploy/` — ressources, secrets, namespace, nom logique d'image, et le nom
   DNS du registre du banc, qui dérive du namespace.
 
 ```bash
@@ -91,25 +91,25 @@ grep -rl orchestrator deploy/ | xargs sed -i '' 's/orchestrator/uske/g'
 
 Vérification : `grep -rc orchestrator deploy/ | grep -v ':0'` ne doit rien afficher.
 
-- [ ] 2.3 Renommer les trois textes de `uske/`, qui décrivent le rôle et non une ressource.
+- [x] 2.3 Renommer les trois textes de `uske/`, qui décrivent le rôle et non une ressource.
 
 ```bash
 sed -i '' 's/The orchestrator seed/The uske seed/' uske/__init__.py
 sed -i '' 's/the orchestrator judges/uske judges/; s/The orchestrator has those digests/uske has those digests/' uske/gate.py
 ```
 
-- [ ] 2.4 Renommer la raison écrite au journal pour un régime inconnu. **C'est une valeur, pas un
+- [x] 2.4 Renommer la raison écrite au journal pour un régime inconnu. **C'est une valeur, pas un
   commentaire** : elle apparaîtra dans les lignes du journal à venir. Aucun test ni aucune fixture
   ne l'affirme — vérifié le 2026-09-20 — et aucun journal réel n'existe encore, donc le geste est
   sans coût aujourd'hui et impossible plus tard sans raturer une ligne.
 
 Dans `uske/cli.py:85`, remplacer `"orchestrator/unknown-track"` par `"uske/unknown-track"`.
 
-- [ ] 2.5 Supprimer la phrase du `README.md:52` qui justifiait l'ancien nom (« In the manifests the
+- [x] 2.5 Supprimer la phrase du `README.md:52` qui justifiait l'ancien nom (« In the manifests the
   role keeps its name — `orchestrator` — whatever tool fills it. »). Le rôle qu'elle nommait
   vivait dans `docs/orchestrator/`, supprimé le 2026-09-20.
 
-- [ ] 2.6 Vérifier qu'il ne reste aucun résidu hors de l'histoire.
+- [x] 2.6 Vérifier qu'il ne reste aucun résidu hors de l'histoire.
 
 ```bash
 grep -rn orchestrator --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv \
@@ -118,7 +118,7 @@ grep -rn orchestrator --exclude-dir=.git --exclude-dir=node_modules --exclude-di
 
 Attendu : seul `CONTEXT.md` ressort, où le mot cite `docs/orchestrator/` comme fait historique.
 
-- [ ] 2.7 Lancer les tests.
+- [x] 2.7 Lancer les tests.
 
 ```bash
 uv run --with pyyaml python -m unittest discover tests -t .
@@ -126,7 +126,7 @@ uv run --with pyyaml python -m unittest discover tests -t .
 
 Attendu : `OK`.
 
-- [ ] 2.8 Rendre les manifestes du banc et les vérifier.
+- [x] 2.8 Rendre les manifestes du banc et les vérifier.
 
 ```bash
 kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline /tmp/uske.yaml
@@ -134,7 +134,7 @@ kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline /tmp/uske.
 
 Attendu : aucune erreur, et `grep -c 'name: uske' /tmp/uske.yaml` rend un nombre non nul.
 
-- [ ] 2.9 Rejouer le banc de bout en bout — c'est la seule vérification qui prouve que les secrets,
+- [x] 2.9 Rejouer le banc de bout en bout — c'est la seule vérification qui prouve que les secrets,
   le namespace et le nom DNS du registre se retrouvent.
 
 ```bash

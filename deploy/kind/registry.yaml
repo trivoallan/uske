@@ -1,7 +1,7 @@
 # A throwaway registry standing in for Harbor: Zot, over TLS with a self-signed CA made by up.sh, with its web UI (the `ui` and
 # `search` extensions) on the registry port itself, as in knock's local overlay. It shows what
 # arrived and what was placed — repos, tags, annotations, referrers:
-#   kubectl -n orchestrator port-forward svc/registry 8082:5000   # then https://localhost:8082
+#   kubectl -n uske port-forward svc/registry 8082:5000   # then https://localhost:8082
 apiVersion: v1
 kind: ConfigMap
 metadata:

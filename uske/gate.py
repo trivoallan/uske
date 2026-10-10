@@ -1,7 +1,7 @@
-"""knock's gate (D-30, form b; knock ADR 0051): knock plans, the orchestrator judges, knock applies.
+"""knock's gate (D-30, form b; knock ADR 0051): knock plans, uske judges, knock applies.
 
 `knock reconcile --plan-out` writes a ReconcilePlan: one operation per import, update or rebuild,
-each with the source digest it would copy. The orchestrator has those digests judged and returns
+each with the source digest it would copy. uske has those digests judged and returns
 the plan minus the refused operations; `knock reconcile --apply-plan` applies an operation only if
 (policy, destination, tag, kind, source digest) is still in it. A tag republished upstream changes
 digest and is withheld.

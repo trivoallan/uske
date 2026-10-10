@@ -3,22 +3,22 @@
 # `up.sh` creates the cluster, the images and the secrets, then applies this.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: orchestrator
+namespace: uske
 resources:
   - ../base
   - registry.yaml
 images:
-  - {name: orchestrator, newName: orchestrator, newTag: dev}
+  - {name: uske, newName: uske, newTag: dev}
   - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:95fc4bbdb87e77726c3d79f4977ed3c8d80c4141017797d031b1ba0f03783f5a"}  # 0.38.1-full
   - {name: knock, newName: ghcr.io/trivoallan/knock, digest: "sha256:2381703b01eb791ebf2d4f91dc2dc403f759b52bd1db0913904f6d0d3e77087d"}  # 0.12.0
 patches:
   # Rounds are started by hand here.
-  - target: {kind: CronWorkflow, name: orchestrator}
+  - target: {kind: CronWorkflow, name: uske}
     patch: |-
       - op: add
         path: /spec/suspend
         value: true
-  - target: {kind: WorkflowTemplate, name: orchestrator-screening}
+  - target: {kind: WorkflowTemplate, name: uske-screening}
     patch: |-
       - op: replace
         path: /spec/arguments/parameters/0/value
@@ -37,7 +37,7 @@ patches:
       - op: replace
         path: /spec/templates/3/container
         value:
-          image: orchestrator
+          image: uske
           command: [sh, -c]
           args: ["rm -rf /work/repo && cp -r /repository /work/repo"]
           volumeMounts:
@@ -49,7 +49,7 @@ patches:
         value: {name: registry-ca, secret: {secretName: registry-ca}}
       - op: add
         path: /spec/volumes/-
-        value: {name: knock-key, secret: {secretName: orchestrator-knock-key}}
+        value: {name: knock-key, secret: {secretName: uske-knock-key}}
       - op: add
         path: /spec/templates/6/container/volumeMounts/-
         value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}

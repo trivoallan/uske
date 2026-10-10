@@ -49,7 +49,7 @@ deploy/kind/up.sh down
 ```
 
 [`deploy/base`](deploy/base) is the workflow; an overlay pins the images and names the repository to
-check out. In the manifests the role keeps its name — `orchestrator` — whatever tool fills it.
+check out.
 
 ## Décisions
 
