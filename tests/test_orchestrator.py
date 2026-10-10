@@ -364,6 +364,9 @@ class Rebuild(Workdir):
     def test_no_staged_file_means_nothing_held(self):
         self.assertEqual(self.pending_held(None), [])
         self.assertEqual(self.approve_held(None), ({"approved": 0}, []))
+        (self.tmp / "broken.json").write_text("{")
+        self.assertEqual(run("pending", "--policy", self.POLICY, "--staged", str(self.tmp / "broken.json"),
+                             "--results", str(self.results))[0], 1)  # unreadable is still a failure
 
     def test_a_source_to_repair_needs_a_rebuild_and_a_transit(self):
         self.judge_source(D1, self.REPAIR)

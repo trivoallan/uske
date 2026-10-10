@@ -256,7 +256,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--policy", required=True)
     source = s.add_mutually_exclusive_group(required=True)
     source.add_argument("--plan", help="knock's ReconcilePlan (reconcile --plan-out)")
-    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out)")
+    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out); a missing file means nothing was held")
     s.add_argument("--results", required=True)
     s.set_defaults(run=cmd_pending)
 
@@ -284,7 +284,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--policy", required=True)
     source = s.add_mutually_exclusive_group(required=True)
     source.add_argument("--plan", help="knock's ReconcilePlan (reconcile --plan-out)")
-    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out)")
+    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out); a missing file means nothing was held")
     s.add_argument("--results", required=True)
     s.add_argument("--out", required=True)
     s.add_argument("--transit", help="name of the registry rebuilds are held in; trusted, not checked. Without it, no source to repair is approved")
