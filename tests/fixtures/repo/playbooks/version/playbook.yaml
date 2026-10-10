@@ -56,15 +56,12 @@ spec:
       level: critical
       tags: [version, redhibitoire]
       options:
-        # Identifiants SPDX actuels, comme au tier allégé : `GPL-2.0` et `GPL-3.0`,
-        # dépréciés depuis SPDX 3.0, ne correspondaient à rien de ce que Syft
-        # remonte (essai du 19 septembre 2026 : redis:7.4-alpine placé en officiel,
-        # mis en quarantaine en dérogation). Le périmètre reste à arbitrer : DEBT-13.
+        # Identifiants SPDX actuels. La famille GPL n'y est plus : elle mettait en
+        # quarantaine toute base dont Syft lit les paquets — Alpine (busybox),
+        # Debian, Ubuntu, distroless (`base-files`, `netbase`). Restent les
+        # licences qui visent le service rendu, pas la distribution. Ce que la
+        # redistribution interne engage reste à arbitrer : DEBT-13.
         blocklist:
-          - GPL-2.0-only
-          - GPL-2.0-or-later
-          - GPL-3.0-only
-          - GPL-3.0-or-later
           - AGPL-3.0-only
           - AGPL-3.0-or-later
           - SSPL-1.0
