@@ -126,6 +126,18 @@ class Classify(Workdir):
             with self.subTest(name):
                 self.assertEqual(self.classify(LIGHT, "r:1", D1, value, regis_exit)["state"], "inconclusive")
 
+    def test_a_tier_missed_on_an_unfinished_rule_is_inconclusive(self):
+        age_unread = {"slug": "freshness", "level": "warning", "passed": False, "status": "incomplete"}
+        critical = {"slug": "cve-critical", "level": "critical", "passed": False, "status": "failed"}
+        repair = "Transformation requise puis placement"
+        line = self.classify(FULL, "r:1", D1, report(repair, [age_unread]))
+        self.assertEqual((line["state"], line["reason"]), ("inconclusive", "freshness/age"))
+        # a rule that did fail decides, whatever else did not finish
+        line = self.classify(FULL, "r:1", D2, report(repair, [critical, age_unread]))
+        self.assertEqual((line["state"], line["reason"]), ("transformation-required", "cve/cve-count"))
+        line = self.classify(FULL, "r:1", D3, report("Quarantaine", [SECRET_FAILED, age_unread]))
+        self.assertEqual(line["state"], "quarantine")
+
     def test_the_recorded_report_is_the_one_that_survives(self):
         path = self.write("report.json", report("Quarantaine", [SECRET_FAILED]))
         durable = "/results/reports/pilote/abcdef.html"

@@ -170,6 +170,14 @@ reste approuvable.
 - **THEN** aucune ligne n'est écrite sur l'empreinte source
 - **AND** l'opération sur cette source est de nouveau rendue au placeur
 
+#### Scenario: Une règle que le juge n'a pas su lire ne clôt rien
+
+- **GIVEN** une image retenue dont aucune règle critique n'échoue, et dont une règle est restée
+  incomplète
+- **WHEN** ce verdict est consigné
+- **THEN** l'image retenue est consignée `inconclusive`, avec cette règle pour raison
+- **AND** aucune ligne n'est écrite sur l'empreinte source
+
 #### Scenario: Une réparation réussie ne clôt rien
 
 - **GIVEN** une image retenue dont le verdict est `direct-placement`

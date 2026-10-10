@@ -130,6 +130,11 @@ raison.
 | `transformation-required`, `quarantine` | deux : l'image retenue, puis la source close | `approve` écarte la source, `pending` ne la rejuge pas |
 | `inconclusive` | une, sur l'image retenue | la source reste approuvable : reconstruite, rejugée |
 
+**Une règle qui n'a pas conclu ne clôt rien.** Quand aucune règle critique n'a échoué et qu'une
+règle est restée *incomplete*, `classify` rend `inconclusive`, pour les deux portes : le tier a été
+manqué sur une règle que le juge n'a pas su lire. Trouvé sur le banc, où une image réparée était
+close parce que `regis` ne lisait pas sa date de création (`trivoallan/regis#870`).
+
 Alternative écartée le 2026-10-10 : ne rien écrire sur la source et laisser `approve` chercher une
 image retenue refusée qui la nomme. La version resterait `transformation-required` au journal
 alors qu'elle est refusée, et `approve` gagnerait une recherche.
@@ -190,7 +195,11 @@ reprises communes d'Argo, pour ne pas tripler chaque essai.
   Les reprises d'Argo sont sans risque (fait 6).
 - *Pas de fichier d'images retenues.* Aucun candidat, rien de promu.
 
-**D9 — Le banc : un préfixe du même registre.** `up.sh` ajoute un `buildkitd` sans privilège,
+**D9 — Le banc : un préfixe du même registre, et la réparation en variante.** Le banc par
+défaut ne gagne que l'entrée de transit, obligatoire, et ne reconstruit rien. `up.sh repair`,
+sur un banc déjà monté comme `up.sh dt`, ajoute le reste : un passage de la voie reconstruction
+retient des dizaines de gigaoctets de couches dans le nœud, et a rempli un disque le
+2026-10-10 (revue, finding 19). Il ajoute un `buildkitd` sans privilège,
 repris du composant de `knock` et qui fait confiance à l'autorité de certification du banc ; une
 entrée `transit` dans `KNOCK_REGISTRIES`, préfixe du Zot existant ; un miroir de paquets dans
 `KNOCK_TRANSFORM_PACKAGE_MIRRORS`, dont les dépôts publics de la distribution tiennent lieu ; et

@@ -1,0 +1,11 @@
+# One screening of the two sources to repair, started by hand after `up.sh repair`.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: uske-repair-
+spec:
+  workflowTemplateRef:
+    name: uske-screening
+  arguments:
+    parameters:
+      - {name: policies, value: deploy/kind/repair}

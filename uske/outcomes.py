@@ -53,4 +53,10 @@ def classify(report: dict | None, playbook: dict, regis_exit: int = 0) -> tuple[
     if outcome is Outcome.DIRECT_PLACEMENT:
         return outcome, None
     failed = next((r for r in critical if not r.get("passed")), None)
+    if failed is None:
+        # nothing critical failed: if a rule did not finish, the better tier was missed on it,
+        # and an evaluation that did not conclude decides nothing (D-23)
+        unfinished = next((r for r in rules if r.get("status") == "incomplete"), None)
+        if unfinished:
+            return Outcome.INCONCLUSIVE, reason(unfinished)
     return outcome, reason(failed) if failed else None

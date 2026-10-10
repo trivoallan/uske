@@ -1,0 +1,70 @@
+# Applied by `up.sh repair`, not by the default bench.
+# Rootless buildkitd, which knock drives over buildctl (BUILDKIT_HOST) to rebuild an image whose
+# policy declares a transform. After knock's own component (deploy/components/buildkitd), minus
+# its metrics port. It trusts the bench's CA for the registry it pulls sources from and pushes
+# rebuilds to. Rootless needs seccomp and apparmor unconfined; it does not need privilege.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: buildkitd-config
+data:
+  buildkitd.toml: |
+    [registry."registry.uske.svc.cluster.local:5000"]
+      ca = ["/etc/registry-ca/bundle.pem"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildkitd
+spec:
+  selector:
+    matchLabels: {app: buildkitd}
+  template:
+    metadata:
+      labels: {app: buildkitd}
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
+    spec:
+      containers:
+        - name: buildkitd
+          image: moby/buildkit:v0.30.0-rootless
+          args:
+            - --addr
+            - unix:///run/user/1000/buildkit/buildkitd.sock
+            - --addr
+            - tcp://0.0.0.0:1234
+            - --oci-worker-no-process-sandbox
+            - --config
+            - /etc/buildkit/buildkitd.toml
+          ports:
+            - containerPort: 1234
+          readinessProbe:
+            exec:
+              command: ["buildctl", "debug", "workers"]
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          securityContext:
+            seccompProfile: {type: Unconfined}
+            runAsUser: 1000
+            runAsGroup: 1000
+          volumeMounts:
+            - {name: buildkitd, mountPath: /home/user/.local/share/buildkit}
+            - {name: config, mountPath: /etc/buildkit, readOnly: true}
+            - {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+      volumes:
+        - name: buildkitd
+          emptyDir: {}
+        - name: config
+          configMap: {name: buildkitd-config}
+        - name: registry-ca
+          secret: {secretName: registry-ca}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildkitd
+spec:
+  selector: {app: buildkitd}
+  ports:
+    - port: 1234
+      targetPort: 1234
