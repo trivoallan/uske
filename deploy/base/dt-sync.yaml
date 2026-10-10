@@ -6,7 +6,7 @@ kind: WorkflowTemplate
 metadata:
   name: dt-sync
 spec:
-  serviceAccountName: orchestrator
+  serviceAccountName: uske
   entrypoint: sync
   # ponytail: one step at a time, the per-run volume is ReadWriteOnce (as for the screening)
   parallelism: 1
@@ -25,14 +25,14 @@ spec:
             storage: 100Mi
   volumes:
     - name: knock-key  # knock's public key: what dt-publish verifies with
-      secret: {secretName: orchestrator-knock-key, items: [{key: cosign.pub, path: cosign.pub}]}
+      secret: {secretName: uske-knock-key, items: [{key: cosign.pub, path: cosign.pub}]}
 
   templates:
     - name: sync
       failFast: false  # every image is tried; one failure fails the run, the next run retries it
       steps:
         - - name: checkout  # for the policies: owners and regime
-            templateRef: {name: orchestrator-screening, template: checkout}
+            templateRef: {name: uske-screening, template: checkout}
         - - name: inventory
             template: knock-audit
         - - name: plan
@@ -76,7 +76,7 @@ spec:
         env:
           - {name: KNOCK_LOG_FORMAT, value: json}
         envFrom:
-          - secretRef: {name: orchestrator-knock}  # the roster and the registry credentials
+          - secretRef: {name: uske-knock}  # the roster and the registry credentials
         volumeMounts:
           - {name: work, mountPath: /work}
 
@@ -86,15 +86,15 @@ spec:
         parameters:
           - name: args
       container:
-        image: orchestrator
+        image: uske
         command: [sh, -c]
         args: ["python -m uske {{inputs.parameters.args}}"]
         workingDir: /app
         env:
           - {name: HOME, value: /tmp}  # cosign keeps a cache under $HOME; the image runs as 65532
         envFrom:
-          - secretRef: {name: orchestrator-dt}  # DT_URL, DT_API_KEY
-          - secretRef: {name: orchestrator-harbor}  # registry credentials for cosign
+          - secretRef: {name: uske-dt}  # DT_URL, DT_API_KEY
+          - secretRef: {name: uske-harbor}  # registry credentials for cosign
         volumeMounts:
           - {name: work, mountPath: /work}
           - {name: knock-key, mountPath: /keys, readOnly: true}

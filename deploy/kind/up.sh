@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local environment for the orchestrator: kind + Argo Workflows + a plain registry for Harbor,
+# Local environment for the uske: kind + Argo Workflows + a plain registry for Harbor,
 # the published regis and knock. Then one screening, started by hand.
 #
 #   deploy/kind/up.sh
@@ -9,8 +9,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$ROOT/deploy/kind"
-CLUSTER=orchestrator
-NS=orchestrator
+CLUSTER=uske
+NS=uske
 KNOCK="ghcr.io/trivoallan/knock@sha256:2381703b01eb791ebf2d4f91dc2dc403f759b52bd1db0913904f6d0d3e77087d"  # 0.12.0
 REGISTRY="registry.$NS.svc.cluster.local:5000"
 
@@ -24,7 +24,7 @@ fi
 # through a port-forward. Vulnerability data: OSV for Go only, which the 2.0 candidate needs.
 if [[ "${1:-}" == "dt" ]]; then
   DT=dependency-track
-  DT_PASSWORD=orchestrator
+  DT_PASSWORD=uske
   kubectl config use-context "kind-$CLUSTER" >/dev/null
   kubectl create namespace "$DT" --dry-run=client -o yaml | kubectl apply -f -
   # Created once: a new KEK would make the secrets already encrypted in PostgreSQL unreadable.
@@ -68,7 +68,7 @@ if [[ "${1:-}" == "dt" ]]; then
     done
   fi
   # dt-sync's access: a team with bounded permissions (change dt-sync, decision 9), its API key in
-  # the orchestrator's namespace. Created once: a new key per run would pile up in the team.
+  # the uske's namespace. Created once: a new key per run would pile up in the team.
   team="$(curl -fsS -H "$auth" "$api/v1/team" | jq -r '.[] | select(.name == "dt-sync") | .uuid')"
   [[ -n "$team" ]] || team="$(curl -fsS -X PUT -H "$auth" -H 'Content-Type: application/json' \
     "$api/v1/team" -d '{"name": "dt-sync"}' | jq -r .uuid)"
@@ -76,9 +76,9 @@ if [[ "${1:-}" == "dt" ]]; then
       PORTFOLIO_MANAGEMENT_READ PORTFOLIO_MANAGEMENT_CREATE PORTFOLIO_MANAGEMENT_UPDATE; do
     curl -sS -o /dev/null -X POST -H "$auth" "$api/v1/permission/$permission/team/$team"  # 304 if held
   done
-  if ! kubectl -n "$NS" get secret orchestrator-dt >/dev/null 2>&1; then
+  if ! kubectl -n "$NS" get secret uske-dt >/dev/null 2>&1; then
     key="$(curl -fsS -X PUT -H "$auth" "$api/v1/team/$team/key" | jq -r .key)"
-    kubectl -n "$NS" create secret generic orchestrator-dt --from-literal=DT_API_KEY="$key" \
+    kubectl -n "$NS" create secret generic uske-dt --from-literal=DT_API_KEY="$key" \
       --from-literal=DT_URL="http://dependency-track-api-server.$DT.svc.cluster.local:8080"
   fi
   echo "Dependency-Track ready (admin / $DT_PASSWORD), OSV Go mirrored. Feed it the placed images:"
@@ -110,7 +110,7 @@ helm upgrade --install argo-workflows argo/argo-workflows --namespace "$NS" --wa
   --set "server.authModes={server}"
 
 # 3. Images, loaded into the node.
-docker build -q --provenance=false -f "$ROOT/Dockerfile" -t orchestrator:dev "$ROOT"
+docker build -q --provenance=false -f "$ROOT/Dockerfile" -t uske:dev "$ROOT"
 # A candidate with no package at all, built here: one file on scratch.
 printf 'FROM scratch\nCOPY README.md /README.md\n' | docker build -q --provenance=false -t candidate-empty:dev -f - "$ROOT"
 # A candidate with packages that passes regis: a Go binary on scratch (for Dependency-Track).
@@ -119,7 +119,7 @@ docker pull -q "$KNOCK" >/dev/null
 # ponytail: through an archive; `kind load docker-image` fails on Docker Desktop's containerd
 # store for multi-platform images. Zot, regis and knock (published) are pulled by the node.
 archive="$(mktemp)"
-for image in orchestrator:dev candidate-empty:dev candidate-go:dev; do
+for image in uske:dev candidate-empty:dev candidate-go:dev; do
   docker save -o "$archive" "$image"
   kind load image-archive --name "$CLUSTER" "$archive"
 done
@@ -132,7 +132,7 @@ REGIS="ghcr.io/trivoallan/regis@sha256:95fc4bbdb87e77726c3d79f4977ed3c8d80c41410
 if ! kubectl -n "$NS" get secret registry-tls >/dev/null 2>&1; then
   tls="$(mktemp -d)"
   # Full extensions: Python's ssl verifies strictly (key usage on the CA, key identifiers).
-  openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=orchestrator kind CA" \
+  openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=uske kind CA" \
     -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
     -keyout "$tls/ca.key" -out "$tls/ca.crt" 2>/dev/null
   openssl req -newkey rsa:2048 -nodes -subj "/CN=registry" -keyout "$tls/tls.key" -out "$tls/tls.csr" 2>/dev/null
@@ -147,21 +147,21 @@ if ! kubectl -n "$NS" get secret registry-tls >/dev/null 2>&1; then
   kubectl -n "$NS" create secret generic registry-ca --from-file=bundle.pem="$tls/bundle.pem"
   docker run --rm -e COSIGN_PASSWORD= -v "$tls:/keys" -w /keys --entrypoint cosign "$KNOCK" \
     generate-key-pair >/dev/null
-  kubectl -n "$NS" create secret generic orchestrator-knock-key \
+  kubectl -n "$NS" create secret generic uske-knock-key \
     --from-file=cosign.key="$tls/cosign.key" --from-file=cosign.pub="$tls/cosign.pub"
   rm -rf "$tls"
 fi
-kubectl -n "$NS" create secret generic orchestrator-knock \
+kubectl -n "$NS" create secret generic uske-knock \
   --from-literal=KNOCK_REGISTRIES="{\"local\": {\"host\": \"$REGISTRY\"}}" \
   --from-literal=KNOCK_ATTEST_SIGNER=key --from-literal=KNOCK_ATTEST_KEY_REF=/keys/cosign.key \
   --from-literal=COSIGN_PASSWORD= --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --from-literal=KNOCK_SBOM_FORMATS='["spdx-json","cyclonedx-json"]' \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n "$NS" create secret generic orchestrator-harbor \
+kubectl -n "$NS" create secret generic uske-harbor \
   --from-literal=HARBOR_HOST="$REGISTRY" --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 5. The orchestrator and the registry (Zot, for the node's architecture).
+# 5. The uske and the registry (Zot, for the node's architecture).
 arch="$(docker exec "$CLUSTER-control-plane" uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')"
 kubectl kustomize "$HERE" | sed "s/zot-linux-arm64/zot-linux-$arch/" | kubectl apply -n "$NS" -f -
 kubectl -n "$NS" rollout status deploy/registry --timeout=120s
@@ -169,15 +169,15 @@ kubectl -n "$NS" rollout status deploy/registry --timeout=120s
 # knock's public key becomes Zot's only trusted cosign key: a green badge then means "signed at
 # admission by knock", nothing else (design, decision 13).
 kubectl -n "$NS" delete pod trust-key --ignore-not-found >/dev/null
-kubectl -n "$NS" run trust-key --rm -i --restart=Never --image=orchestrator:dev --overrides='{"spec":{
-  "containers":[{"name":"t","image":"orchestrator:dev","imagePullPolicy":"Never",
+kubectl -n "$NS" run trust-key --rm -i --restart=Never --image=uske:dev --overrides='{"spec":{
+  "containers":[{"name":"t","image":"uske:dev","imagePullPolicy":"Never",
     "env":[{"name":"SSL_CERT_FILE","value":"/ca/bundle.pem"}],
     "command":["python","-c","import urllib.request as u; r=u.Request(\"https://registry:5000/v2/_zot/ext/cosign\", data=open(\"/key/cosign.pub\",\"rb\").read(), method=\"POST\"); print(\"trusted key uploaded:\", u.urlopen(r).status)"],
     "volumeMounts":[{"name":"ca","mountPath":"/ca"},{"name":"key","mountPath":"/key"}]}],
-  "volumes":[{"name":"ca","secret":{"secretName":"registry-ca"}},{"name":"key","secret":{"secretName":"orchestrator-knock-key"}}]}}'
+  "volumes":[{"name":"ca","secret":{"secretName":"registry-ca"}},{"name":"key","secret":{"secretName":"uske-knock-key"}}]}}'
 
 # 6. Three producer tags in the registry, three real images: 1.1 is the
-#    orchestrator image (Alpine, busybox under GPL-2.0: what the licence rule sees, DEBT-13).
+#    uske image (Alpine, busybox under GPL-2.0: what the licence rule sees, DEBT-13).
 #    1.0 is a scratch image holding one file (no package). 2.0 is a Go binary on scratch whose
 #    dependency has known advisories: placed (CVE rules only warn in redistribution), then
 #    watched by Dependency-Track (`up.sh dt`).
@@ -186,7 +186,7 @@ kubectl -n "$NS" run trust-key --rm -i --restart=Never --image=orchestrator:dev 
 NODE="$CLUSTER-control-plane"
 ip="$(kubectl -n "$NS" get svc registry -o jsonpath='{.spec.clusterIP}')"
 platform="linux/$(docker exec "$NODE" uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')"  # only this one is on the node
-for pair in 1.0=docker.io/library/candidate-empty:dev 1.1=docker.io/library/orchestrator:dev 2.0=docker.io/library/candidate-go:dev; do
+for pair in 1.0=docker.io/library/candidate-empty:dev 1.1=docker.io/library/uske:dev 2.0=docker.io/library/candidate-go:dev; do
   tag="${pair%%=*}"
   docker exec "$NODE" ctr -n k8s.io images tag --force "${pair#*=}" "$ip:5000/producer/app:$tag" >/dev/null
   docker exec "$NODE" ctr -n k8s.io images push --local --skip-verify --platform "$platform" "$ip:5000/producer/app:$tag" >/dev/null

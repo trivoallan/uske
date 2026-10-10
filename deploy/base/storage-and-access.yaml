@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orchestrator-results
+  name: uske-results
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -12,13 +12,13 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: orchestrator
+  name: uske
 ---
 # What the Argo executor needs to report step outputs; nothing else.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: orchestrator-executor
+  name: uske-executor
 rules:
   - apiGroups: [argoproj.io]
     resources: [workflowtaskresults]
@@ -27,11 +27,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: orchestrator-executor
+  name: uske-executor
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: orchestrator-executor
+  name: uske-executor
 subjects:
   - kind: ServiceAccount
-    name: orchestrator
+    name: uske

@@ -94,7 +94,7 @@ def cmd_classify(args) -> None:
     if args.playbook is None:
         # unknown regime: never evaluated, recorded as such (D-21, D-23)
         ruleset, report_path, report = "none", None, None
-        outcome, reason = outcomes.Outcome.INCONCLUSIVE, "orchestrator/unknown-track"
+        outcome, reason = outcomes.Outcome.INCONCLUSIVE, "uske/unknown-track"
     else:
         try:
             raw = Path(args.playbook).read_bytes()

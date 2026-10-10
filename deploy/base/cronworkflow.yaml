@@ -3,10 +3,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
-  name: orchestrator
+  name: uske
 spec:
   schedules: ["*/5 * * * *"]
   concurrencyPolicy: Forbid
   workflowSpec:
     workflowTemplateRef:
-      name: orchestrator-screening
+      name: uske-screening

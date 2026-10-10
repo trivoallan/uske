@@ -8,7 +8,7 @@
 set -euo pipefail
 
 TAG="${1:?usage: attestations.sh <tag of shared-test/app>}"
-NS=orchestrator
+NS=uske
 work="$(mktemp -d)"
 # Zot through a port of its own (8082 is the zot-ui preview's). Its certificate names the
 # service, not localhost: TLS is not checked here, the signatures are.
@@ -17,7 +17,7 @@ forward=$!
 trap 'kill $forward; rm -rf "$work"' EXIT
 IMAGE="localhost:18082/shared-test/app:$TAG"
 key="${COSIGN_PUB:-$work/cosign.pub}"
-[[ -n "${COSIGN_PUB:-}" ]] || kubectl -n "$NS" get secret orchestrator-knock-key \
+[[ -n "${COSIGN_PUB:-}" ]] || kubectl -n "$NS" get secret uske-knock-key \
   -o jsonpath='{.data.cosign\.pub}' | base64 -d > "$key"
 until curl -sk -o /dev/null "https://localhost:18082/v2/"; do sleep 1; done
 
