@@ -337,6 +337,7 @@ class Rebuild(Workdir):
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
         self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
         self.assertEqual(self.approve(rebuilt), ({"approved": 0, "discarded": {"no-transit": 1}}, []))
+        self.assertEqual(self.approve(rebuilt, "--transit", "")[0]["discarded"], {"no-transit": 1})  # what Argo passes when unset
         copied = plan(self.NAME, [("1.0", D1)], transformed=False)
         self.assertEqual(self.approve(copied, "--transit", "transit")[0]["discarded"], {"not-rebuilt": 1})
         silent = plan(self.NAME, [("1.0", D1)])

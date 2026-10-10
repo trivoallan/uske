@@ -270,7 +270,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--plan", required=True)
     s.add_argument("--results", required=True)
     s.add_argument("--out", required=True)
-    s.add_argument("--transit", help="the registry rebuilds are held in; without it, no source to repair is approved")
+    s.add_argument("--transit", help="name of the registry rebuilds are held in; trusted, not checked. Without it, no source to repair is approved")
     s.set_defaults(run=cmd_approve)
 
     s = sub.add_parser("dt-plan", help="the placed fleet vs Dependency-Track: what to send, what to retire")

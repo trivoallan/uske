@@ -15,7 +15,7 @@ from uske.outcomes import Outcome
 from uske.policies import Policy
 from uske.results import attempts, last_states
 
-MAX_ATTEMPTS = 3  # held images judged for one source before the orchestrator stops rebuilding it
+MAX_ATTEMPTS = 3  # held images already judged for one source, after which it is no longer rebuilt
 REBUILD_REFUSED = "uske/rebuild-refused"
 
 
@@ -58,7 +58,11 @@ def _discarded(op: dict, states: dict[str, str], lines: list[dict], transit: str
 
 
 def approve(plan: dict, policy: Policy, lines: list[dict], transit: str | None = None) -> tuple[dict, dict]:
-    """(the plan minus every withheld operation, how many were withheld per cause)."""
+    """(the plan minus every withheld operation, how many were withheld per cause).
+
+    `transit` is trusted, not checked: naming it is the workflow's promise that rebuilt images
+    are held and judged before they are placed.
+    """
     states = last_states(lines)
     kept, discarded = [], {}
     for op in operations(plan, policy):
