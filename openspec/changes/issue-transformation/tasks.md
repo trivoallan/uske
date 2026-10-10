@@ -54,7 +54,7 @@ décrit encore un transit proposé. Il appartient à un autre dépôt.
 Aucune de ces tâches n'écrit de code. Chacune note son résultat dans la description de la demande
 de fusion du groupe 9.
 
-- [ ] 1.1 Mesurer les candidates du banc avec le playbook complet. Pour chacune de
+- [x] 1.1 Mesurer les candidates du banc avec le playbook complet. Pour chacune de
   `alpine:3.18.0`, `redis:7.2.0`, `redis:7.4-bookworm`, `debian:bookworm-20230904-slim` :
 
   ```bash
@@ -80,7 +80,7 @@ de fusion du groupe 9.
 
   Attendu : une version postérieure à `0.12.0` et une empreinte `sha256:…`. Si elle n'existe
   pas, les groupes 8 et 9 attendent ; les groupes 3 à 7 non.
-- [ ] 1.4 Confirmer comment `knock` trouve BuildKit :
+- [x] 1.4 Confirmer comment `knock` trouve BuildKit :
 
   ```bash
   grep -rn "BUILDKIT_HOST\|--addr" ../knock/knock/adapters/buildkit_cli.py ../knock/deploy/base
