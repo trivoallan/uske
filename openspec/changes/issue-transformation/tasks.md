@@ -142,8 +142,16 @@ de fusion du groupe 9.
   image-signature` y passe ; il échoue sur les deux images du transit, qui ne sont pas signées
   comme admises. `hub-refusee` est absente de la destination. Quinze minutes pour les deux
   politiques.
-- *Restent à faire* : 9.5 (la durée du banc complet avec les deux politiques) et l'autre moitié
-  de 9.9 (un déploiement sans transit).
+- *Un déploiement sans transit* (seconde moitié de 9.9, tenue le 2026-10-10). L'entrée `transit`
+  retirée de `KNOCK_REGISTRIES`, `place` sort en 3 sur `ConfigError: --stage-to 'transit' is not
+  a registry of KNOCK_REGISTRIES`, sans reprise. Rien n'est placé ni retenu, le journal ne porte
+  que le verdict des deux sources, `promote` est sauté et la politique finit en échec.
+- *Reste à faire* : **9.5, la durée du banc complet, n'est pas mesurée.** Le screening des onze
+  politiques en était à huit, sans échec, après une cinquantaine de minutes, quand le disque du
+  poste s'est rempli ; le banc a été démonté. Repères acquis : 38 minutes pour les neuf
+  politiques d'avant ce change, 15 minutes pour les deux politiques de réparation seules. La
+  question du finding 19 — faire de la réparation une variante de `up.sh` — reste donc ouverte,
+  et le poids du banc sur le disque s'y ajoute.
 
 **Écarts au plan dans le groupe 10**, dits ici pour la relecture :
 
@@ -864,7 +872,7 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 - [x] 9.8 Lancer un second screening : `argo -n uske submit deploy/kind/screening.yaml --wait`.
   Attendu : le journal de `hub-en-root` n'a pas de ligne de plus, et l'étape `second-gate` de
   cette politique est `Skipped`.
-- [ ] 9.9 Éprouver les pannes à la main (finding 9), chacune sur un banc remonté :
+- [x] 9.9 Éprouver les pannes à la main (finding 9), chacune sur un banc remonté :
   - retirer `transit` de `KNOCK_REGISTRIES`, lancer un screening : l'étape `place` échoue, rien
     n'est placé, `place-failed` fait échouer la politique ;
   - arrêter `buildkitd` (`kubectl -n uske scale deploy/buildkitd --replicas=0`), lancer un
@@ -907,9 +915,9 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
   vérifié.
 - [x] 10.7 Relire le plan de documentation de ce fichier contre ce qui a été écrit : chaque ligne
   du tableau a son fichier modifié dans `git diff --stat main`.
-- [ ] 10.8 Valider le change : `openspec validate issue-transformation --type change --strict`.
+- [x] 10.8 Valider le change : `openspec validate issue-transformation --type change --strict`.
   Attendu : `Change 'issue-transformation' is valid`.
-- [ ] 10.9 Commit : `git add README.md docs/ openspec/discovery.md && git commit -m "docs: le screening en deux portes, et les décisions qui le tiennent"`.
+- [x] 10.9 Commit : `git add README.md docs/ openspec/discovery.md && git commit -m "docs: le screening en deux portes, et les décisions qui le tiennent"`.
 - [ ] 10.10 Ouvrir la demande de fusion du workflow, du banc et des écrits : titre `feat: le
   screening fait juger ce que knock reconstruit avant de le promouvoir`. Sa description porte les
   résultats des tâches 1.1, 9.5 et 9.9.
