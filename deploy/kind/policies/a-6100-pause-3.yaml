@@ -12,7 +12,7 @@ metadata:
 spec:
   artifactType: image
   source:
-    registry: registry.orchestrator.svc.cluster.local:5000  # a host; destinations name the roster
+    registry: registry.uske.svc.cluster.local:5000  # a host; destinations name the roster
     repository: mirror/pause
   imports:
     - name: demo

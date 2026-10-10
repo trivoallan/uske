@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: orchestrator-screening-
+  generateName: uske-screening-
 spec:
   workflowTemplateRef:
-    name: orchestrator-screening
+    name: uske-screening

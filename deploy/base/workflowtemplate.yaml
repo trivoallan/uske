@@ -4,9 +4,9 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: orchestrator-screening
+  name: uske-screening
 spec:
-  serviceAccountName: orchestrator
+  serviceAccountName: uske
   entrypoint: screening
   # ponytail: one step at a time, the per-run volume is ReadWriteOnce; widen with RWX storage
   parallelism: 1
@@ -28,7 +28,7 @@ spec:
   volumes:
     - name: results
       persistentVolumeClaim:
-        claimName: orchestrator-results
+        claimName: uske-results
 
   templates:
     - name: screening
@@ -36,7 +36,7 @@ spec:
         - - name: checkout
             template: checkout
         - - name: list
-            template: orchestrator
+            template: uske
             arguments:
               parameters:
                 - name: args
@@ -61,7 +61,7 @@ spec:
           - name: "policy-{{inputs.parameters.name}}"
       steps:
         - - name: prepare
-            template: orchestrator
+            template: uske
             arguments:
               parameters:
                 - name: args
@@ -77,7 +77,7 @@ spec:
                     reconcile /work/policies/{{inputs.parameters.name}}
                     --plan-out /work/plans/{{inputs.parameters.name}}.json
         - - name: pending
-            template: orchestrator
+            template: uske
             arguments:
               parameters:
                 - name: args
@@ -85,7 +85,7 @@ spec:
                     pending --policy {{inputs.parameters.path}}
                     --plan /work/plans/{{inputs.parameters.name}}.json --results /results
           - name: resolve
-            template: orchestrator
+            template: uske
             arguments:
               parameters:
                 - name: args
@@ -112,7 +112,7 @@ spec:
                   value: classify --ref {{item.ref}} --digest {{item.digest}}
                 - {name: out, value: "/work/lines/{{inputs.parameters.name}}/{{item.key}}.json"}
         - - name: record
-            template: orchestrator
+            template: uske
             arguments:
               parameters:
                 - name: args
@@ -120,7 +120,7 @@ spec:
                     record --policy {{inputs.parameters.path}} --results /results
                     --lines /work/lines/{{inputs.parameters.name}}
         - - name: approve
-            template: orchestrator
+            template: uske
             arguments:
               parameters:
                 - name: args
@@ -184,17 +184,17 @@ spec:
         env:
           - name: TOKEN
             valueFrom:
-              secretKeyRef: {name: orchestrator-repository, key: token}
+              secretKeyRef: {name: uske-repository, key: token}
         volumeMounts:
           - {name: work, mountPath: /work}
 
-    - name: orchestrator
+    - name: uske
       retryStrategy: *retry
       inputs:
         parameters:
           - name: args
       container:
-        image: orchestrator
+        image: uske
         command: [sh, -c]
         args: ["python -m uske {{inputs.parameters.args}}"]
         workingDir: /app
@@ -212,7 +212,7 @@ spec:
           - {name: html, value: ""}  # where regis wrote it, on the screening's volume
           - {name: link, value: ""}  # where it survives, next to the journal
       container:
-        image: orchestrator
+        image: uske
         command: [sh, -c]
         args:
           # The report outlives the screening: its volume goes, /results stays (change
@@ -243,7 +243,7 @@ spec:
             ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"}
             -D /work/reports/{{inputs.parameters.key}} -o "report.{format}" --html
         envFrom:
-          - secretRef: {name: orchestrator-harbor}
+          - secretRef: {name: uske-harbor}
         volumeMounts:
           - {name: work, mountPath: /work}
 
@@ -258,6 +258,6 @@ spec:
         # --plan-out does not create its parent directory
         args: ["mkdir -p /work/plans && knock {{inputs.parameters.args}}"]
         envFrom:
-          - secretRef: {name: orchestrator-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
+          - secretRef: {name: uske-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
         volumeMounts:
           - {name: work, mountPath: /work}
