@@ -88,7 +88,7 @@ de fusion du groupe 9.
 
   Attendu : soit `BUILDKIT_HOST` lu par `buildctl`, soit une option. La tâche 9.2 emploie ce qui
   est trouvé.
-- [ ] 1.5 Confirmer que la branche de renommage de `demenagement-gitlab-et-livraison` est
+- [x] 1.5 Confirmer que la branche de renommage de `demenagement-gitlab-et-livraison` est
   fusionnée : `grep -rn "orchestrator" deploy/ uske/ | wc -l` doit rendre `0`. Sinon, les groupes
   8 et 9 attendent, et la raison `uske/unknown-track` citée en 6.1 s'écrit encore
   `orchestrator/unknown-track` : ne pas la toucher.
@@ -108,8 +108,9 @@ de fusion du groupe 9.
   `sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9`.
 - *1.4.* `knock` ne porte aucun réglage pour l'adresse de BuildKit : `buildctl` lit
   `BUILDKIT_HOST`, comme le font ses propres manifestes.
-- *1.5.* **Non tenu** : `grep -rn "orchestrator" deploy/ uske/` rend 74 lignes. Le renommage de
-  `demenagement-gitlab-et-livraison` n'est pas fait ; les groupes 8 et 9 attendent.
+- *1.5.* Tenu depuis `trivoallan/uske#12` : `grep -rn "orchestrator" deploy/ uske/` ne rend plus
+  rien. Le banc `kind` remonté sur les noms d'après a joué un screening `Succeeded`, 83 étapes,
+  en 38 minutes : c'est la durée de référence de la tâche 9.5.
 
 ## 2. Dans `knock` : dire ce qu'il reconstruit — première demande de fusion, autre dépôt
 
