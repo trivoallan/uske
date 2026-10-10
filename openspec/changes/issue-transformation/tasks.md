@@ -495,7 +495,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 **Fichiers** : `tests/test_orchestrator.py`. Aucun code de produit : les groupes 3 à 6 suffisent,
 et ces tests le montrent.
 
-- [ ] 7.1 Écrire les tests, dans `class Rebuild` :
+- [x] 7.1 Écrire les tests, dans `class Rebuild` :
 
   ```python
       def test_a_silent_judge_is_retried_three_times_then_a_line_reopens(self):
@@ -537,12 +537,12 @@ et ces tests le montrent.
           # not a verdict of the judge on the source: the reason says so, and story 3 must read it
           self.assertNotEqual(closing["reason"], "secrets/verified-secrets")
   ```
-- [ ] 7.2 Lancer la commande de test. Attendu : `OK`, sans toucher au produit. Si un test
+- [x] 7.2 Lancer la commande de test. Attendu : `OK`, sans toucher au produit. Si un test
   échoue, le défaut est dans les groupes 3 à 6 : le corriger là.
-- [ ] 7.3 Vérifier qu'aucun identifiant de test n'est entré dans le produit :
+- [x] 7.3 Vérifier qu'aucun identifiant de test n'est entré dans le produit :
   `uv run --with pyyaml python -m unittest tests.test_orchestrator.NothingHardcoded`. Attendu :
   `OK`.
-- [ ] 7.4 Commit : `git add tests/test_orchestrator.py && git commit -m "test: les essais sans verdict sont bornés, et une ligne rouvre une source"`.
+- [x] 7.4 Commit : `git add tests/test_orchestrator.py && git commit -m "test: les essais sans verdict sont bornés, et une ligne rouvre une source"`.
 - [ ] 7.5 Ouvrir la demande de fusion du Python : titre `feat: une source à réparer passe par le
   transit, sa sortie est jugée avant d'être promue`. Sa description dit que rien ne change tant que
   le workflow ne passe pas `--transit`, et renvoie à ce change.

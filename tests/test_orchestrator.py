@@ -427,6 +427,45 @@ class Rebuild(Workdir):
         self.assertIsInstance(line, dict)
         self.assertNotIn("source", line)
 
+    def test_a_silent_judge_is_retried_three_times_then_a_line_reopens(self):
+        self.judge_source(D1, self.REPAIR)
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        for held in (S1, S2):
+            lines = self.judge_held(D1, held, report(None))
+            self.assertEqual([l["state"] for l in lines], ["inconclusive"])  # nothing closes
+            self.record(f"held-{held[-4:]}.json", lines)
+            self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+        self.record("held-third.json", self.judge_held(D1, S3, report(None)))
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit"),
+                         ({"approved": 0, "discarded": {"attempts-exhausted": 1}}, []))
+        self.assertEqual(self.journal()[-1]["digest"], S3)  # nothing was written on the source
+
+        reopen = {"ts": "2026-10-10T00:00:00Z", "ref": self.SOURCE, "digest": D1,
+                  "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"}
+        self.assertEqual(self.record("reopen.json", reopen), 1)
+        todo = run("pending", "--policy", self.POLICY, "--plan", self.write("plan.json", rebuilt),
+                   "--results", str(self.results))[1]
+        self.assertEqual([c["digest"] for c in todo], [D1])
+        self.judge_source(D1, self.REPAIR)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+
+    def test_a_closed_source_reopens_by_the_same_line(self):
+        self.judge_source(D1, self.REPAIR)
+        self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
+        self.record("reopen.json", {"ts": "2026-10-10T00:00:00Z", "ref": self.SOURCE, "digest": D1,
+                                    "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"})
+        self.judge_source(D1, self.REPAIR)
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+
+    def test_a_sound_source_whose_rebuild_is_refused_is_closed_too(self):
+        self.judge_source(D1, report("Placement direct"))
+        self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
+        closing = self.journal()[-1]
+        self.assertEqual((closing["digest"], closing["reason"]), (D1, "uske/rebuild-refused"))
+        # not a verdict of the judge on the source: the reason says so, and story 3 must read it
+        self.assertNotEqual(closing["reason"], "secrets/verified-secrets")
+
 
 class NothingHardcoded(unittest.TestCase):
     def test_no_fixture_identifier_in_code(self):
