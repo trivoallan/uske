@@ -12,11 +12,12 @@ import json
 import re
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
-from uske import cli, outcomes
+from uske import cli, outcomes, results
 from uske.outcomes import Outcome
 
 HERE = Path(__file__).parent
@@ -30,6 +31,9 @@ LIGHT = PLAYBOOKS / "version" / "playbook-allege.yaml"
 D1 = "sha256:" + "1" * 64
 D2 = "sha256:" + "2" * 64
 D3 = "sha256:" + "3" * 64
+S1 = "sha256:" + "a" * 64  # held-image digests
+S2 = "sha256:" + "b" * 64
+S3 = "sha256:" + "c" * 64
 
 
 def run(*argv: str) -> tuple[int, object]:
@@ -46,6 +50,10 @@ def report(tier: str | None, rules: list[dict] | None = None) -> dict:
 
 SECRET_FAILED = {"slug": "no-secret", "level": "critical", "passed": False, "status": "failed"}
 SECRET_INCOMPLETE = {"slug": "no-secret", "level": "critical", "passed": False, "status": "incomplete"}
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Workdir(unittest.TestCase):
@@ -144,12 +152,24 @@ class Classify(Workdir):
                     self.assertIn(tier["name"], outcomes.TIERS)
 
 
-def plan(policy: str, ops: list[tuple[str, str]], kind: str = "import") -> dict:
+def plan(policy: str, ops: list[tuple[str, str]], kind: str = "import",
+         transformed: bool | None = None) -> dict:
     """A ReconcilePlan as `knock reconcile --plan-out` writes it: (tag, source digest) per op."""
+    extra = {} if transformed is None else {"transformed": transformed}
     return {"apiVersion": "knock.io/v1alpha1", "kind": "ReconcilePlan", "operations": [
         {"policy": policy, "kind": kind, "destination": "harbor.example/shared-test/app", "tag": tag,
-         "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": digest}
+         "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": digest, **extra}
         for tag, digest in ops]}
+
+
+def staged(policy: str, items: list[tuple[str, str, str]]) -> dict:
+    """A StagedRebuilds as `knock reconcile --staged-out` writes it: (tag, source digest, held digest)."""
+    return {"apiVersion": "knock.io/v1alpha1", "kind": "StagedRebuilds", "entries": [
+        {"policy": policy, "import": "v1", "variant": "default", "kind": "import",
+         "destination": "harbor.example/shared-test/app", "tag": tag,
+         "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": source,
+         "staged": "harbor.example/transit/shared-test/app", "stagedDigest": held, "aliases": []}
+        for tag, source, held in items]}
 
 
 class Pending(Workdir):
@@ -203,6 +223,39 @@ class Record(Workdir):
         self.assertTrue(after.startswith(before))
         self.assertEqual(len(after.splitlines()), 2)
 
+    def record_lines(self, lines) -> tuple[int, object]:
+        return run("record", "--policy", str(FIXTURES / "standard.yaml"), "--results", str(self.results),
+                   "--lines", self.write("in.json", lines))
+
+    def test_a_legacy_line_without_ts_is_the_oldest(self):
+        self.results.mkdir(exist_ok=True)
+        journal = self.results / "fixture-standard.jsonl"
+        journal.write_text(json.dumps({"digest": D1, "state": "inconclusive"}) + "\n")
+        line = {"ts": now(), "ref": "r:1", "digest": D1, "state": "quarantine", "ruleset": "x"}
+        self.assertEqual(self.record_lines([line]), (0, {"written": 1}))
+
+    def test_a_new_line_with_an_unreadable_ts_is_refused(self):
+        self.results.mkdir(exist_ok=True)
+        journal = self.results / "fixture-standard.jsonl"
+        journal.write_text(json.dumps({"ts": "2026-01-01T00:00:00Z", "digest": D1, "state": "inconclusive"}) + "\n")
+        before = journal.read_text()
+        for bad in ("2026-10-10", None, "2026-10-10T00:00:00.5Z", "2026-10-10T00:00:00+00:00"):
+            line = {"ts": bad, "ref": "r:1", "digest": D1, "state": "quarantine", "ruleset": "x"}
+            self.assertEqual(self.record_lines([line])[0], 1)
+            self.assertEqual(journal.read_text(), before)
+        self.assertEqual(self.record_lines([{"ref": "r:1", "digest": D1, "state": "quarantine"}])[0], 1)
+
+    def test_the_guard_compares_with_the_newest_ts_not_the_last_line(self):
+        self.results.mkdir(exist_ok=True)
+        journal = self.results / "fixture-standard.jsonl"
+        rows = [{"ts": "2026-03-01T00:00:00Z", "digest": D1, "state": "transformation-required"},
+                {"ts": "2026-05-01T00:00:00Z", "digest": D1, "state": "quarantine"},
+                {"ts": "2026-01-01T00:00:00Z", "digest": D1, "state": "abandoned"}]  # added by hand, backdated
+        journal.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        replay = {**rows[0], "ref": "r:1", "ruleset": "x"}
+        self.assertEqual(self.record_lines([replay]), (0, {"written": 0, "stale": 1}))
+        self.assertEqual(len(journal.read_text().splitlines()), 3)
+
 
 class Screening(Workdir):
     """A screening as the CronWorkflow runs it: knock's plan in, the approved plan out."""
@@ -228,7 +281,7 @@ class Screening(Workdir):
         _, approved = run("approve", "--policy", policy, "--plan", plan_file, "--results", str(self.results),
                           "--out", str(out))
         applied = [op["tag"] for op in json.loads(out.read_text())["operations"]]
-        return calls, approved, applied
+        return calls, {"approved": approved["approved"]}, applied
 
     def results_of(self, name: str) -> list[dict]:
         path = self.results / f"{name}.jsonl"
@@ -285,6 +338,229 @@ class Screening(Workdir):
         self.screening(policy, [("1.0", D1)], {D1: report("Placement direct")})
         _, _, applied = self.screening(policy, [("1.0", D2)], {D2: report("Quarantaine", [SECRET_FAILED])})
         self.assertEqual(applied, [])  # the new digest is refused: nothing to apply for 1.0
+
+
+class Attempts(unittest.TestCase):
+    def test_counts_held_images_since_the_last_line_on_the_source(self):
+        held = lambda digest: {"digest": digest, "state": "inconclusive", "source": D1}
+        own = {"digest": D1, "state": "transformation-required"}
+        self.assertEqual(results.attempts([own, held(S1), held(S2)], D1), 2)
+        self.assertEqual(results.attempts([own, held(S1), own, held(S2)], D1), 1)
+        self.assertEqual(results.attempts([own, held(S1)], D2), 0)
+        repaired = {"digest": S2, "state": "direct-placement", "source": D1}
+        self.assertEqual(results.attempts([own, held(S1), repaired], D1), 1)  # a verdict is not an attempt
+
+    def test_a_line_carries_its_source_and_its_rebuild(self):
+        line = results.ResultLine(ts="t", ref="r", digest=D1, state="quarantine", ruleset="x",
+                                  source=D2, rebuilt=S1)
+        self.assertEqual((line.to_dict()["source"], line.to_dict()["rebuilt"]), (D2, S1))
+
+
+class Rebuild(Workdir):
+    """The second gate: a source to repair is rebuilt, its output judged, then promoted or closed."""
+
+    POLICY = str(FIXTURES / "standard.yaml")
+    NAME = "fixture-standard"
+    SOURCE = "harbor.example/producer/app:1.0"
+    HELD = "harbor.example/transit/shared-test/app:1.0"
+    REPAIR = report("Transformation requise puis placement")
+
+    def record(self, name: str, lines) -> int:
+        return run("record", "--policy", self.POLICY, "--results", str(self.results),
+                   "--lines", self.write(name, lines))[1]["written"]
+
+    def judge_source(self, digest: str, value) -> None:
+        self.record(f"src-{digest[-4:]}.json", self.classify(FULL, self.SOURCE, digest, value))
+
+    def approve(self, value: dict, *extra: str) -> tuple[dict, list[str]]:
+        out = self.tmp / "approved.json"
+        _, result = run("approve", "--policy", self.POLICY, "--plan", self.write("plan.json", value),
+                        "--results", str(self.results), "--out", str(out), *extra)
+        return result, [op["tag"] for op in json.loads(out.read_text())["operations"]]
+
+    def journal(self) -> list[dict]:
+        path = self.results / f"{self.NAME}.jsonl"
+        return [json.loads(l) for l in path.read_text().splitlines()]
+
+    def pending_held(self, value: dict | None) -> list[dict]:
+        path = self.write("staged.json", value) if value is not None else str(self.tmp / "absent.json")
+        return run("pending", "--policy", self.POLICY, "--staged", path, "--results", str(self.results))[1]
+
+    def approve_held(self, value: dict | None) -> tuple[dict, list[dict]]:
+        path = self.write("staged.json", value) if value is not None else str(self.tmp / "absent.json")
+        out = self.tmp / "staged.approved.json"
+        _, result = run("approve", "--policy", self.POLICY, "--staged", path,
+                        "--results", str(self.results), "--out", str(out))
+        return result, json.loads(out.read_text())["entries"]
+
+    def test_one_candidate_per_held_digest(self):
+        value = staged(self.NAME, [("1.0", D1, S1), ("latest", D1, S1), ("1.1", D2, S2)])
+        value["entries"].append({**value["entries"][0], "policy": "another-policy", "stagedDigest": S3})
+        todo = self.pending_held(value)
+        self.assertEqual([c["digest"] for c in todo], [S1, S2])
+        self.assertEqual(todo[0]["target"], f"harbor.example/transit/shared-test/app@{S1}")
+        self.assertEqual((todo[0]["source"], todo[0]["sourceRef"]), (D1, self.SOURCE))
+
+    def test_no_staged_file_means_nothing_held(self):
+        self.assertEqual(self.pending_held(None), [])
+        self.assertEqual(self.approve_held(None), ({"approved": 0}, []))
+        (self.tmp / "broken.json").write_text("{")
+        self.assertEqual(run("pending", "--policy", self.POLICY, "--staged", str(self.tmp / "broken.json"),
+                             "--results", str(self.results))[0], 1)  # unreadable is still a failure
+
+    def test_a_source_to_repair_needs_a_rebuild_and_a_transit(self):
+        self.judge_source(D1, self.REPAIR)
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+        self.assertEqual(self.approve(rebuilt), ({"approved": 0, "discarded": {"no-transit": 1}}, []))
+        self.assertEqual(self.approve(rebuilt, "--transit", "")[0]["discarded"], {"no-transit": 1})  # what Argo passes when unset
+        copied = plan(self.NAME, [("1.0", D1)], transformed=False)
+        self.assertEqual(self.approve(copied, "--transit", "transit")[0]["discarded"], {"not-rebuilt": 1})
+        silent = plan(self.NAME, [("1.0", D1)])
+        self.assertEqual(self.approve(silent, "--transit", "transit")[0]["discarded"], {"not-rebuilt": 1})
+
+    def test_a_sound_source_is_approved_rebuilt_or_not(self):
+        self.judge_source(D1, report("Placement direct"))
+        for transformed in (True, False, None):
+            with self.subTest(transformed=transformed):
+                value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
+                self.assertEqual(self.approve(value)[1], ["1.0"])
+
+    def judge_held(self, source: str, held: str, value) -> list[dict]:
+        path = self.write(f"held-{held[-4:]}.json", value)
+        code, lines = run("classify", "--playbook", str(FULL), "--ref", self.HELD, "--digest", held,
+                          "--report", path, "--source-ref", self.SOURCE, "--source-digest", source)
+        self.assertEqual(code, 0)
+        return lines
+
+    def test_a_held_image_names_both_its_source_ref_and_digest(self):
+        path = self.write("held.json", self.REPAIR)
+        base = ["classify", "--playbook", str(FULL), "--ref", self.HELD, "--digest", S1, "--report", path]
+        self.assertEqual(run(*base, "--source-digest", D1)[0], 1)
+        self.assertEqual(run(*base, "--source-ref", self.SOURCE)[0], 1)
+
+    def test_a_repaired_image_is_promoted_and_closes_nothing(self):
+        self.judge_source(D1, self.REPAIR)
+        lines = self.judge_held(D1, S1, report("Placement direct"))
+        self.assertEqual([(l["digest"], l["state"], l["source"]) for l in lines],
+                         [(S1, "direct-placement", D1)])
+        self.record("held.json", lines)
+        value = staged(self.NAME, [("1.0", D1, S1), ("1.1", D2, S2)])
+        result, kept = self.approve_held(value)
+        self.assertEqual(result, {"approved": 1})
+        self.assertEqual(kept, [value["entries"][0]])  # handed back exactly as knock wrote it
+
+    def test_a_refused_rebuild_closes_its_source(self):
+        self.judge_source(D1, self.REPAIR)
+        lines = self.judge_held(D1, S1, self.REPAIR)
+        held, closing = lines
+        self.assertEqual((held["digest"], held["state"], held["source"]), (S1, "transformation-required", D1))
+        self.assertEqual((closing["digest"], closing["ref"], closing["state"], closing["reason"]),
+                         (D1, self.SOURCE, "quarantine", "uske/rebuild-refused"))
+        self.assertEqual((closing["rebuilt"], closing["ruleset"], closing["report"]),
+                         (S1, held["ruleset"], held["report"]))
+        self.assertEqual(self.record("held.json", lines), 2)
+        self.assertEqual(self.record("held-again.json", lines), 0)  # replaying the second gate adds nothing
+        self.assertEqual(self.approve_held(staged(self.NAME, [("1.0", D1, S1)])), ({"approved": 0}, []))  # a refused rebuild is never promoted
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit"),
+                         ({"approved": 0, "discarded": {"refused": 1}}, []))
+        todo = run("pending", "--policy", self.POLICY, "--plan", self.write("plan.json", rebuilt),
+                   "--results", str(self.results))[1]
+        self.assertEqual(todo, [])  # a closed source is not judged again
+
+    def test_a_first_gate_line_is_untouched(self):
+        line = self.classify(FULL, self.SOURCE, D1, self.REPAIR)
+        self.assertIsInstance(line, dict)
+        self.assertNotIn("source", line)
+
+    def test_a_silent_judge_is_retried_three_times_then_a_line_reopens(self):
+        self.judge_source(D1, self.REPAIR)
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        for held in (S1, S2):
+            lines = self.judge_held(D1, held, report(None))
+            self.assertEqual([l["state"] for l in lines], ["inconclusive"])  # nothing closes
+            self.record(f"held-{held[-4:]}.json", lines)
+            self.assertEqual(self.approve_held(staged(self.NAME, [("1.0", D1, held)])), ({"approved": 0}, []))  # no verdict, no promotion
+            self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+        self.record("held-third.json", self.judge_held(D1, S3, report(None)))
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit"),
+                         ({"approved": 0, "discarded": {"attempts-exhausted": 1}}, []))
+        self.assertEqual(self.journal()[-1]["digest"], S3)  # nothing was written on the source
+
+        reopen = {"ts": now(), "ref": self.SOURCE, "digest": D1,
+                  "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"}
+        self.assertEqual(self.record("reopen.json", reopen), 1)
+        todo = run("pending", "--policy", self.POLICY, "--plan", self.write("plan.json", rebuilt),
+                   "--results", str(self.results))[1]
+        self.assertEqual([c["digest"] for c in todo], [D1])
+        self.judge_source(D1, self.REPAIR)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+
+    def test_replaying_the_first_gate_does_not_reopen_a_closed_source(self):
+        original = self.classify(FULL, self.SOURCE, D1, self.REPAIR)
+        original["ts"] = "2026-01-01T00:00:00Z"  # judged long before the rebuild
+        self.record("src.json", original)
+        self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
+        self.assertEqual(self.record("src-again.json", original), 0)
+        self.assertEqual(run("record", "--policy", self.POLICY, "--results", str(self.results),
+                             "--lines", self.write("src-again.json", original))[1], {"written": 0, "stale": 1})
+        self.assertEqual(self.journal()[-1]["reason"], "uske/rebuild-refused")
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], [])
+
+    def test_repaired_images_do_not_exhaust_their_source(self):
+        self.judge_source(D1, self.REPAIR)
+        for held in (S1, S2, S3):
+            self.record(f"held-{held[-4:]}.json", self.judge_held(D1, held, report("Placement direct")))
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+
+    def test_a_closed_source_reopens_by_the_same_line(self):
+        self.judge_source(D1, self.REPAIR)
+        self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
+        self.record("reopen.json", {"ts": now(), "ref": self.SOURCE, "digest": D1,
+                                    "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"})
+        self.judge_source(D1, self.REPAIR)
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+
+    def test_a_sound_source_whose_rebuild_is_refused_is_closed_too(self):
+        self.judge_source(D1, report("Placement direct"))
+        self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
+        closing = self.journal()[-1]
+        self.assertEqual((closing["digest"], closing["reason"]), (D1, "uske/rebuild-refused"))
+        self.assertEqual(closing["state"], "quarantine")
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], [])  # closed, though the judge found it sound
+
+    def test_a_quarantined_rebuild_closes_its_source_too(self):
+        self.judge_source(D1, self.REPAIR)
+        lines = self.judge_held(D1, S1, report("Quarantaine", [SECRET_FAILED]))
+        self.assertEqual([(l["digest"], l["state"]) for l in lines], [(S1, "quarantine"), (D1, "quarantine")])
+        self.assertEqual(lines[1]["reason"], "uske/rebuild-refused")
+        self.record("held.json", lines)
+        self.assertEqual(self.approve_held(staged(self.NAME, [("1.0", D1, S1)])), ({"approved": 0}, []))
+
+    def test_a_decided_held_image_is_not_judged_again(self):
+        self.judge_source(D1, self.REPAIR)
+        self.record("held.json", self.judge_held(D1, S1, report("Placement direct")))
+        value = staged(self.NAME, [("1.0", D1, S1), ("1.1", D2, S2)])
+        self.assertEqual([c["digest"] for c in self.pending_held(value)], [S2])
+
+    def test_another_policy_s_held_images_are_never_handed_back(self):
+        self.judge_source(D1, self.REPAIR)
+        self.record("held.json", self.judge_held(D1, S1, report("Placement direct")))
+        value = staged("another-policy", [("1.0", D1, S1)])
+        self.assertEqual(self.approve_held(value), ({"approved": 0}, []))
+
+    def test_the_bound_covers_a_sound_source_and_spares_a_copy(self):
+        self.judge_source(D1, report("Placement direct"))
+        for held in (S1, S2, S3):
+            self.record(f"held-{held[-4:]}.json", self.judge_held(D1, held, report(None)))
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt)[0]["discarded"], {"attempts-exhausted": 1})
+        self.assertEqual(self.approve(plan(self.NAME, [("1.0", D1)], transformed=False))[1], ["1.0"])
 
 
 class NothingHardcoded(unittest.TestCase):

@@ -54,7 +54,7 @@ décrit encore un transit proposé. Il appartient à un autre dépôt.
 Aucune de ces tâches n'écrit de code. Chacune note son résultat dans la description de la demande
 de fusion du groupe 9.
 
-- [ ] 1.1 Mesurer les candidates du banc avec le playbook complet. Pour chacune de
+- [x] 1.1 Mesurer les candidates du banc avec le playbook complet. Pour chacune de
   `alpine:3.18.0`, `redis:7.2.0`, `redis:7.4-bookworm`, `debian:bookworm-20230904-slim` :
 
   ```bash
@@ -80,7 +80,7 @@ de fusion du groupe 9.
 
   Attendu : une version postérieure à `0.12.0` et une empreinte `sha256:…`. Si elle n'existe
   pas, les groupes 8 et 9 attendent ; les groupes 3 à 7 non.
-- [ ] 1.4 Confirmer comment `knock` trouve BuildKit :
+- [x] 1.4 Confirmer comment `knock` trouve BuildKit :
 
   ```bash
   grep -rn "BUILDKIT_HOST\|--addr" ../knock/knock/adapters/buildkit_cli.py ../knock/deploy/base
@@ -113,7 +113,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
 **Fichiers** : `uske/results.py`, `tests/test_orchestrator.py`.
 
-- [ ] 3.1 Écrire le test qui échoue. Dans `tests/test_orchestrator.py`, ajouter l'import
+- [x] 3.1 Écrire le test qui échoue. Dans `tests/test_orchestrator.py`, ajouter l'import
   `from uske import cli, outcomes, results` (remplace `from uske import cli, outcomes`), les
   constantes après `D3` :
 
@@ -139,9 +139,9 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
                                     source=D2, rebuilt=S1)
           self.assertEqual((line.to_dict()["source"], line.to_dict()["rebuilt"]), (D2, S1))
   ```
-- [ ] 3.2 Lancer la commande de test. Attendu : `AttributeError: module 'uske.results' has no
+- [x] 3.2 Lancer la commande de test. Attendu : `AttributeError: module 'uske.results' has no
   attribute 'attempts'` et `TypeError: ... unexpected keyword argument 'source'`.
-- [ ] 3.3 Dans `uske/results.py`, ajouter deux champs à `ResultLine`, après `report` :
+- [x] 3.3 Dans `uske/results.py`, ajouter deux champs à `ResultLine`, après `report` :
 
   ```python
       source: str | None = None  # on a held image's line: the source digest it was built from
@@ -161,14 +161,14 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
               count += 1
       return count
   ```
-- [ ] 3.4 Lancer la commande de test. Attendu : `OK`.
-- [ ] 3.5 Commit : `git add uske/results.py tests/test_orchestrator.py && git commit -m "feat: le journal porte la source d'une image retenue et compte ses essais"`.
+- [x] 3.4 Lancer la commande de test. Attendu : `OK`.
+- [x] 3.5 Commit : `git add uske/results.py tests/test_orchestrator.py && git commit -m "feat: le journal porte la source d'une image retenue et compte ses essais"`.
 
 ## 4. `approve` : une source à réparer, sous deux conditions
 
 **Fichiers** : `uske/gate.py`, `uske/cli.py`, `tests/test_orchestrator.py`.
 
-- [ ] 4.1 Dans `tests/test_orchestrator.py`, donner au constructeur de plan un champ de plus.
+- [x] 4.1 Dans `tests/test_orchestrator.py`, donner au constructeur de plan un champ de plus.
   Remplacer la fonction `plan` par :
 
   ```python
@@ -181,13 +181,13 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
            "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": digest, **extra}
           for tag, digest in ops]}
   ```
-- [ ] 4.2 `approve` va rendre une clé de plus. Dans `Screening.screening`, remplacer la dernière
+- [x] 4.2 `approve` va rendre une clé de plus. Dans `Screening.screening`, remplacer la dernière
   ligne `return calls, approved, applied` par :
 
   ```python
           return calls, {"approved": approved["approved"]}, applied
   ```
-- [ ] 4.3 Écrire le test qui échoue, avant `class NothingHardcoded` :
+- [x] 4.3 Écrire le test qui échoue, avant `class NothingHardcoded` :
 
   ```python
   class Rebuild(Workdir):
@@ -233,9 +233,9 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
                   value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
                   self.assertEqual(self.approve(value)[1], ["1.0"])
   ```
-- [ ] 4.4 Lancer la commande de test. Attendu : `error: unrecognized arguments: --transit` puis
+- [x] 4.4 Lancer la commande de test. Attendu : `error: unrecognized arguments: --transit` puis
   des échecs sur `discarded`.
-- [ ] 4.5 Dans `uske/gate.py`, remplacer l'import `from uske.results import last_states` par
+- [x] 4.5 Dans `uske/gate.py`, remplacer l'import `from uske.results import last_states` par
   `from uske.results import attempts, last_states`, ajouter après les imports :
 
   ```python
@@ -274,7 +274,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
               discarded[cause] = discarded.get(cause, 0) + 1
       return {**plan, "operations": kept}, discarded
   ```
-- [ ] 4.6 Dans `uske/cli.py`, remplacer le corps de `cmd_approve` par :
+- [x] 4.6 Dans `uske/cli.py`, remplacer le corps de `cmd_approve` par :
 
   ```python
   def cmd_approve(args) -> None:
@@ -292,14 +292,14 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
   ```python
       s.add_argument("--transit", help="the registry rebuilds are held in; without it, no source to repair is approved")
   ```
-- [ ] 4.7 Lancer la commande de test. Attendu : `OK`.
-- [ ] 4.8 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: approve rend une source à réparer quand knock la reconstruit et qu'un transit est nommé"`.
+- [x] 4.7 Lancer la commande de test. Attendu : `OK`.
+- [x] 4.8 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: approve rend une source à réparer quand knock la reconstruit et qu'un transit est nommé"`.
 
 ## 5. Les images retenues : dues, puis filtrées
 
 **Fichiers** : `uske/gate.py`, `uske/cli.py`, `tests/test_orchestrator.py`.
 
-- [ ] 5.1 Dans `tests/test_orchestrator.py`, ajouter après la fonction `plan` :
+- [x] 5.1 Dans `tests/test_orchestrator.py`, ajouter après la fonction `plan` :
 
   ```python
   def staged(policy: str, items: list[tuple[str, str, str]]) -> dict:
@@ -311,7 +311,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
            "staged": "harbor.example/transit/shared-test/app", "stagedDigest": held, "aliases": []}
           for tag, source, held in items]}
   ```
-- [ ] 5.2 Écrire le test qui échoue, dans `class Rebuild` :
+- [x] 5.2 Écrire le test qui échoue, dans `class Rebuild` :
 
   ```python
       def pending_held(self, value: dict | None) -> list[dict]:
@@ -337,8 +337,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
           self.assertEqual(self.pending_held(None), [])
           self.assertEqual(self.approve_held(None), ({"approved": 0}, []))
   ```
-- [ ] 5.3 Lancer la commande de test. Attendu : `error: unrecognized arguments: --staged`.
-- [ ] 5.4 Dans `uske/gate.py`, ajouter à la fin :
+- [x] 5.3 Lancer la commande de test. Attendu : `error: unrecognized arguments: --staged`.
+- [x] 5.4 Dans `uske/gate.py`, ajouter à la fin :
 
   ```python
   def entries(staged: dict, policy: Policy) -> list[dict]:
@@ -361,7 +361,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
       kept = [e for e in entries(staged, policy) if states.get(e["stagedDigest"]) == Outcome.DIRECT_PLACEMENT]
       return {**staged, "entries": kept}
   ```
-- [ ] 5.5 Dans `uske/cli.py`, ajouter après `_read_json` :
+- [x] 5.5 Dans `uske/cli.py`, ajouter après `_read_json` :
 
   ```python
   def _read_staged(path: str) -> dict:
@@ -411,14 +411,14 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
   et sous `approve`, remplacer la ligne `s.add_argument("--plan", required=True)` par les trois
   mêmes lignes.
-- [ ] 5.6 Lancer la commande de test. Attendu : `OK`.
-- [ ] 5.7 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: pending et approve lisent le fichier des images retenues"`.
+- [x] 5.6 Lancer la commande de test. Attendu : `OK`.
+- [x] 5.7 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: pending et approve lisent le fichier des images retenues"`.
 
 ## 6. `classify` : la ligne d'une image retenue, et la clôture de sa source
 
 **Fichiers** : `uske/cli.py`, `tests/test_orchestrator.py`.
 
-- [ ] 6.1 Écrire le test qui échoue, dans `class Rebuild` :
+- [x] 6.1 Écrire le test qui échoue, dans `class Rebuild` :
 
   ```python
       def judge_held(self, source: str, held: str, value) -> list[dict]:
@@ -462,8 +462,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
           self.assertIsInstance(line, dict)
           self.assertNotIn("source", line)
   ```
-- [ ] 6.2 Lancer la commande de test. Attendu : `error: unrecognized arguments: --source-ref`.
-- [ ] 6.3 Dans `uske/cli.py`, ajouter `import dataclasses` avec les imports de la bibliothèque
+- [x] 6.2 Lancer la commande de test. Attendu : `error: unrecognized arguments: --source-ref`.
+- [x] 6.3 Dans `uske/cli.py`, ajouter `import dataclasses` avec les imports de la bibliothèque
   standard, et remplacer la dernière ligne de `cmd_classify`, `_json(line.to_dict())`, par :
 
   ```python
@@ -487,15 +487,15 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
       s.add_argument("--source-ref", default="", help="for a held image: the source it was built from")
       s.add_argument("--source-digest", default="", help="for a held image: that source's digest")
   ```
-- [ ] 6.4 Lancer la commande de test. Attendu : `OK`.
-- [ ] 6.5 Commit : `git add uske/cli.py tests/test_orchestrator.py && git commit -m "feat: classify consigne une image retenue et clôt la source d'une reconstruction refusée"`.
+- [x] 6.4 Lancer la commande de test. Attendu : `OK`.
+- [x] 6.5 Commit : `git add uske/cli.py tests/test_orchestrator.py && git commit -m "feat: classify consigne une image retenue et clôt la source d'une reconstruction refusée"`.
 
 ## 7. Les essais bornés, la réouverture, et ce que la clôture ne dit pas
 
 **Fichiers** : `tests/test_orchestrator.py`. Aucun code de produit : les groupes 3 à 6 suffisent,
 et ces tests le montrent.
 
-- [ ] 7.1 Écrire les tests, dans `class Rebuild` :
+- [x] 7.1 Écrire les tests, dans `class Rebuild` :
 
   ```python
       def test_a_silent_judge_is_retried_three_times_then_a_line_reopens(self):
@@ -537,13 +537,13 @@ et ces tests le montrent.
           # not a verdict of the judge on the source: the reason says so, and story 3 must read it
           self.assertNotEqual(closing["reason"], "secrets/verified-secrets")
   ```
-- [ ] 7.2 Lancer la commande de test. Attendu : `OK`, sans toucher au produit. Si un test
+- [x] 7.2 Lancer la commande de test. Attendu : `OK`, sans toucher au produit. Si un test
   échoue, le défaut est dans les groupes 3 à 6 : le corriger là.
-- [ ] 7.3 Vérifier qu'aucun identifiant de test n'est entré dans le produit :
+- [x] 7.3 Vérifier qu'aucun identifiant de test n'est entré dans le produit :
   `uv run --with pyyaml python -m unittest tests.test_orchestrator.NothingHardcoded`. Attendu :
   `OK`.
-- [ ] 7.4 Commit : `git add tests/test_orchestrator.py && git commit -m "test: les essais sans verdict sont bornés, et une ligne rouvre une source"`.
-- [ ] 7.5 Ouvrir la demande de fusion du Python : titre `feat: une source à réparer passe par le
+- [x] 7.4 Commit : `git add tests/test_orchestrator.py && git commit -m "test: les essais sans verdict sont bornés, et une ligne rouvre une source"`.
+- [x] 7.5 Ouvrir la demande de fusion du Python : titre `feat: une source à réparer passe par le
   transit, sa sortie est jugée avant d'être promue`. Sa description dit que rien ne change tant que
   le workflow ne passe pas `--transit`, et renvoie à ce change.
 

@@ -128,7 +128,8 @@ ajouter au journal, après la ligne de l'image retenue, une ligne sur l'empreint
 `state: quarantine`, `reason: uske/rebuild-refused`, la référence de la source, le jeu de règles
 qui a jugé l'image retenue, son rapport, et une clé `rebuilt` qui porte son empreinte. Une source
 ainsi close MUST NOT être rendue au placeur ni rejugée aux screenings suivants, quelles que soient
-les lignes rejouées. Cette clôture dit que la reconstruction a été refusée ; elle n'est pas une
+les lignes rejouées : le journal MUST NOT accepter une ligne dont la date précède la dernière
+ligne du même digest. Cette clôture dit que la reconstruction a été refusée ; elle n'est pas une
 quarantaine prononcée par le juge sur la source. Un verdict non concluant ne clôt rien : la source
 reste approuvable.
 
@@ -150,7 +151,8 @@ reste approuvable.
 #### Scenario: La ligne de première porte est rejouée après la clôture
 
 - **GIVEN** une empreinte source close par une ligne `uske/rebuild-refused`
-- **WHEN** l'étape de consignation de la seconde porte est rejouée
+- **WHEN** l'étape de consignation de la première porte est rejouée, avec la ligne d'origine de
+  la source
 - **THEN** aucune ligne n'est ajoutée sur l'empreinte source, qui reste close
 
 #### Scenario: Une source saine dont la reconstruction est refusée
@@ -177,8 +179,8 @@ reste approuvable.
 ### Requirement: Les essais sans verdict sont bornés, et une ligne rouvre une source
 
 Le screening MUST NOT rendre au placeur une opération reconstruite dont l'empreinte source compte
-déjà trois lignes d'images retenues écrites depuis la dernière ligne sur cette empreinte source.
-Il n'écrit alors rien. Une ligne `state: inconclusive`, `reason: uske/reopened`, ajoutée sur une
+déjà trois lignes d'images retenues non concluantes, écrites depuis la dernière ligne sur cette
+empreinte source. Il n'écrit alors rien. Une image retenue jugée saine ne compte pas. Une ligne `state: inconclusive`, `reason: uske/reopened`, ajoutée sur une
 empreinte source, SHALL la rendre due de nouveau, qu'elle ait été close ou bornée, et remettre le
 compte à zéro.
 
@@ -189,10 +191,17 @@ compte à zéro.
 - **THEN** l'opération sur cette source est retirée du plan rendu au placeur
 - **AND** aucune ligne n'est écrite sur l'empreinte source
 
+#### Scenario: Trois variantes réparées n'épuisent pas leur source
+
+- **GIVEN** une empreinte source dont trois images retenues ont reçu `direct-placement`
+- **WHEN** un plan porte de nouveau une opération reconstruite sur cette source
+- **THEN** l'opération est rendue au placeur
+
 #### Scenario: Rouvrir une source close
 
 - **GIVEN** une empreinte source close par une ligne `uske/rebuild-refused`
-- **WHEN** une ligne `inconclusive` de raison `uske/reopened` est ajoutée sur cette empreinte
+- **WHEN** une ligne `inconclusive` de raison `uske/reopened`, datée du geste, est ajoutée sur
+  cette empreinte
 - **THEN** le screening suivant la fait rejuger
 - **AND** si elle ressort à réparer, son opération reconstruite est de nouveau rendue au placeur
 

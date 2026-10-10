@@ -13,7 +13,10 @@ import copy
 
 from uske.outcomes import Outcome
 from uske.policies import Policy
-from uske.results import last_states
+from uske.results import attempts, last_states
+
+MAX_ATTEMPTS = 3  # held images left without a verdict for one source, after which it is no longer rebuilt
+REBUILD_REFUSED = "uske/rebuild-refused"
 
 
 def prepare(policy: Policy) -> dict:
@@ -38,8 +41,55 @@ def candidates(plan: dict, policy: Policy) -> list[dict]:
     return list(seen.values())
 
 
-def approve(plan: dict, policy: Policy, lines: list[dict]) -> dict:
-    """The plan minus every operation whose source digest is not direct-placement."""
+def _discarded(op: dict, states: dict[str, str], lines: list[dict], transit: str | None) -> str | None:
+    """Why an operation is withheld, or None when it is handed back to knock."""
+    rebuilt = op.get("transformed") is True  # absent means a copy: knock did not say it rebuilds
+    state = states.get(op["sourceDigest"])
+    if state == Outcome.TRANSFORMATION_REQUIRED:
+        if not transit:
+            return "no-transit"  # without a second gate, the rebuilt output would be placed unjudged
+        if not rebuilt:
+            return "not-rebuilt"
+    elif state != Outcome.DIRECT_PLACEMENT:
+        return "refused"
+    if rebuilt and attempts(lines, op["sourceDigest"]) >= MAX_ATTEMPTS:
+        return "attempts-exhausted"
+    return None
+
+
+def approve(plan: dict, policy: Policy, lines: list[dict], transit: str | None = None) -> tuple[dict, dict]:
+    """(the plan minus every withheld operation, how many were withheld per cause).
+
+    `transit` is trusted, not checked: naming it is the workflow's promise that rebuilt images
+    are held and judged before they are placed.
+    """
     states = last_states(lines)
-    kept = [op for op in operations(plan, policy) if states.get(op["sourceDigest"]) == Outcome.DIRECT_PLACEMENT]
-    return {**plan, "operations": kept}
+    kept, discarded = [], {}
+    for op in operations(plan, policy):
+        cause = _discarded(op, states, lines, transit)
+        if cause is None:
+            kept.append(op)
+        else:
+            discarded[cause] = discarded.get(cause, 0) + 1
+    return {**plan, "operations": kept}, discarded
+
+
+def entries(staged: dict, policy: Policy) -> list[dict]:
+    return [e for e in staged.get("entries") or [] if e.get("policy") == policy.name]
+
+
+def staged_candidates(staged: dict, policy: Policy) -> list[dict]:
+    """One candidate per held digest: what knock built is judged where it is held."""
+    seen: dict[str, dict] = {}
+    for e in entries(staged, policy):
+        seen.setdefault(e["stagedDigest"], {
+            "ref": f"{e['staged']}:{e['tag']}", "digest": e["stagedDigest"],
+            "source": e["sourceDigest"], "sourceRef": f"{e['source']}:{e['sourceTag']}"})
+    return list(seen.values())
+
+
+def approve_staged(staged: dict, policy: Policy, lines: list[dict]) -> dict:
+    """The held images minus every one that is not direct-placement. Kept entries are untouched."""
+    states = last_states(lines)
+    kept = [e for e in entries(staged, policy) if states.get(e["stagedDigest"]) == Outcome.DIRECT_PLACEMENT]
+    return {**staged, "entries": kept}
