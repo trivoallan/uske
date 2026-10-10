@@ -18,6 +18,8 @@ class ResultLine:
     ruleset: str
     reason: str | None = None
     report: str | None = None
+    source: str | None = None  # on a held image's line: the source digest it was built from
+    rebuilt: str | None = None  # on a closing line: the held image that was refused
 
     def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -42,6 +44,17 @@ def pending(candidates: list[dict], lines: list[dict]) -> list[dict]:
     """Candidates never decided, plus those whose last outcome was inconclusive (retried)."""
     states = last_states(lines)
     return [c for c in candidates if states.get(c["digest"], Outcome.INCONCLUSIVE) == Outcome.INCONCLUSIVE]
+
+
+def attempts(lines: list[dict], source: str) -> int:
+    """Held images judged for `source` since the last line written on `source` itself."""
+    count = 0
+    for line in lines:
+        if line["digest"] == source:
+            count = 0
+        elif line.get("source") == source:
+            count += 1
+    return count
 
 
 def append(path: Path, new_lines: list[dict]) -> int:

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from uske import cli, outcomes
+from uske import cli, outcomes, results
 from uske.outcomes import Outcome
 
 HERE = Path(__file__).parent
@@ -30,6 +30,9 @@ LIGHT = PLAYBOOKS / "version" / "playbook-allege.yaml"
 D1 = "sha256:" + "1" * 64
 D2 = "sha256:" + "2" * 64
 D3 = "sha256:" + "3" * 64
+S1 = "sha256:" + "a" * 64  # held-image digests
+S2 = "sha256:" + "b" * 64
+S3 = "sha256:" + "c" * 64
 
 
 def run(*argv: str) -> tuple[int, object]:
@@ -285,6 +288,20 @@ class Screening(Workdir):
         self.screening(policy, [("1.0", D1)], {D1: report("Placement direct")})
         _, _, applied = self.screening(policy, [("1.0", D2)], {D2: report("Quarantaine", [SECRET_FAILED])})
         self.assertEqual(applied, [])  # the new digest is refused: nothing to apply for 1.0
+
+
+class Attempts(unittest.TestCase):
+    def test_counts_held_images_since_the_last_line_on_the_source(self):
+        held = lambda digest: {"digest": digest, "state": "inconclusive", "source": D1}
+        own = {"digest": D1, "state": "transformation-required"}
+        self.assertEqual(results.attempts([own, held(S1), held(S2)], D1), 2)
+        self.assertEqual(results.attempts([own, held(S1), own, held(S2)], D1), 1)
+        self.assertEqual(results.attempts([own, held(S1)], D2), 0)
+
+    def test_a_line_carries_its_source_and_its_rebuild(self):
+        line = results.ResultLine(ts="t", ref="r", digest=D1, state="quarantine", ruleset="x",
+                                  source=D2, rebuilt=S1)
+        self.assertEqual((line.to_dict()["source"], line.to_dict()["rebuilt"]), (D2, S1))
 
 
 class NothingHardcoded(unittest.TestCase):

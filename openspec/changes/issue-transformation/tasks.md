@@ -113,7 +113,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
 **Fichiers** : `uske/results.py`, `tests/test_orchestrator.py`.
 
-- [ ] 3.1 Écrire le test qui échoue. Dans `tests/test_orchestrator.py`, ajouter l'import
+- [x] 3.1 Écrire le test qui échoue. Dans `tests/test_orchestrator.py`, ajouter l'import
   `from uske import cli, outcomes, results` (remplace `from uske import cli, outcomes`), les
   constantes après `D3` :
 
@@ -139,9 +139,9 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
                                     source=D2, rebuilt=S1)
           self.assertEqual((line.to_dict()["source"], line.to_dict()["rebuilt"]), (D2, S1))
   ```
-- [ ] 3.2 Lancer la commande de test. Attendu : `AttributeError: module 'uske.results' has no
+- [x] 3.2 Lancer la commande de test. Attendu : `AttributeError: module 'uske.results' has no
   attribute 'attempts'` et `TypeError: ... unexpected keyword argument 'source'`.
-- [ ] 3.3 Dans `uske/results.py`, ajouter deux champs à `ResultLine`, après `report` :
+- [x] 3.3 Dans `uske/results.py`, ajouter deux champs à `ResultLine`, après `report` :
 
   ```python
       source: str | None = None  # on a held image's line: the source digest it was built from
@@ -161,8 +161,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
               count += 1
       return count
   ```
-- [ ] 3.4 Lancer la commande de test. Attendu : `OK`.
-- [ ] 3.5 Commit : `git add uske/results.py tests/test_orchestrator.py && git commit -m "feat: le journal porte la source d'une image retenue et compte ses essais"`.
+- [x] 3.4 Lancer la commande de test. Attendu : `OK`.
+- [x] 3.5 Commit : `git add uske/results.py tests/test_orchestrator.py && git commit -m "feat: le journal porte la source d'une image retenue et compte ses essais"`.
 
 ## 4. `approve` : une source à réparer, sous deux conditions
 
