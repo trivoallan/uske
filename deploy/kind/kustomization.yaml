@@ -10,7 +10,7 @@ resources:
   - buildkitd.yaml
 images:
   - {name: uske, newName: uske, newTag: dev}
-  - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:95fc4bbdb87e77726c3d79f4977ed3c8d80c4141017797d031b1ba0f03783f5a"}  # 0.38.1-full
+  - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:cdecd15fc81c3322bc2119dd2a3ed3964ab88dd67e07fb6e9c1fa0a5cdde0207"}  # 0.39.1-full
   - {name: knock, newName: ghcr.io/trivoallan/knock, digest: "sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9"}  # 0.13.0
 patches:
   # Rounds are started by hand here.

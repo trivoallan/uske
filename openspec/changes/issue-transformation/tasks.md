@@ -135,8 +135,15 @@ de fusion du groupe 9.
   `KNOCK_BUILD_PLATFORM` suit l'architecture du nœud, parce que l'inventaire de `knock` cherche
   la plateforme de la machine. La seconde politique s'appelle `hub-refusee`, pas `hub-en-root` :
   `no-root` ne tombe sur aucune candidate.
-- *Restent à faire* : 9.5 (la durée du banc complet avec les deux politiques), 9.6, et l'autre
-  moitié de 9.9 (un déploiement sans transit).
+- *La réparation promue et signée* (9.6, tenue le 2026-10-10 avec `regis` 0.39.1, qui porte
+  `trivoallan/regis#870`). `hub-reparable` : source `transformation-required`, image retenue
+  `direct-placement` avec sa clé `source`, `promote` réussi. La destination `hub/alpine:3.18.0`
+  porte l'empreinte jugée, la même que dans le transit, et `knock verify --require
+  image-signature` y passe ; il échoue sur les deux images du transit, qui ne sont pas signées
+  comme admises. `hub-refusee` est absente de la destination. Quinze minutes pour les deux
+  politiques.
+- *Restent à faire* : 9.5 (la durée du banc complet avec les deux politiques) et l'autre moitié
+  de 9.9 (un déploiement sans transit).
 
 ## 2. Dans `knock` : dire ce qu'il reconstruit — première demande de fusion, autre dépôt
 
@@ -830,7 +837,7 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 - [ ] 9.5 Monter le banc et lancer un screening : `deploy/kind/up.sh`. Noter la durée, et celle
   du même montage sur `main` : c'est la mesure du finding 19. Si elle double, arrêter et proposer
   à la personne de faire de la réparation une variante `up.sh repair`.
-- [ ] 9.6 Vérifier la réparation réussie :
+- [x] 9.6 Vérifier la réparation réussie :
 
   ```bash
   kubectl -n uske exec deploy/registry -- ls /var/lib/registry/hub/<réparable>

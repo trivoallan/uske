@@ -128,7 +128,7 @@ rm -f "$archive"
 # 4. TLS and secrets. A self-signed CA and Zot's certificate; a trust bundle (public CAs, which
 # grype needs for its database, plus ours) handed to every tool through SSL_CERT_FILE; knock's
 # test signing key; the registry roster.
-REGIS="ghcr.io/trivoallan/regis@sha256:95fc4bbdb87e77726c3d79f4977ed3c8d80c4141017797d031b1ba0f03783f5a"  # 0.38.1-full
+REGIS="ghcr.io/trivoallan/regis@sha256:cdecd15fc81c3322bc2119dd2a3ed3964ab88dd67e07fb6e9c1fa0a5cdde0207"  # 0.39.1-full
 if ! kubectl -n "$NS" get secret registry-tls >/dev/null 2>&1; then
   tls="$(mktemp -d)"
   # Full extensions: Python's ssl verifies strictly (key usage on the CA, key identifiers).
