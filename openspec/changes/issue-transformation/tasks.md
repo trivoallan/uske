@@ -543,7 +543,7 @@ et ces tests le montrent.
   `uv run --with pyyaml python -m unittest tests.test_orchestrator.NothingHardcoded`. Attendu :
   `OK`.
 - [x] 7.4 Commit : `git add tests/test_orchestrator.py && git commit -m "test: les essais sans verdict sont bornés, et une ligne rouvre une source"`.
-- [ ] 7.5 Ouvrir la demande de fusion du Python : titre `feat: une source à réparer passe par le
+- [x] 7.5 Ouvrir la demande de fusion du Python : titre `feat: une source à réparer passe par le
   transit, sa sortie est jugée avant d'être promue`. Sa description dit que rien ne change tant que
   le workflow ne passe pas `--transit`, et renvoie à ce change.
 
