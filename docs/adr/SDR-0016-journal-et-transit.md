@@ -2,7 +2,7 @@
 adr: SDR-0016
 slug: journal-et-transit
 title: Vocabulaire du journal pour une reconstruction, et transit obligatoire
-status: proposed
+status: accepted
 date: 2026-10-10
 authors: [Tristan Rivoallan]
 supersedes: []
@@ -10,11 +10,10 @@ supersedes: []
 
 # Vocabulaire du journal pour une reconstruction, et transit obligatoire
 
-> Première décision propre à `uske` : les douze autres sont héritées de la méthode. Elle porte
-> `status: proposed` parce qu'un verdict demande la réponse d'une personne
-> ([`SDR-0001`](SDR-0001-record-architecture-decisions.md)) ; le code du change
-> `issue-transformation` s'y conforme déjà. Les numéros `SDR-0014` et `SDR-0015` sont réservés
-> par le change `demenagement-gitlab-et-livraison`.
+> Première décision propre à `uske` : les douze autres sont héritées de la méthode. Verdict
+> `accepted` reçu de Tristan Rivoallan le 2026-10-10 ; le code du change `issue-transformation`
+> s'y conforme. Les numéros `SDR-0014` et `SDR-0015` sont réservés par le change
+> `demenagement-gitlab-et-livraison`.
 
 ## Context and Problem Statement
 

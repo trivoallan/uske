@@ -288,9 +288,9 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Douze questions posées à ce jour, onze statuées, toutes héritées de la méthode — voir
+Treize questions posées à ce jour, douze statuées. Douze sont héritées de la méthode — voir
 *Architecture Constraints* : onze questions qu'elle pose à tout dépôt qui l'adopte, et la règle
-qui dit comment on y répond. Aucune n'est encore propre à `uske`. Une nouvelle décision s'écrit
+qui dit comment on y répond. Une seule est propre à `uske`, `SDR-0016`. Une nouvelle décision s'écrit
 quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
 ou contraint les changes suivants.
 
@@ -326,7 +326,7 @@ et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un
 | [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted | 2026-09-20 | Opérabilité | oui |
 | [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
 | [SDR-0013](../adr/SDR-0013-frontend.md) | Framework du front et thème du design system | **proposed** | — | — | sans objet — question non tranchée |
-| [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | **proposed** | — | Sûreté, Contestabilité | oui — le code s'y conforme déjà ; première décision propre à `uske` |
+| [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
 
 ## Écarts ouverts
 

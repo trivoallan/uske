@@ -161,8 +161,8 @@ de fusion du groupe 9.
 
 - *10.2.* `docs/consommer-la-base.md` n'existe pas encore : ce qu'une surcouche doit fournir est
   dans la section « Rebuilds » du `README.md`.
-- *10.4.* `SDR-0016` est écrit en `status: proposed`, et non `accepted` comme le plan le disait :
-  un verdict demande la réponse d'une personne (`SDR-0001`).
+- *10.4.* `SDR-0016` a d'abord été écrit en `status: proposed`, un verdict demandant la réponse
+  d'une personne (`SDR-0001`) ; il est passé `accepted` sur réponse reçue le 2026-10-10.
 - *10.6.* L'audit a été fait à la main, sur les trois points nommés, sans `/cso`. Ses constats
   sont dans la description de la demande de fusion.
 
