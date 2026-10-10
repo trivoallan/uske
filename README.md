@@ -14,15 +14,19 @@ policy, it runs one **screening**.
 2. `uske` has `regis` judge each digest still owed a decision, with the playbook the policy's regime
    calls for.
 3. `uske` hands `knock` the plan minus the refused operations; `knock` applies only that
-   (`reconcile --apply-plan`).
-4. `uske` appends one line per decision to a results file. Lines are added, never rewritten: weeks
+   (`reconcile --apply-plan`). Copies are placed. What `knock` rebuilds is held in a **transit**
+   registry instead (`--stage-to`).
+4. `uske` has `regis` judge each held image by its own digest, then hands `knock` the list minus
+   the refused ones; `knock` places those (`promote`), with their evidence, and signs them.
+5. `uske` appends one line per decision to a results file. Lines are added, never rewritten: weeks
    later, a refusal can still be found, explained and contested.
 
 `uske` judges nothing and places nothing. It calls, it waits, it writes down.
 
 > **Status — a seed.** The decisions of one screening, exposed as subcommands that an Argo Workflows
-> `CronWorkflow` chains. Of the four outcomes a verdict can route to, only direct placement is
-> acted on; the other three are recorded and place nothing. Not deployed anywhere yet.
+> `CronWorkflow` chains. Of the four outcomes a verdict can route to, two are acted on: direct
+> placement, and transformation required when `knock` rebuilds the image. Quarantine and
+> inconclusive are recorded and place nothing. Not deployed anywhere yet.
 
 ## What it knows
 
@@ -50,6 +54,40 @@ deploy/kind/up.sh down
 
 [`deploy/base`](deploy/base) is the workflow; an overlay pins the images and names the repository to
 check out.
+
+## Rebuilds
+
+A source the playbook sends to repair is rebuilt only when `knock` says so in its plan
+(`transformed: true`) and the workflow names a transit. That needs **`knock` 0.13.0 or later**:
+with an older one nothing is repaired, and nothing says why.
+
+An overlay must provide:
+
+- the workflow parameter `transit`, a name of `KNOCK_REGISTRIES` (default `transit`). It is
+  **required**: without that entry `knock` refuses to apply and nothing is placed, copies included;
+- that entry **on the destination's host**, as a path prefix (`harbor.example/transit`). `regis`
+  authenticates to one host, and `knock` opens one session per host: one `knock` identity writes
+  to both the destination and the transit, and `regis` reads the transit;
+- a transit **consumers cannot pull from**. `knock` only refuses a transit that is also a
+  destination; closing it is the registry's job, and nothing here deletes from it;
+- `BUILDKIT_HOST` for `knock`, and `KNOCK_TRANSFORM_PACKAGE_MIRRORS` if a policy rewrites package
+  sources. A mirror is a host, without a path: `knock` keeps the path of each source.
+  The bench's `buildkitd` listens in clear on the cluster network, which is fine for a throwaway
+  cluster only: elsewhere, restrict who can reach it (mTLS, a NetworkPolicy).
+
+A rebuild that is judged and refused closes its source: the journal gets a `quarantine` line on
+the source digest, reason `uske/rebuild-refused`, and that source is not rebuilt again. A held
+image left without a verdict is retried, three times at most.
+
+To reopen a source, append one line to the policy's results file, dated when you write it:
+
+```json
+{"ts": "2026-10-10T16:13:29Z", "ref": "<source ref>", "digest": "<source digest>", "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"}
+```
+
+The next screening judges it again. The date must be in exactly that format and not older than
+the source's last line, or `uske record` refuses or drops it. The file lives on a volume: writing
+to it takes a throwaway pod.
 
 ## Décisions
 

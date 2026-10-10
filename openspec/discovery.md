@@ -95,8 +95,10 @@ Parcours de la responsable plateforme :
    ailleurs que dans le banc local (`deploy/kind/`) — partial
 3. **Juger ce qui est dû** — `prepare`, `pending`, `resolve`, `classify` (`uske/gate.py`,
    `uske/outcomes.py`, `uske/playbooks.py`) — supported
-4. **Placer ce qui est admis** — `approve` retire du plan les opérations refusées ; des quatre
-   issues, seule `direct-placement` agit (`uske/outcomes.py`) — partial
+4. **Placer ce qui est admis** — `approve` retire du plan les opérations refusées ; deux issues
+   sur quatre agissent : `direct-placement`, et `transformation-required` quand le placeur
+   reconstruit, sa sortie étant jugée dans un transit avant d'être promue (`uske/gate.py`) —
+   supported sur le banc, pas encore déployé
 5. **Mettre à l'écart ce qui est refusé** — l'issue `quarantine` est consignée et ne fait rien
    — gap
 6. **Enregistrer la décision** — une ligne par décision, ajoutée, jamais réécrite
@@ -179,10 +181,14 @@ Chaque story est une tranche verticale fine — de bout en bout et démontrable.
     quarantaine ; la contestation.
   - **Relevant code** : `uske/outcomes.py` (`Outcome.QUARANTINE`, `classify`), `uske/gate.py`
     (`approve`), `deploy/base/workflowtemplate.yaml`
+  - **À savoir depuis la story 4** : une ligne `quarantine` de raison `uske/rebuild-refused`
+    n'est pas une quarantaine prononcée par le juge. Elle clôt une source dont la
+    reconstruction a été refusée, et une copie de cette même source peut être en service. La
+    mise à l'écart doit lire la raison, pas seulement l'état.
   - **Added** : 2026-09-20
   - **Change** : _not yet proposed_
 
-- [ ] 4. `issue-transformation` — une image à transformer suit son chemin au lieu d'attendre
+- [x] 4. `issue-transformation` — une image à transformer suit son chemin au lieu d'attendre
   - **Persona served** : responsable plateforme
   - **Journey segment** : 4
   - **MoSCoW** : Should
@@ -193,7 +199,8 @@ Chaque story est une tranche verticale fine — de bout en bout et démontrable.
     consigner. out — définir de nouvelles transformations.
   - **Relevant code** : `uske/outcomes.py` (`Outcome.TRANSFORMATION_REQUIRED`), `uske/gate.py`
   - **Added** : 2026-09-20
-  - **Change** : _not yet proposed_
+  - **Change** : `issue-transformation` — prouvé sur le banc local le 2026-10-10 ; les manifestes
+    attendent le premier screening réel de la story 1
 
 - [ ] 5. `issue-non-concluante` — un verdict non concluant se rejoue, sans rien placer entre-temps
   - **Persona served** : responsable plateforme

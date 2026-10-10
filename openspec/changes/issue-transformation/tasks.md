@@ -145,6 +145,15 @@ de fusion du groupe 9.
 - *Restent à faire* : 9.5 (la durée du banc complet avec les deux politiques) et l'autre moitié
   de 9.9 (un déploiement sans transit).
 
+**Écarts au plan dans le groupe 10**, dits ici pour la relecture :
+
+- *10.2.* `docs/consommer-la-base.md` n'existe pas encore : ce qu'une surcouche doit fournir est
+  dans la section « Rebuilds » du `README.md`.
+- *10.4.* `SDR-0016` est écrit en `status: proposed`, et non `accepted` comme le plan le disait :
+  un verdict demande la réponse d'une personne (`SDR-0001`).
+- *10.6.* L'audit a été fait à la main, sur les trois points nommés, sans `/cso`. Ses constats
+  sont dans la description de la demande de fusion.
+
 ## 2. Dans `knock` : dire ce qu'il reconstruit — première demande de fusion, autre dépôt
 
 Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses propres règles
@@ -868,35 +877,35 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 
 ## 10. Écrire, décider, auditer
 
-- [ ] 10.1 `README.md` : la liste des étapes d'un screening gagne le transit et la seconde porte ;
+- [x] 10.1 `README.md` : la liste des étapes d'un screening gagne le transit et la seconde porte ;
   l'encadré *Status* ne dit plus que seul le placement direct agit, mais que deux issues sur
   quatre agissent ; une section « Rebuilds » dit la version minimale de `knock`, que sans le champ
   `transformed` rien n'est réparé, et le geste qui rouvre une source : la ligne à ajouter, ses
   cinq clés, et qu'il faut un pod jetable pour écrire sur le volume.
-- [ ] 10.2 Ce qu'une surcouche doit fournir (findings 6 et 13), dans `docs/consommer-la-base.md`
+- [x] 10.2 Ce qu'une surcouche doit fournir (findings 6 et 13), dans `docs/consommer-la-base.md`
   si elle existe, sinon dans la même section du `README.md` : le paramètre `transit` ; l'entrée
   de liste, **sur l'hôte de la destination** ; une seule identité `knock` avec l'écriture sur les
   deux projets ; la lecture du transit pour `regis` ; l'adresse de BuildKit ; les miroirs.
-- [ ] 10.3 `docs/architecture/arc42.md`, *Essential Features* : remplacer « Rendre au placeur le
+- [x] 10.3 `docs/architecture/arc42.md`, *Essential Features* : remplacer « Rendre au placeur le
   plan, moins les opérations refusées ; il n'applique que cela » par deux lignes — le plan
   filtré, où une source à réparer n'est rendue que si le placeur la reconstruit ; puis ce que le
   placeur a construit, retenu, jugé par empreinte, et promu seulement en placement direct.
-- [ ] 10.4 Créer `docs/adr/SDR-0016-journal-et-transit.md`, en français, avec le frontmatter des
+- [x] 10.4 Créer `docs/adr/SDR-0016-journal-et-transit.md`, en français, avec le frontmatter des
   autres ADR (`adr`, `slug`, `title`, `status: accepted`, `date`, `authors`, `supersedes: []`,
   sans bloc `traits:`) et les sections du gabarit. Il consigne les deux décisions de la section
   ADR de ce plan, et renvoie à `design.md` D3, D5, D6 et D7 sans les recopier. L'ajouter au
   journal des décisions de `docs/architecture/arc42.md`. Si `SDR-0014` et `SDR-0015` n'existent
   pas encore à ce moment, garder `0016` : ces deux numéros sont réservés.
-- [ ] 10.5 `openspec/discovery.md` : cocher la story 4 et y nommer ce change ; à la story 3,
+- [x] 10.5 `openspec/discovery.md` : cocher la story 4 et y nommer ce change ; à la story 3,
   ajouter une ligne — une clôture `uske/rebuild-refused` n'est pas une quarantaine du juge, et
   une copie de la même source peut être en service (finding 8) ; à l'étape 4 du parcours,
   remplacer « seule `direct-placement` agit ».
-- [ ] 10.6 Auditer la surface d'attaque (finding 18) : lancer `/cso` sur la branche. Sans la
+- [x] 10.6 Auditer la surface d'attaque (finding 18) : lancer `/cso` sur la branche. Sans la
   commande, parcourir à la main l'OWASP Top 10 et STRIDE sur trois points — l'écriture de
   `knock` sur le transit, la signature à la promotion sur la foi d'un fichier filtré, le port de
   `buildkitd` sur le banc — et ouvrir un fil sur la demande de fusion pour chaque point non
   vérifié.
-- [ ] 10.7 Relire le plan de documentation de ce fichier contre ce qui a été écrit : chaque ligne
+- [x] 10.7 Relire le plan de documentation de ce fichier contre ce qui a été écrit : chaque ligne
   du tableau a son fichier modifié dans `git diff --stat main`.
 - [ ] 10.8 Valider le change : `openspec validate issue-transformation --type change --strict`.
   Attendu : `Change 'issue-transformation' is valid`.
