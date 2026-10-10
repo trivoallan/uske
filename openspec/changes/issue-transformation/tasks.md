@@ -67,10 +67,10 @@ de fusion du groupe 9.
   « Transformation requise puis placement » dont les seules règles en échec sont `cve-critical`
   ou `freshness`, et **une** dont `no-root` échoue. La liste de licences n'a plus la famille GPL
   depuis `trivoallan/uske#8` : vérifier que cette PR est fusionnée avant de mesurer.
-- [ ] 1.2 Si aucune image ne satisfait le premier cas : arrêter et revenir à la personne. Le
+- [x] 1.2 Si aucune image ne satisfait le premier cas : arrêter et revenir à la personne. Le
   repli écrit dans `review.md` (finding 7) est une image faite exprès, non `root`, trop ancienne,
   poussée par `up.sh` ; il change ce que le banc prouve, et ce n'est pas à ce plan de le décider.
-- [ ] 1.3 Relever la version de `knock` qui contient sa PR #310 et le champ `transformed`, et son
+- [x] 1.3 Relever la version de `knock` qui contient sa PR #310 et le champ `transformed`, et son
   empreinte :
 
   ```bash
@@ -93,21 +93,39 @@ de fusion du groupe 9.
   8 et 9 attendent, et la raison `uske/unknown-track` citée en 6.1 s'écrit encore
   `orchestrator/unknown-track` : ne pas la toucher.
 
+**Faits établis le 2026-10-10**, pour les groupes 8 et 9 :
+
+- *1.1 et 1.2.* Mesuré avec `regis` sur le playbook complet corrigé (`cve-fixable` lue dans le bon
+  sens, `trivoallan/uske#10`). `alpine:3.18.0`, `redis:7.2.0` et `debian:bookworm-20230904-slim`
+  sont en « Transformation requise puis placement » ; `redis:7.4-bookworm` est en « Quarantaine ».
+  `no-root` et la règle de licence ne tombent sur aucune des quatre. Candidates du banc :
+  `alpine:3.18.0` pour la réparation attendue réussie, `redis:7.2.0` pour la réparation attendue
+  refusée (les notes de `knock` disent que ses failles sont sur son propre binaire). **Ce que la
+  reconstruction en fait n'est pas mesuré** : seul le banc le dira, et le plan ne s'arrête plus à
+  la tâche 1.2.
+- *1.3.* `knock` v0.13.0, publiée le 2026-10-10, porte sa PR #310 et le champ `transformed`
+  (`trivoallan/knock#311`). Image `ghcr.io/trivoallan/knock:0.13.0`, empreinte
+  `sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9`.
+- *1.4.* `knock` ne porte aucun réglage pour l'adresse de BuildKit : `buildctl` lit
+  `BUILDKIT_HOST`, comme le font ses propres manifestes.
+- *1.5.* **Non tenu** : `grep -rn "orchestrator" deploy/ uske/` rend 74 lignes. Le renommage de
+  `demenagement-gitlab-et-livraison` n'est pas fait ; les groupes 8 et 9 attendent.
+
 ## 2. Dans `knock` : dire ce qu'il reconstruit — première demande de fusion, autre dépôt
 
 Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses propres règles
 (couverture par fichier, `ruff`, `mypy`). Il est listé ici parce que tout le reste en dépend.
 
-- [ ] 2.1 Ouvrir dans `knock` un change `plan-says-transformed` : `PlannedOperation`
+- [x] 2.1 Ouvrir dans `knock` un change `plan-says-transformed` : `PlannedOperation`
   (`knock/domain/gate.py`) gagne `transformed: bool = False`, **hors** de `key()`.
-- [ ] 2.2 `reconcile_registry.py` le renseigne à l'écriture du plan, avec la même expression que
+- [x] 2.2 `reconcile_registry.py` le renseigne à l'écriture du plan, avec la même expression que
   `_held` : `bool(w.vplan.transform)`.
-- [ ] 2.3 Régénérer le schéma publié et l'exemple : `make reference`. Attendu :
+- [x] 2.3 Régénérer le schéma publié et l'exemple : `make reference`. Attendu :
   `docs/reference/schemas/reconcile-plan.schema.json` et `docs/examples/gate/plan.json` portent
   `transformed`.
-- [ ] 2.4 Vérifier : `uv run pytest && uv run ruff check . && uv run mypy knock`. Attendu : tout
+- [x] 2.4 Vérifier : `uv run pytest && uv run ruff check . && uv run mypy knock`. Attendu : tout
   passe, couverture tenue.
-- [ ] 2.5 Fusionner, puis publier une version. Reprendre la tâche 1.3.
+- [x] 2.5 Fusionner, puis publier une version. Reprendre la tâche 1.3.
 
 ## 3. Le journal : deux clés et un compte
 
