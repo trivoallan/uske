@@ -72,3 +72,24 @@ def approve(plan: dict, policy: Policy, lines: list[dict], transit: str | None =
         else:
             discarded[cause] = discarded.get(cause, 0) + 1
     return {**plan, "operations": kept}, discarded
+
+
+def entries(staged: dict, policy: Policy) -> list[dict]:
+    return [e for e in staged.get("entries") or [] if e.get("policy") == policy.name]
+
+
+def staged_candidates(staged: dict, policy: Policy) -> list[dict]:
+    """One candidate per held digest: what knock built is judged where it is held."""
+    seen: dict[str, dict] = {}
+    for e in entries(staged, policy):
+        seen.setdefault(e["stagedDigest"], {
+            "ref": f"{e['staged']}:{e['tag']}", "digest": e["stagedDigest"],
+            "source": e["sourceDigest"], "sourceRef": f"{e['source']}:{e['sourceTag']}"})
+    return list(seen.values())
+
+
+def approve_staged(staged: dict, policy: Policy, lines: list[dict]) -> dict:
+    """The held images minus every one that is not direct-placement. Kept entries are untouched."""
+    states = last_states(lines)
+    kept = [e for e in entries(staged, policy) if states.get(e["stagedDigest"]) == Outcome.DIRECT_PLACEMENT]
+    return {**staged, "entries": kept}

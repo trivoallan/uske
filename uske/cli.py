@@ -34,6 +34,11 @@ def _read_json(path: str):
         raise Failure(f"{path}: {exc}") from exc
 
 
+def _read_staged(path: str) -> dict:
+    """knock's StagedRebuilds. No file: knock held nothing, or did not get that far."""
+    return _read_json(path) if Path(path).exists() else {"entries": []}
+
+
 def _policy(path: str) -> policies.Policy:
     try:
         return policies.load(path)
@@ -60,7 +65,10 @@ def _target(candidate: dict) -> dict:
 def cmd_pending(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
-    found = gate.candidates(_read_json(args.plan), policy)
+    if args.staged:
+        found = gate.staged_candidates(_read_staged(args.staged), policy)
+    else:
+        found = gate.candidates(_read_json(args.plan), policy)
     _json([_target(c) for c in results.pending(found, lines)])
 
 
@@ -128,11 +136,16 @@ def cmd_record(args) -> None:
 def cmd_approve(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
-    approved, discarded = gate.approve(_read_json(args.plan), policy, lines, args.transit)
+    if args.staged:
+        approved = gate.approve_staged(_read_staged(args.staged), policy, lines)
+        count = {"approved": len(approved["entries"])}
+    else:
+        approved, discarded = gate.approve(_read_json(args.plan), policy, lines, args.transit)
+        count = {"approved": len(approved["operations"]), "discarded": discarded}
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(approved, indent=2))
-    _json({"approved": len(approved["operations"]), "discarded": discarded})
+    _json(count)
 
 
 def _dependency_track() -> dtsync.DependencyTrack:
@@ -241,7 +254,9 @@ def parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("pending", help="the plan's digests still owed a decision")
     s.add_argument("--policy", required=True)
-    s.add_argument("--plan", required=True, help="knock's ReconcilePlan (reconcile --plan-out)")
+    source = s.add_mutually_exclusive_group(required=True)
+    source.add_argument("--plan", help="knock's ReconcilePlan (reconcile --plan-out)")
+    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out)")
     s.add_argument("--results", required=True)
     s.set_defaults(run=cmd_pending)
 
@@ -267,7 +282,9 @@ def parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("approve", help="the plan minus refused operations, for knock --apply-plan")
     s.add_argument("--policy", required=True)
-    s.add_argument("--plan", required=True)
+    source = s.add_mutually_exclusive_group(required=True)
+    source.add_argument("--plan", help="knock's ReconcilePlan (reconcile --plan-out)")
+    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out)")
     s.add_argument("--results", required=True)
     s.add_argument("--out", required=True)
     s.add_argument("--transit", help="name of the registry rebuilds are held in; trusted, not checked. Without it, no source to repair is approved")

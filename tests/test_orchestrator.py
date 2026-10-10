@@ -157,6 +157,16 @@ def plan(policy: str, ops: list[tuple[str, str]], kind: str = "import",
         for tag, digest in ops]}
 
 
+def staged(policy: str, items: list[tuple[str, str, str]]) -> dict:
+    """A StagedRebuilds as `knock reconcile --staged-out` writes it: (tag, source digest, held digest)."""
+    return {"apiVersion": "knock.io/v1alpha1", "kind": "StagedRebuilds", "entries": [
+        {"policy": policy, "import": "v1", "variant": "default", "kind": "import",
+         "destination": "harbor.example/shared-test/app", "tag": tag,
+         "source": "harbor.example/producer/app", "sourceTag": tag, "sourceDigest": source,
+         "staged": "harbor.example/transit/shared-test/app", "stagedDigest": held, "aliases": []}
+        for tag, source, held in items]}
+
+
 class Pending(Workdir):
     def test_candidates_come_from_the_plan_by_digest(self):
         p = plan("fixture-redistribution", [("1.0", D1), ("latest", D1), ("1.1", D2)])
@@ -331,6 +341,29 @@ class Rebuild(Workdir):
     def journal(self) -> list[dict]:
         path = self.results / f"{self.NAME}.jsonl"
         return [json.loads(l) for l in path.read_text().splitlines()]
+
+    def pending_held(self, value: dict | None) -> list[dict]:
+        path = self.write("staged.json", value) if value is not None else str(self.tmp / "absent.json")
+        return run("pending", "--policy", self.POLICY, "--staged", path, "--results", str(self.results))[1]
+
+    def approve_held(self, value: dict | None) -> tuple[dict, list[dict]]:
+        path = self.write("staged.json", value) if value is not None else str(self.tmp / "absent.json")
+        out = self.tmp / "staged.approved.json"
+        _, result = run("approve", "--policy", self.POLICY, "--staged", path,
+                        "--results", str(self.results), "--out", str(out))
+        return result, json.loads(out.read_text())["entries"]
+
+    def test_one_candidate_per_held_digest(self):
+        value = staged(self.NAME, [("1.0", D1, S1), ("latest", D1, S1), ("1.1", D2, S2)])
+        value["entries"].append({**value["entries"][0], "policy": "another-policy", "stagedDigest": S3})
+        todo = self.pending_held(value)
+        self.assertEqual([c["digest"] for c in todo], [S1, S2])
+        self.assertEqual(todo[0]["target"], f"harbor.example/transit/shared-test/app@{S1}")
+        self.assertEqual((todo[0]["source"], todo[0]["sourceRef"]), (D1, self.SOURCE))
+
+    def test_no_staged_file_means_nothing_held(self):
+        self.assertEqual(self.pending_held(None), [])
+        self.assertEqual(self.approve_held(None), ({"approved": 0}, []))
 
     def test_a_source_to_repair_needs_a_rebuild_and_a_transit(self):
         self.judge_source(D1, self.REPAIR)

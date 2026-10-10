@@ -299,7 +299,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
 **Fichiers** : `uske/gate.py`, `uske/cli.py`, `tests/test_orchestrator.py`.
 
-- [ ] 5.1 Dans `tests/test_orchestrator.py`, ajouter après la fonction `plan` :
+- [x] 5.1 Dans `tests/test_orchestrator.py`, ajouter après la fonction `plan` :
 
   ```python
   def staged(policy: str, items: list[tuple[str, str, str]]) -> dict:
@@ -311,7 +311,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
            "staged": "harbor.example/transit/shared-test/app", "stagedDigest": held, "aliases": []}
           for tag, source, held in items]}
   ```
-- [ ] 5.2 Écrire le test qui échoue, dans `class Rebuild` :
+- [x] 5.2 Écrire le test qui échoue, dans `class Rebuild` :
 
   ```python
       def pending_held(self, value: dict | None) -> list[dict]:
@@ -337,8 +337,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
           self.assertEqual(self.pending_held(None), [])
           self.assertEqual(self.approve_held(None), ({"approved": 0}, []))
   ```
-- [ ] 5.3 Lancer la commande de test. Attendu : `error: unrecognized arguments: --staged`.
-- [ ] 5.4 Dans `uske/gate.py`, ajouter à la fin :
+- [x] 5.3 Lancer la commande de test. Attendu : `error: unrecognized arguments: --staged`.
+- [x] 5.4 Dans `uske/gate.py`, ajouter à la fin :
 
   ```python
   def entries(staged: dict, policy: Policy) -> list[dict]:
@@ -361,7 +361,7 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
       kept = [e for e in entries(staged, policy) if states.get(e["stagedDigest"]) == Outcome.DIRECT_PLACEMENT]
       return {**staged, "entries": kept}
   ```
-- [ ] 5.5 Dans `uske/cli.py`, ajouter après `_read_json` :
+- [x] 5.5 Dans `uske/cli.py`, ajouter après `_read_json` :
 
   ```python
   def _read_staged(path: str) -> dict:
@@ -411,8 +411,8 @@ Ce groupe vit dans le dépôt `knock`, avec son propre change OpenSpec et ses pr
 
   et sous `approve`, remplacer la ligne `s.add_argument("--plan", required=True)` par les trois
   mêmes lignes.
-- [ ] 5.6 Lancer la commande de test. Attendu : `OK`.
-- [ ] 5.7 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: pending et approve lisent le fichier des images retenues"`.
+- [x] 5.6 Lancer la commande de test. Attendu : `OK`.
+- [x] 5.7 Commit : `git add uske/gate.py uske/cli.py tests/test_orchestrator.py && git commit -m "feat: pending et approve lisent le fichier des images retenues"`.
 
 ## 6. `classify` : la ligne d'une image retenue, et la clôture de sa source
 
