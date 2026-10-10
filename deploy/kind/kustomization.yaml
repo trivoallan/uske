@@ -7,7 +7,6 @@ namespace: uske
 resources:
   - ../base
   - registry.yaml
-  - buildkitd.yaml
 images:
   - {name: uske, newName: uske, newTag: dev}
   - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:cdecd15fc81c3322bc2119dd2a3ed3964ab88dd67e07fb6e9c1fa0a5cdde0207"}  # 0.39.1-full

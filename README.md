@@ -49,6 +49,7 @@ One subcommand per workflow step, JSON on stdout: `list`, `prepare`, `pending`, 
 ```bash
 docker build -t uske .        # the image the workflow runs
 deploy/kind/up.sh             # kind + Argo Workflows + Zot for Harbor, then one screening by hand
+deploy/kind/up.sh repair      # on that cluster: buildkitd and two sources to repair (tens of GB)
 deploy/kind/up.sh down
 ```
 

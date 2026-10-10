@@ -146,12 +146,16 @@ de fusion du groupe 9.
   retirée de `KNOCK_REGISTRIES`, `place` sort en 3 sur `ConfigError: --stage-to 'transit' is not
   a registry of KNOCK_REGISTRIES`, sans reprise. Rien n'est placé ni retenu, le journal ne porte
   que le verdict des deux sources, `promote` est sauté et la politique finit en échec.
-- *Reste à faire* : **9.5, la durée du banc complet, n'est pas mesurée.** Le screening des onze
-  politiques en était à huit, sans échec, après une cinquantaine de minutes, quand le disque du
-  poste s'est rempli ; le banc a été démonté. Repères acquis : 38 minutes pour les neuf
-  politiques d'avant ce change, 15 minutes pour les deux politiques de réparation seules. La
-  question du finding 19 — faire de la réparation une variante de `up.sh` — reste donc ouverte,
-  et le poids du banc sur le disque s'y ajoute.
+- *La réparation est une variante du banc* (9.5 et finding 19, tranchés le 2026-10-10). Le
+  passage complet à onze politiques n'a pas fini : après une cinquantaine de minutes et huit
+  politiques, le disque du poste était plein, le nœud retenant 37 Go. La voie reconstruction
+  sort donc du banc par défaut : `deploy/kind/up.sh repair` ajoute `buildkitd` et les deux
+  sources à réparer sur un banc déjà monté, et `deploy/kind/repair.yaml` les juge seules ; les
+  deux politiques vivent sous `deploy/kind/repair/`. Mesuré sur la variante : le banc par défaut
+  monte en 350 s, sans `buildkitd` ; `up.sh repair` prend 105 s ; le screening de réparation
+  finit `Succeeded` en 15 minutes, Alpine promue et Redis refusée ; l'ensemble occupe une
+  vingtaine de gigaoctets dans Docker. Le banc par défaut garde ses neuf politiques et ses 38
+  minutes d'avant ce change : il n'y gagne que l'entrée de transit.
 
 **Écarts au plan dans le groupe 10**, dits ici pour la relecture :
 
@@ -851,7 +855,7 @@ sont celles qu'elle a retenues, notées `<réparable>` et `<en-root>` ci-dessous
 
   En tête de chaque fichier, un commentaire dit ce que le banc attend d'elle et la date de la
   mesure de la tâche 1.1.
-- [ ] 9.5 Monter le banc et lancer un screening : `deploy/kind/up.sh`. Noter la durée, et celle
+- [x] 9.5 Monter le banc et lancer un screening : `deploy/kind/up.sh`. Noter la durée, et celle
   du même montage sur `main` : c'est la mesure du finding 19. Si elle double, arrêter et proposer
   à la personne de faire de la réparation une variante `up.sh repair`.
 - [x] 9.6 Vérifier la réparation réussie :

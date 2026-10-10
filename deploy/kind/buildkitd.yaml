@@ -1,3 +1,4 @@
+# Applied by `up.sh repair`, not by the default bench.
 # Rootless buildkitd, which knock drives over buildctl (BUILDKIT_HOST) to rebuild an image whose
 # policy declares a transform. After knock's own component (deploy/components/buildkitd), minus
 # its metrics port. It trusts the bench's CA for the registry it pulls sources from and pushes

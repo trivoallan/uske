@@ -4,6 +4,7 @@
 #
 #   deploy/kind/up.sh
 #   deploy/kind/up.sh dt      # then Dependency-Track, on that cluster
+#   deploy/kind/up.sh repair  # then the rebuild path, on that cluster: buildkitd and two sources to repair
 #   deploy/kind/up.sh down
 set -euo pipefail
 
@@ -14,8 +15,41 @@ NS=uske
 KNOCK="ghcr.io/trivoallan/knock@sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9"  # 0.13.0
 REGISTRY="registry.$NS.svc.cluster.local:5000"
 
+CRANE="gcr.io/go-containerregistry/crane/debug@sha256:94f61956845714bea3b788445454ae4827f49a90dcd9dac28255c4cccb6220ad"  # v0.20.3
+
+# Copy "source destination" pairs into the bench registry, whole index by digest, once.
+mirror() {
+  local script='while read -r src dst; do
+  [ -n "$src" ] || continue
+  if crane digest "$REGISTRY/$dst" >/dev/null 2>&1; then echo "present $dst"; else crane copy "$src" "$REGISTRY/$dst" && echo "copied $dst"; fi
+done'
+  kubectl -n "$NS" delete pod mirror --ignore-not-found >/dev/null
+  kubectl -n "$NS" run mirror --rm -i --restart=Never --image="$CRANE" --overrides="$(jq -n \
+    --arg image "$CRANE" --arg script "$script" --arg mirrors "$1" --arg registry "$REGISTRY" '{spec: {
+    containers: [{name: "m", image: $image, command: ["sh", "-c", ($script + " <<EOF\n" + $mirrors + "\nEOF")],
+      env: [{name: "REGISTRY", value: $registry}, {name: "SSL_CERT_FILE", value: "/ca/bundle.pem"}],
+      volumeMounts: [{name: "ca", mountPath: "/ca"}]}],
+    volumes: [{name: "ca", secret: {secretName: "registry-ca"}}]}}')"
+}
+
 if [[ "${1:-}" == "down" ]]; then
   kind delete cluster --name "$CLUSTER"
+  exit 0
+fi
+
+# The rebuild path, on a cluster `up.sh` has built (change issue-transformation). Apart from the
+# default bench on purpose: one pass of it holds tens of gigabytes of layers in the node. It adds
+# buildkitd, which knock drives to rebuild, and two sources the full playbook sends to repair:
+# one comes out repaired and is promoted, the other is refused and its source closed.
+if [[ "${1:-}" == "repair" ]]; then
+  kubectl config use-context "kind-$CLUSTER" >/dev/null
+  kubectl -n "$NS" apply -f "$HERE/buildkitd.yaml"
+  kubectl -n "$NS" rollout status deploy/buildkitd --timeout=180s
+  mirror "
+docker.io/library/alpine@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11 mirror/alpine:3.18.0
+docker.io/library/redis@sha256:c45b9ac48fde5e7ffc59e785719165511b1327151c392c891c2f552a83446847 mirror/redis-repair:7.2.0"
+  echo "Rebuild path ready. Screen the two sources to repair:"
+  echo "  kubectl -n $NS create -f $HERE/repair.yaml && kubectl -n $NS get wf -w"
   exit 0
 fi
 
@@ -167,13 +201,12 @@ kubectl -n "$NS" create secret generic uske-harbor \
   --from-literal=HARBOR_HOST="$REGISTRY" --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 5. uske, the registry (Zot, for the node's architecture) and buildkitd, which knock drives to
-#    rebuild. The transit where rebuilds are held is a prefix of that same registry: it stands in
-#    for a private Harbor project, and Zot does not close it.
+# 5. uske and the registry (Zot, for the node's architecture). The transit where rebuilds are held
+#    is a prefix of that same registry: it stands in for a private Harbor project, and Zot does
+#    not close it. Nothing is rebuilt until `up.sh repair` adds buildkitd.
 arch="$(docker exec "$CLUSTER-control-plane" uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')"
 kubectl kustomize "$HERE" | sed "s/zot-linux-arm64/zot-linux-$arch/" | kubectl apply -n "$NS" -f -
 kubectl -n "$NS" rollout status deploy/registry --timeout=120s
-kubectl -n "$NS" rollout status deploy/buildkitd --timeout=180s
 
 # knock's public key becomes Zot's only trusted cosign key: a green badge then means "signed at
 # admission by knock", nothing else (design, decision 13).
@@ -205,28 +238,14 @@ done
 # 7. Known products for the demonstration policies (change politiques-de-demonstration): copied
 #    once into Zot under mirror/, whole index by digest, so what regis judges here is byte for
 #    byte what the 2026-09-19 spike judged. After this, no network is needed.
-CRANE="gcr.io/go-containerregistry/crane/debug@sha256:94f61956845714bea3b788445454ae4827f49a90dcd9dac28255c4cccb6220ad"  # v0.20.3
-MIRRORS="
+mirror "
 docker.io/library/redis@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7 mirror/redis:7.4-alpine
 registry.k8s.io/coredns/coredns@sha256:40384aa1f5ea6bfdc77997d243aec73da05f27aed0c5e9d65bfa98933c519d97 mirror/coredns:v1.12.0
 gcr.io/distroless/static-debian12@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab mirror/distroless-static:nonroot
 docker.io/library/nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 mirror/nginx:1.27-alpine
 ghcr.io/sigstore/cosign/cosign@sha256:6bbe0d281d955c79f85b325f0f7e651c1bcab5a4fa4ad4903d74955178a3b2eb mirror/cosign:v3.1.1
 registry.k8s.io/pause@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a mirror/pause:3.10
-docker.io/library/hello-world@sha256:5e23090353324d887c48ad5e5c56d294eab81588df9605b07d1afe895f9cc8f8 mirror/hello-world:latest
-docker.io/library/alpine@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11 mirror/alpine:3.18.0
-docker.io/library/redis@sha256:c45b9ac48fde5e7ffc59e785719165511b1327151c392c891c2f552a83446847 mirror/redis-repair:7.2.0"
-script='while read -r src dst; do
-  [ -n "$src" ] || continue
-  if crane digest "$REGISTRY/$dst" >/dev/null 2>&1; then echo "present $dst"; else crane copy "$src" "$REGISTRY/$dst" && echo "copied $dst"; fi
-done'
-kubectl -n "$NS" delete pod mirror --ignore-not-found >/dev/null
-kubectl -n "$NS" run mirror --rm -i --restart=Never --image="$CRANE" --overrides="$(jq -n \
-  --arg image "$CRANE" --arg script "$script" --arg mirrors "$MIRRORS" --arg registry "$REGISTRY" '{spec: {
-  containers: [{name: "m", image: $image, command: ["sh", "-c", ($script + " <<EOF\n" + $mirrors + "\nEOF")],
-    env: [{name: "REGISTRY", value: $registry}, {name: "SSL_CERT_FILE", value: "/ca/bundle.pem"}],
-    volumeMounts: [{name: "ca", mountPath: "/ca"}]}],
-  volumes: [{name: "ca", secret: {secretName: "registry-ca"}}]}}')"
+docker.io/library/hello-world@sha256:5e23090353324d887c48ad5e5c56d294eab81588df9605b07d1afe895f9cc8f8 mirror/hello-world:latest"
 
 echo "Ready. Start a screening:"
 echo "  kubectl -n $NS create -f $HERE/screening.yaml && kubectl -n $NS get wf -w"
@@ -234,3 +253,4 @@ echo "Argo UI:     kubectl -n $NS port-forward svc/argo-workflows-server 2746:27
 echo "Registry UI: kubectl -n $NS port-forward svc/registry 8082:5000               → https://localhost:8082"
 echo "What knock attached to a placed image, verified: $HERE/attestations.sh 2.0"
 echo "Dependency-Track: $0 dt, then a dt-sync pass: kubectl -n $NS create -f $HERE/sync.yaml"
+echo "Rebuild path: $0 repair, then: kubectl -n $NS create -f $HERE/repair.yaml"

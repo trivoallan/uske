@@ -195,7 +195,11 @@ reprises communes d'Argo, pour ne pas tripler chaque essai.
   Les reprises d'Argo sont sans risque (fait 6).
 - *Pas de fichier d'images retenues.* Aucun candidat, rien de promu.
 
-**D9 — Le banc : un préfixe du même registre.** `up.sh` ajoute un `buildkitd` sans privilège,
+**D9 — Le banc : un préfixe du même registre, et la réparation en variante.** Le banc par
+défaut ne gagne que l'entrée de transit, obligatoire, et ne reconstruit rien. `up.sh repair`,
+sur un banc déjà monté comme `up.sh dt`, ajoute le reste : un passage de la voie reconstruction
+retient des dizaines de gigaoctets de couches dans le nœud, et a rempli un disque le
+2026-10-10 (revue, finding 19). Il ajoute un `buildkitd` sans privilège,
 repris du composant de `knock` et qui fait confiance à l'autorité de certification du banc ; une
 entrée `transit` dans `KNOCK_REGISTRIES`, préfixe du Zot existant ; un miroir de paquets dans
 `KNOCK_TRANSFORM_PACKAGE_MIRRORS`, dont les dépôts publics de la distribution tiennent lieu ; et
