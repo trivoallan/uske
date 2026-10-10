@@ -1,5 +1,5 @@
 # Demonstration policy for the kind environment (change politiques-de-demonstration).
-# An image with no distribution package: one of the few the licence rule lets through (DEBT-13).
+# An image with no distribution package: nothing for the licence rule to read (DEBT-13).
 # No `major` label: hello-world publishes no versioned tag.
 apiVersion: knock.io/v1alpha1
 kind: MirrorPolicy
