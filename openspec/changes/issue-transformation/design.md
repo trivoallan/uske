@@ -130,6 +130,11 @@ raison.
 | `transformation-required`, `quarantine` | deux : l'image retenue, puis la source close | `approve` écarte la source, `pending` ne la rejuge pas |
 | `inconclusive` | une, sur l'image retenue | la source reste approuvable : reconstruite, rejugée |
 
+**Une règle qui n'a pas conclu ne clôt rien.** Quand aucune règle critique n'a échoué et qu'une
+règle est restée *incomplete*, `classify` rend `inconclusive`, pour les deux portes : le tier a été
+manqué sur une règle que le juge n'a pas su lire. Trouvé sur le banc, où une image réparée était
+close parce que `regis` ne lisait pas sa date de création (`trivoallan/regis#870`).
+
 Alternative écartée le 2026-10-10 : ne rien écrire sur la source et laisser `approve` chercher une
 image retenue refusée qui la nomme. La version resterait `transformation-required` au journal
 alors qu'elle est refusée, et `approve` gagnerait une recherche.
