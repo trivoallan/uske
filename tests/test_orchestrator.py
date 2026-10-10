@@ -12,6 +12,7 @@ import json
 import re
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -49,6 +50,10 @@ def report(tier: str | None, rules: list[dict] | None = None) -> dict:
 
 SECRET_FAILED = {"slug": "no-secret", "level": "critical", "passed": False, "status": "failed"}
 SECRET_INCOMPLETE = {"slug": "no-secret", "level": "critical", "passed": False, "status": "incomplete"}
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Workdir(unittest.TestCase):
@@ -309,6 +314,8 @@ class Attempts(unittest.TestCase):
         self.assertEqual(results.attempts([own, held(S1), held(S2)], D1), 2)
         self.assertEqual(results.attempts([own, held(S1), own, held(S2)], D1), 1)
         self.assertEqual(results.attempts([own, held(S1)], D2), 0)
+        repaired = {"digest": S2, "state": "direct-placement", "source": D1}
+        self.assertEqual(results.attempts([own, held(S1), repaired], D1), 1)  # a verdict is not an attempt
 
     def test_a_line_carries_its_source_and_its_rebuild(self):
         line = results.ResultLine(ts="t", ref="r", digest=D1, state="quarantine", ruleset="x",
@@ -448,7 +455,7 @@ class Rebuild(Workdir):
                          ({"approved": 0, "discarded": {"attempts-exhausted": 1}}, []))
         self.assertEqual(self.journal()[-1]["digest"], S3)  # nothing was written on the source
 
-        reopen = {"ts": "2026-10-10T00:00:00Z", "ref": self.SOURCE, "digest": D1,
+        reopen = {"ts": now(), "ref": self.SOURCE, "digest": D1,
                   "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"}
         self.assertEqual(self.record("reopen.json", reopen), 1)
         todo = run("pending", "--policy", self.POLICY, "--plan", self.write("plan.json", rebuilt),
@@ -457,10 +464,27 @@ class Rebuild(Workdir):
         self.judge_source(D1, self.REPAIR)
         self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
 
+    def test_replaying_the_first_gate_does_not_reopen_a_closed_source(self):
+        original = self.classify(FULL, self.SOURCE, D1, self.REPAIR)
+        original["ts"] = "2026-01-01T00:00:00Z"  # judged long before the rebuild
+        self.record("src.json", original)
+        self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
+        self.assertEqual(self.record("src-again.json", original), 0)
+        self.assertEqual(self.journal()[-1]["reason"], "uske/rebuild-refused")
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], [])
+
+    def test_repaired_images_do_not_exhaust_their_source(self):
+        self.judge_source(D1, self.REPAIR)
+        for held in (S1, S2, S3):
+            self.record(f"held-{held[-4:]}.json", self.judge_held(D1, held, report("Placement direct")))
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
+
     def test_a_closed_source_reopens_by_the_same_line(self):
         self.judge_source(D1, self.REPAIR)
         self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
-        self.record("reopen.json", {"ts": "2026-10-10T00:00:00Z", "ref": self.SOURCE, "digest": D1,
+        self.record("reopen.json", {"ts": now(), "ref": self.SOURCE, "digest": D1,
                                     "state": "inconclusive", "ruleset": "none", "reason": "uske/reopened"})
         self.judge_source(D1, self.REPAIR)
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)

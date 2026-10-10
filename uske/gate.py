@@ -15,7 +15,7 @@ from uske.outcomes import Outcome
 from uske.policies import Policy
 from uske.results import attempts, last_states
 
-MAX_ATTEMPTS = 3  # held images already judged for one source, after which it is no longer rebuilt
+MAX_ATTEMPTS = 3  # held images left without a verdict for one source, after which it is no longer rebuilt
 REBUILD_REFUSED = "uske/rebuild-refused"
 
 

@@ -47,24 +47,27 @@ def pending(candidates: list[dict], lines: list[dict]) -> list[dict]:
 
 
 def attempts(lines: list[dict], source: str) -> int:
-    """Held images judged for `source` since the last line written on `source` itself."""
+    """Held images left without a verdict for `source` since the last line written on `source` itself."""
     count = 0
     for line in lines:
         if line["digest"] == source:
             count = 0
-        elif line.get("source") == source:
+        elif line.get("source") == source and line["state"] == Outcome.INCONCLUSIVE:
             count += 1
     return count
 
 
 def append(path: Path, new_lines: list[dict]) -> int:
-    """Append in a single write; a line that repeats a digest's last state is dropped (D-27)."""
-    states = last_states(read(path))
+    """Append in a single write. A line that repeats a digest's last state is dropped (D-27), and so is
+    a line older than that digest's last line: the journal only moves forward, so replaying a step
+    never reopens a decision."""
+    last = {line["digest"]: (line["ts"], line["state"]) for line in read(path)}
     kept = []
     for line in new_lines:
-        if states.get(line["digest"]) != line["state"]:
+        ts, state = last.get(line["digest"], ("", None))
+        if line["ts"] >= ts and line["state"] != state:
             kept.append(line)
-            states[line["digest"]] = line["state"]
+            last[line["digest"]] = (line["ts"], line["state"])
     if kept:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as out:
