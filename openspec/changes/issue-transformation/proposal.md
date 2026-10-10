@@ -49,7 +49,8 @@ découverte n'a consommé aucune passe.
 ## What Changes
 
 - **Routage** — `approve` garde une opération dont la source est en `transformation-required`
-  quand le plan de `knock` la dit `transformed`. Champ absent : refus. La règle sur
+  quand le plan de `knock` la dit `transformed` et que le workflow lui nomme le transit. Champ ou
+  option absents : refus. La règle sur
   `direct-placement` ne change pas.
 - **Transit** — `place` passe toujours `--stage-to` et `--staged-out` à `knock reconcile
   --apply-plan`. Le workflow gagne un paramètre `transit`, un nom de `KNOCK_REGISTRIES`. Les copies
@@ -61,7 +62,9 @@ découverte n'a consommé aucune passe.
   promote`. Seul `direct-placement` promeut.
 - **Journal** — une ligne par image retenue jugée, avec une clé facultative `source` qui porte
   l'empreinte de sa source. Quand la reconstruction est refusée, une seconde ligne clôt la source :
-  `state: quarantine`, `reason: uske/rebuild-refused`. Une seule tentative par empreinte source.
+  `state: quarantine`, `reason: uske/rebuild-refused`. Une reconstruction refusée n'est tentée
+  qu'une fois ; les essais sans verdict sont bornés à trois ; une ligne `uske/reopened`, ajoutée à
+  la main, rouvre une source.
 - **Sous-commandes** — aucune nouvelle. `pending` et `approve` acceptent `--staged` à la place de
   `--plan` ; `classify` reçoit la source d'une image retenue.
 - **Banc local** — un `buildkitd`, une entrée de transit, un miroir de paquets et deux politiques
@@ -135,7 +138,8 @@ banc s'y ajoute en delta ; sinon elle reste un critère des tâches.
 - **Fichiers** : `uske/gate.py`, `uske/cli.py`, `uske/results.py` ; `tests/test_orchestrator.py`
   et ses fichiers figés ; `deploy/base/workflowtemplate.yaml` ; `deploy/kind/up.sh`,
   `deploy/kind/kustomization.yaml`, deux politiques sous `deploy/kind/policies/` et un manifeste
-  pour `buildkitd` ; `README.md`, `openspec/discovery.md`, `docs/architecture/arc42.md`.
+  pour `buildkitd` ; `deploy/example`, que pose `demenagement-gitlab-et-livraison` et qui
+  remplace les paramètres en bloc : `transit` y entre, en dernier paramètre de la base ; `README.md`, `openspec/discovery.md`, `docs/architecture/arc42.md`.
 - **Dépendances** : aucune dépendance Python nouvelle. Une version de `knock` à paraître ; l'image
   de BuildKit, tirée au montage du banc seulement.
 - **Surface d'attaque** : l'identité de `knock` reçoit l'écriture sur le transit. Un transit que des
@@ -143,21 +147,28 @@ banc s'y ajoute en delta ; sinon elle reste un critère des tâches.
   destination de la politique. Sa fermeture relève du registre, pas de ce change.
 - **Ordre** : le Python et ses tests peuvent précéder. Les manifestes viennent après
   `demenagement-gitlab-et-livraison`, qui renomme tout `deploy/`, et après la version de `knock`.
-- **Premier screening réel**, dû le 2026-10-31 : si ce change est fusionné avant, la surcouche de
-  staging doit nommer un transit, même si aucune politique n'y reconstruit.
+- **Premier screening réel**, dû le 2026-10-31 : les manifestes de ce change fusionnent après
+  lui. Le transit obligatoire et une version de `knock` à paraître n'entrent pas sur le chemin
+  d'un *Must* pour une story *Should*.
 - **Hors de ce change** : le dossier `docs` (D-32, DEBT-21, §5.2), qui décrit encore un transit
-  proposé ; la consignation d'une construction en échec ; la levée d'une source close ; la
-  fermeture et la rétention du transit ; l'issue `quarantine` qui agit (story 3).
+  proposé ; la consignation d'une construction en échec ; savoir quelle étape de `knock`
+  répare quelle règle, pour ne pas tenter une reconstruction perdue d'avance ; la fermeture et la
+  rétention du transit ; l'issue `quarantine` qui agit (story 3) ; et `census`, qui tient pour
+  admise toute image marquée par `knock`, donc une image retenue et refusée — piste : exclure le
+  préfixe de transit, ou exiger la signature.
 - **Branche** : `github-flow`, `squash`, préfixe `feat` selon `SDR-0009`.
 
 ## Questions ouvertes
 
 - **Quelles images pour le banc ?** Il en faut une dont la source tombe dans le tier
   « Transformation requise » et sort réparée, et une qui ne l'est pas. Les notes de `knock` donnent
-  des candidates (`alpine:3.18.0`, `redis:7.2.0`), non vérifiées contre le playbook complet. Le
-  résultat dépend de la base de failles du jour.
-- **La story 4 attend-elle la story 1 ?** `openspec/discovery.md` l'en fait dépendre. Ce change se
-  prouve sur le banc et ne l'attend pas ; à confirmer.
+  des candidates (`alpine:3.18.0`, `redis:7.2.0`), non vérifiées contre le playbook complet. La
+  famille GPL est sortie de sa liste de licences le 2026-10-10 (`trivoallan/uske#8`), ce qui
+  devrait laisser passer les bases à paquets ; ce n'est pas rejoué. Le tier « Placement direct »
+  exige aussi `no-root`, qu'aucune étape ne fixe. La mesure avec `regis` est la première tâche du
+  banc, avec en repli une image faite exprès, que toute reconstruction rafraîchit.
+- **La story 4 attend-elle la story 1 ?** Tranché par la revue pour les manifestes, qui passent
+  après le premier screening réel. Le Python et ses tests ne l'attendent pas.
 - **Le nom du champ côté `knock`.** `transformed` est celui que `knock` emploie déjà dans son
   prédicat de provenance ; c'est à son propre change de le fixer.
 - **La variante Harbor du banc.** Si `harbor-au-banc-local` est fusionné, le transit peut y être un

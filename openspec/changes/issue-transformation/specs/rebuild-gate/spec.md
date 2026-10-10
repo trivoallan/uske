@@ -4,7 +4,7 @@
 
 Le screening MUST NOT rendre au placeur une opération dont l'empreinte source est en
 `transformation-required`, sauf si le plan du placeur déclare que cette opération sera
-reconstruite. Une opération que le plan ne déclare pas reconstruite MUST être tenue pour une
+reconstruite et que le screening a nommé un transit au filtrage. Une opération que le plan ne déclare pas reconstruite MUST être tenue pour une
 copie. Une source en `direct-placement` reste rendue, reconstruite ou non. `uske` ne déduit jamais
 lui-même, de la politique, ce qui sera reconstruit.
 
@@ -29,6 +29,13 @@ lui-même, de la politique, ce qui sera reconstruit.
 - **WHEN** le plan est filtré
 - **THEN** l'opération est retirée du plan rendu au placeur
 
+#### Scenario: Un screening qui ne nomme pas de transit
+
+- **GIVEN** une empreinte source dont le dernier état au journal est `transformation-required`
+- **AND** un plan dont l'opération sur cette empreinte est déclarée reconstruite
+- **WHEN** le plan est filtré sans qu'un transit soit nommé
+- **THEN** l'opération est retirée du plan rendu au placeur
+
 #### Scenario: Une source saine sur une politique qui reconstruit
 
 - **GIVEN** une empreinte source dont le dernier état au journal est `direct-placement`
@@ -41,14 +48,14 @@ lui-même, de la politique, ce qui sera reconstruit.
 À chaque application d'un plan, pour toute politique, le screening SHALL nommer au placeur un
 transit où retenir ce qu'il construit, et lui demander la liste des images retenues. Le screening
 MUST NOT appliquer un plan sans transit : un déploiement qui n'en déclare pas ne place rien. Une
-image copiée n'est pas retenue : elle est identique, à l'octet près, à la source déjà jugée.
+image copiée n'est pas retenue : ses couches sont celles de la source déjà jugée.
 
 #### Scenario: Une politique qui reconstruit
 
 - **GIVEN** une politique qui déclare une transformation, et une opération approuvée
 - **WHEN** le plan filtré est appliqué
 - **THEN** l'image construite se trouve dans le transit et figure dans la liste des images retenues
-- **AND** la destination ne porte pas son tag
+- **AND** la destination est inchangée
 
 #### Scenario: Une politique en voie copie
 
@@ -81,7 +88,7 @@ pour la promotion MUST NOT nommer une image retenue dont le dernier état n'est 
 - **GIVEN** une image retenue dont le verdict est `transformation-required` ou `quarantine`
 - **WHEN** la liste des images retenues est filtrée
 - **THEN** son entrée est retirée du fichier rendu au placeur
-- **AND** la destination ne porte pas son tag
+- **AND** la destination est inchangée
 
 #### Scenario: Le juge ne conclut pas
 
@@ -118,9 +125,12 @@ rapport qu'elle désigne MUST survivre au screening.
 
 Quand une image retenue reçoit un verdict décidé autre que `direct-placement`, le screening SHALL
 ajouter au journal, après la ligne de l'image retenue, une ligne sur l'empreinte source :
-`state: quarantine`, `reason: uske/rebuild-refused`, et le rapport de l'image retenue. Une source
-ainsi close MUST NOT être rendue au placeur ni rejugée aux screenings suivants. Un verdict non
-concluant ne clôt rien : la source reste approuvable.
+`state: quarantine`, `reason: uske/rebuild-refused`, la référence de la source, le jeu de règles
+qui a jugé l'image retenue, son rapport, et une clé `rebuilt` qui porte son empreinte. Une source
+ainsi close MUST NOT être rendue au placeur ni rejugée aux screenings suivants, quelles que soient
+les lignes rejouées. Cette clôture dit que la reconstruction a été refusée ; elle n'est pas une
+quarantaine prononcée par le juge sur la source. Un verdict non concluant ne clôt rien : la source
+reste approuvable.
 
 #### Scenario: Le refus s'écrit deux fois
 
@@ -137,6 +147,20 @@ concluant ne clôt rien : la source reste approuvable.
 - **THEN** le juge n'est pas appelé pour cette empreinte, et l'opération est retirée du plan rendu
   au placeur
 
+#### Scenario: La ligne de première porte est rejouée après la clôture
+
+- **GIVEN** une empreinte source close par une ligne `uske/rebuild-refused`
+- **WHEN** l'étape de consignation de la seconde porte est rejouée
+- **THEN** aucune ligne n'est ajoutée sur l'empreinte source, qui reste close
+
+#### Scenario: Une source saine dont la reconstruction est refusée
+
+- **GIVEN** une empreinte source en `direct-placement`, dont une variante est copiée et une autre
+  reconstruite
+- **WHEN** l'image retenue de la variante reconstruite est refusée
+- **THEN** la source est close par une ligne `uske/rebuild-refused`
+- **AND** la copie déjà placée reste en service
+
 #### Scenario: Un verdict non concluant se rejoue
 
 - **GIVEN** une image retenue dont le verdict est `inconclusive`
@@ -149,6 +173,28 @@ concluant ne clôt rien : la source reste approuvable.
 - **GIVEN** une image retenue dont le verdict est `direct-placement`
 - **WHEN** ce verdict est consigné
 - **THEN** le journal ne gagne que la ligne de l'image retenue
+
+### Requirement: Les essais sans verdict sont bornés, et une ligne rouvre une source
+
+Le screening MUST NOT rendre au placeur une opération reconstruite dont l'empreinte source compte
+déjà trois lignes d'images retenues écrites depuis la dernière ligne sur cette empreinte source.
+Il n'écrit alors rien. Une ligne `state: inconclusive`, `reason: uske/reopened`, ajoutée sur une
+empreinte source, SHALL la rendre due de nouveau, qu'elle ait été close ou bornée, et remettre le
+compte à zéro.
+
+#### Scenario: Le juge reste muet trois screenings de suite
+
+- **GIVEN** une empreinte source dont trois images retenues successives ont reçu `inconclusive`
+- **WHEN** le plan du screening suivant est filtré
+- **THEN** l'opération sur cette source est retirée du plan rendu au placeur
+- **AND** aucune ligne n'est écrite sur l'empreinte source
+
+#### Scenario: Rouvrir une source close
+
+- **GIVEN** une empreinte source close par une ligne `uske/rebuild-refused`
+- **WHEN** une ligne `inconclusive` de raison `uske/reopened` est ajoutée sur cette empreinte
+- **THEN** le screening suivant la fait rejuger
+- **AND** si elle ressort à réparer, son opération reconstruite est de nouveau rendue au placeur
 
 ### Requirement: Une panne n'emporte pas ce qui a réussi
 

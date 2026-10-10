@@ -22,9 +22,10 @@ Ce que `knock` fait depuis sa PR #310 (ADR 0055), lu dans son code à `ce2278b` 
    inventoriée, attestée, et **pas signée comme admise**. Les copies sont placées directement. Les
    trois options vont ensemble.
 5. `G` est un document `StagedRebuilds` : une entrée par image retenue, avec `policy`, `import`,
-   `variant`, `destination`, `tag`, `source`, `sourceTag`, `sourceDigest`, `staged`, `stagedDigest`
-   et `aliases`. Il est écrit **même quand des opérations ont échoué** ; le code de sortie est alors
-   non nul.
+   `variant`, `kind`, `destination`, `tag`, `source`, `sourceTag`, `sourceDigest`, `staged`,
+   `stagedDigest` et `aliases`. Il est écrit **même quand des opérations ont échoué** ; le code de
+   sortie est alors non nul. Il ne l'est pas si `knock` s'arrête avant son rapport, sur une erreur
+   de configuration.
 6. `promote DIR --staged G'` place les entrées qu'un fichier filtré nomme encore. Il redérive la
    destination, le lieu de transit et l'identité de l'image ; il copie par empreinte avec les
    attestations, vérifie qu'elles sont arrivées, écrit le tag, signe si la politique admet, puis
@@ -74,8 +75,12 @@ voir `proposal.md`. Le fait 9 les rend toutes deux fragiles, et l'échec serait 
 source à réparer copiée telle quelle.
 
 **D2 — La règle de `approve`.** Une opération est gardée si sa source est en `direct-placement`,
-ou en `transformation-required` avec `transformed` à vrai. Champ absent vaut faux. Un `knock` qui
-n'écrit pas ce champ ne répare donc rien : la panne est fermée.
+ou en `transformation-required` avec `transformed` à vrai **et un transit nommé à `approve`**, par
+une option `--transit` que seul le workflow à seconde porte passe. Champ absent vaut faux, option
+absente vaut la règle d'avant ce change. La panne est fermée des deux côtés : un `knock` qui
+n'écrit pas le champ ne répare rien, et un workflow sans transit ne reçoit jamais une source à
+réparer, même avec l'image neuve de `uske` (revue, finding 2). `approve` rend aussi le nombre
+d'opérations écartées, par cause.
 
 **D3 — Le transit est un nom, toujours passé, obligatoire.** Le workflow reçoit un paramètre
 `transit` ; `place` passe `--stage-to` et `--staged-out` pour toute politique. Une politique en
@@ -83,14 +88,18 @@ voie copie produit un fichier vide et la suite ne fait rien : un seul chemin. Sa
 transit dans la liste, `knock` refuse de tourner et rien n'entre. Alternative écartée : un
 interrupteur. Sans transit, une source approuvée par D2 serait reconstruite et placée sans que sa
 sortie soit jugée. Pour un déploiement qui ne reconstruit rien, le coût est une clé de plus dans
-un secret, pointant un préfixe où rien n'est jamais écrit.
+un secret, pointant un préfixe où rien n'est écrit, mais où `knock` ouvre une session à chaque
+passage.
 
 **D4 — La seconde porte rejoue la première, avec les mêmes verbes.** Après `place` :
 
 1. `pending --staged G` rend un candidat par `stagedDigest` encore dû, pour cette politique :
    `ref` = `{staged}:{tag}`, `digest` = `stagedDigest`, `target` = `{staged}@{stagedDigest}`, et
    la source dont il vient.
-2. Le gabarit `evaluate` existant le juge, avec le playbook déjà résolu pour la politique.
+2. Le gabarit `evaluate` existant le juge, avec le playbook déjà résolu pour la politique. Il
+   écrit ses lignes dans un **répertoire propre à la seconde porte**, passé en paramètre : dans
+   celui de la première, `record` relirait la ligne de la source après sa clôture et la rouvrirait
+   (revue, finding 1).
 3. `record` consigne.
 4. `approve --staged G` écrit `G` moins les entrées dont l'image retenue n'est pas en
    `direct-placement`.
@@ -108,9 +117,12 @@ l'image retenue par cette clé.
 **D6 — Une reconstruction refusée clôt sa source.** Quand l'image retenue ressort en
 `transformation-required` ou en `quarantine`, le même `classify` émet deux lignes : celle de
 l'image retenue, puis une ligne sur l'empreinte source — `state: quarantine`, `reason:
-uske/rebuild-refused`, `report` = le rapport de l'image retenue. `record` accepte déjà une liste
-par fichier. La raison prend le préfixe en vigueur pour `unknown-track` à la fusion : `uske/`
-après le renommage, `orchestrator/` avant.
+uske/rebuild-refused`. Ses autres clés sont fixées : `ref` = la référence source, `ruleset` = le
+jeu de règles qui a jugé l'image retenue, `report` = le rapport de l'image retenue, et `rebuilt` =
+l'empreinte de l'image retenue, où se lit la règle en échec. `record` accepte déjà une liste par
+fichier. Le préfixe est `uske/`, sans condition : une raison neuve n'a aucun passé à suivre. Cette
+clôture n'est pas une quarantaine prononcée par le juge ; la story 3 devra les distinguer par la
+raison.
 
 | Verdict de l'image retenue | Lignes écrites | Au screening suivant |
 |---|---|---|
@@ -124,17 +136,34 @@ alors qu'elle est refusée, et `approve` gagnerait une recherche.
 
 **Cette décision est irréversible à la première ligne réelle** : le journal ne se rature pas.
 
-**D7 — Une seule tentative par empreinte source, et ce que cela coûte.** D6 l'obtient sans
-logique nouvelle. Quatre limites, assumées :
+**D7 — Une reconstruction refusée n'est tentée qu'une fois ; les autres essais sont bornés ; une
+ligne rouvre.** D6 donne la tentative unique sans logique nouvelle. Deux règles de plus :
+
+- *La borne.* Un verdict non concluant ou une promotion en échec font reconstruire au screening
+  suivant, sous une empreinte neuve à chaque fois. `approve` compte les lignes d'images retenues
+  dont `source` vaut l'empreinte, écrites depuis la dernière ligne sur l'empreinte source
+  elle-même, et n'approuve plus à partir de **trois**. Rien n'est écrit : la source garde son
+  état, et `approve` la compte parmi les écartées.
+- *La réouverture.* Une ligne ajoutée à la main sur l'empreinte source — `state: inconclusive`,
+  `reason: uske/reopened` — la rend due : `pending` la fait rejuger, la suite reprend, et le
+  compte repart de zéro. Aucun code nouveau. Le journal vivant sur un volume, le geste demande un
+  pod jetable, et le `README.md` le décrit.
+
+Trois limites, assumées :
 
 - Une source close ne se rouvre pas seule : ni un nouvel `epoch` de `upgradePackages`, ni un
-  correctif paru depuis. La lever est un acte humain, hors de ce change.
+  correctif paru depuis, ni un miroir de paquets qui rattrape son retard. Et la reconstruction
+  est tentée même quand aucune étape déclarée ne peut lever la règle en échec — `no-root`, par
+  exemple, qu'aucune étape de `knock` ne fixe. Savoir quelle étape répare quelle règle est hors
+  de ce change.
 - Un tag déjà en service dont la re-réparation est refusée garde son ancienne image, et sa source
   est close.
 - La clôture porte sur l'empreinte source, donc sur toutes ses variantes et toutes ses
-  destinations : une variante refusée empêche de reconstruire plus tard une variante saine.
-- Tant que le juge ne conclut pas, la même source est reconstruite à chaque screening. `knock`
-  replanifie de toute façon ; l'éviter demanderait de rejuger une image déjà retenue.
+  destinations : une variante refusée empêche de reconstruire plus tard une variante saine, et
+  clôt une source dont une copie peut être en service.
+
+Une construction qui échoue n'écrit aucune ligne : la borne ne la voit pas. `place` sort des
+reprises communes d'Argo, pour ne pas tripler chaque essai.
 
 **D8 — Une panne n'emporte pas ce qui a réussi.**
 
@@ -166,7 +195,13 @@ retenues figés :
   sans fichier ;
 - `approve --staged` ne garde que `direct-placement` ;
 - `classify` d'une image retenue écrit deux lignes sur un refus, une sinon ;
-- après la ligne de clôture, le même plan n'est plus approuvé ;
+- après la ligne de clôture, le même plan n'est plus approuvé, même quand la ligne de première
+  porte de la source est rejouée ;
+- `approve` sans `--transit` refuse `transformation-required` ;
+- trois images retenues non concluantes pour une source : elle n'est plus approuvée ; une ligne
+  `uske/reopened` la rend due ;
+- `approve --staged` rend les entrées gardées telles qu'il les a lues, et un fichier vide sans
+  fichier lu ;
 - `argo lint` passe sur les manifestes.
 
 ## Risks / Trade-offs
@@ -181,6 +216,9 @@ retenues figés :
 - Le transit accumule : `knock` n'y supprime rien → sans objet sur un banc jetable ; sur un
   registre réel, c'est à son exploitant d'y tenir une rétention.
 - Zot n'a aucun contrôle d'accès → le banc ne prouve pas que le transit est fermé.
+- `regis` ne s'authentifie qu'à un hôte, et `knock` n'ouvre qu'une session par hôte nu → le
+  transit vit sur l'hôte de la destination, avec une seule identité `knock` pour les deux projets
+  et la lecture pour `regis`. Écrit dans le `README.md` et la surcouche d'exemple.
 - La version de `knock` tarde → le Python et ses tests ne l'attendent pas ; le workflow et le banc,
   si.
 - Un `knock` sans `transformed` ne répare rien, sans bruit → le `README.md` dit la version
@@ -192,7 +230,8 @@ retenues figés :
 
 1. Dans `knock` : `transformed` au plan, puis une version publiée.
 2. Ici, le Python : `gate`, `cli`, `results`, et leurs tests.
-3. Ici, le workflow et le banc, sur l'image `knock` publiée, après le renommage de `deploy/`.
+3. Ici, le workflow et le banc, sur l'image `knock` publiée, après le renommage de `deploy/` et
+   **après le premier screening réel** : le transit obligatoire n'entre pas sur son chemin.
 4. Ici, les écrits : `README.md`, `openspec/discovery.md`, `docs/architecture/arc42.md`.
 
 **Retour arrière.** Révoquer la fusion suffit tant qu'aucun journal réel ne porte une ligne à clé
