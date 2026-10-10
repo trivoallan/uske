@@ -393,6 +393,12 @@ class Rebuild(Workdir):
         self.assertEqual(code, 0)
         return lines
 
+    def test_a_held_image_names_both_its_source_ref_and_digest(self):
+        path = self.write("held.json", self.REPAIR)
+        base = ["classify", "--playbook", str(FULL), "--ref", self.HELD, "--digest", S1, "--report", path]
+        self.assertEqual(run(*base, "--source-digest", D1)[0], 1)
+        self.assertEqual(run(*base, "--source-ref", self.SOURCE)[0], 1)
+
     def test_a_repaired_image_is_promoted_and_closes_nothing(self):
         self.judge_source(D1, self.REPAIR)
         lines = self.judge_held(D1, S1, report("Placement direct"))
@@ -415,6 +421,7 @@ class Rebuild(Workdir):
                          (S1, held["ruleset"], held["report"]))
         self.assertEqual(self.record("held.json", lines), 2)
         self.assertEqual(self.record("held-again.json", lines), 0)  # replaying the second gate adds nothing
+        self.assertEqual(self.approve_held(staged(self.NAME, [("1.0", D1, S1)])), ({"approved": 0}, []))  # a refused rebuild is never promoted
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
         self.assertEqual(self.approve(rebuilt, "--transit", "transit"),
                          ({"approved": 0, "discarded": {"refused": 1}}, []))
@@ -434,6 +441,7 @@ class Rebuild(Workdir):
             lines = self.judge_held(D1, held, report(None))
             self.assertEqual([l["state"] for l in lines], ["inconclusive"])  # nothing closes
             self.record(f"held-{held[-4:]}.json", lines)
+            self.assertEqual(self.approve_held(staged(self.NAME, [("1.0", D1, held)])), ({"approved": 0}, []))  # no verdict, no promotion
             self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
         self.record("held-third.json", self.judge_held(D1, S3, report(None)))
         self.assertEqual(self.approve(rebuilt, "--transit", "transit"),
@@ -463,8 +471,37 @@ class Rebuild(Workdir):
         self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
         closing = self.journal()[-1]
         self.assertEqual((closing["digest"], closing["reason"]), (D1, "uske/rebuild-refused"))
-        # not a verdict of the judge on the source: the reason says so, and story 3 must read it
-        self.assertNotEqual(closing["reason"], "secrets/verified-secrets")
+        self.assertEqual(closing["state"], "quarantine")
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], [])  # closed, though the judge found it sound
+
+    def test_a_quarantined_rebuild_closes_its_source_too(self):
+        self.judge_source(D1, self.REPAIR)
+        lines = self.judge_held(D1, S1, report("Quarantaine", [SECRET_FAILED]))
+        self.assertEqual([(l["digest"], l["state"]) for l in lines], [(S1, "quarantine"), (D1, "quarantine")])
+        self.assertEqual(lines[1]["reason"], "uske/rebuild-refused")
+        self.record("held.json", lines)
+        self.assertEqual(self.approve_held(staged(self.NAME, [("1.0", D1, S1)])), ({"approved": 0}, []))
+
+    def test_a_decided_held_image_is_not_judged_again(self):
+        self.judge_source(D1, self.REPAIR)
+        self.record("held.json", self.judge_held(D1, S1, report("Placement direct")))
+        value = staged(self.NAME, [("1.0", D1, S1), ("1.1", D2, S2)])
+        self.assertEqual([c["digest"] for c in self.pending_held(value)], [S2])
+
+    def test_another_policy_s_held_images_are_never_handed_back(self):
+        self.judge_source(D1, self.REPAIR)
+        self.record("held.json", self.judge_held(D1, S1, report("Placement direct")))
+        value = staged("another-policy", [("1.0", D1, S1)])
+        self.assertEqual(self.approve_held(value), ({"approved": 0}, []))
+
+    def test_the_bound_covers_a_sound_source_and_spares_a_copy(self):
+        self.judge_source(D1, report("Placement direct"))
+        for held in (S1, S2, S3):
+            self.record(f"held-{held[-4:]}.json", self.judge_held(D1, held, report(None)))
+        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        self.assertEqual(self.approve(rebuilt)[0]["discarded"], {"attempts-exhausted": 1})
+        self.assertEqual(self.approve(plan(self.NAME, [("1.0", D1)], transformed=False))[1], ["1.0"])
 
 
 class NothingHardcoded(unittest.TestCase):

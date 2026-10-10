@@ -88,6 +88,9 @@ def cmd_resolve(args) -> None:
 
 def cmd_classify(args) -> None:
     """The report is read where the screening wrote it, and recorded where it will still be."""
+    if bool(args.source_ref) != bool(args.source_digest):
+        # half a pair would write an anonymous closing line, or silently skip the second gate
+        raise Failure("--source-ref and --source-digest go together")
     if args.playbook is None:
         # unknown regime: never evaluated, recorded as such (D-21, D-23)
         ruleset, report_path, report = "none", None, None
