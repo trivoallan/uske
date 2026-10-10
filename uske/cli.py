@@ -7,6 +7,7 @@ Exit 1 is a technical failure (Argo retries it), exit 2 a usage error (argparse)
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import os
@@ -32,6 +33,11 @@ def _read_json(path: str):
         return json.loads(Path(path).read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise Failure(f"{path}: {exc}") from exc
+
+
+def _read_staged(path: str) -> dict:
+    """knock's StagedRebuilds. No file: knock held nothing, or did not get that far."""
+    return _read_json(path) if Path(path).exists() else {"entries": []}
 
 
 def _policy(path: str) -> policies.Policy:
@@ -60,7 +66,10 @@ def _target(candidate: dict) -> dict:
 def cmd_pending(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
-    found = gate.candidates(_read_json(args.plan), policy)
+    if args.staged:
+        found = gate.staged_candidates(_read_staged(args.staged), policy)
+    else:
+        found = gate.candidates(_read_json(args.plan), policy)
     _json([_target(c) for c in results.pending(found, lines)])
 
 
@@ -79,6 +88,9 @@ def cmd_resolve(args) -> None:
 
 def cmd_classify(args) -> None:
     """The report is read where the screening wrote it, and recorded where it will still be."""
+    if bool(args.source_ref) != bool(args.source_digest):
+        # half a pair would write an anonymous closing line, or silently skip the second gate
+        raise Failure("--source-ref and --source-digest go together")
     if args.playbook is None:
         # unknown regime: never evaluated, recorded as such (D-21, D-23)
         ruleset, report_path, report = "none", None, None
@@ -106,7 +118,18 @@ def cmd_classify(args) -> None:
         # what a human opens, when the workflow kept it; else what was read, for a local run
         report=(args.report_link or str(report_path)) if report is not None else None,
     )
-    _json(line.to_dict())
+    if not args.source_digest:  # first gate; Argo passes an empty string
+        _json(line.to_dict())
+        return
+    lines = [dataclasses.replace(line, source=args.source_digest).to_dict()]
+    if outcome in (outcomes.Outcome.TRANSFORMATION_REQUIRED, outcomes.Outcome.QUARANTINE):
+        # the rebuild was judged and refused: close the source, one attempt only
+        lines.append(results.ResultLine(
+            ts=line.ts, ref=args.source_ref, digest=args.source_digest,
+            state=outcomes.Outcome.QUARANTINE.value, ruleset=ruleset,
+            reason=gate.REBUILD_REFUSED, report=line.report, rebuilt=args.digest,
+        ).to_dict())
+    _json(lines)
 
 
 def cmd_record(args) -> None:
@@ -121,18 +144,30 @@ def cmd_record(args) -> None:
     for f in files:
         value = _read_json(str(f))
         lines.extend(value if isinstance(value, list) else [value])
-    written = results.append(results.path_for(args.results, policy.name), lines)
-    _json({"written": written})
+    for line in lines:
+        try:
+            datetime.strptime(line["ts"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise Failure(f"{line.get('digest')}: ts must be %Y-%m-%dT%H:%M:%SZ, got {line.get('ts')!r}") from exc
+    written, stale = results.append(results.path_for(args.results, policy.name), lines)
+    for message in stale:
+        print(message, file=sys.stderr)
+    _json({"written": written, **({"stale": len(stale)} if stale else {})})
 
 
 def cmd_approve(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
-    approved = gate.approve(_read_json(args.plan), policy, lines)
+    if args.staged:
+        approved = gate.approve_staged(_read_staged(args.staged), policy, lines)
+        count = {"approved": len(approved["entries"])}
+    else:
+        approved, discarded = gate.approve(_read_json(args.plan), policy, lines, args.transit)
+        count = {"approved": len(approved["operations"]), "discarded": discarded}
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(approved, indent=2))
-    _json({"approved": len(approved["operations"])})
+    _json(count)
 
 
 def _dependency_track() -> dtsync.DependencyTrack:
@@ -241,7 +276,9 @@ def parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("pending", help="the plan's digests still owed a decision")
     s.add_argument("--policy", required=True)
-    s.add_argument("--plan", required=True, help="knock's ReconcilePlan (reconcile --plan-out)")
+    source = s.add_mutually_exclusive_group(required=True)
+    source.add_argument("--plan", help="knock's ReconcilePlan (reconcile --plan-out)")
+    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out); a missing file means nothing was held")
     s.add_argument("--results", required=True)
     s.set_defaults(run=cmd_pending)
 
@@ -257,6 +294,8 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--report", help="the regis report read to judge")
     s.add_argument("--report-link", help="where that report survives the screening; recorded instead of --report")
     s.add_argument("--regis-exit", type=int, default=0)
+    s.add_argument("--source-ref", default="", help="for a held image: the source it was built from")
+    s.add_argument("--source-digest", default="", help="for a held image: that source's digest")
     s.set_defaults(run=cmd_classify)
 
     s = sub.add_parser("record", help="append this screening's lines")
@@ -267,9 +306,12 @@ def parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("approve", help="the plan minus refused operations, for knock --apply-plan")
     s.add_argument("--policy", required=True)
-    s.add_argument("--plan", required=True)
+    source = s.add_mutually_exclusive_group(required=True)
+    source.add_argument("--plan", help="knock's ReconcilePlan (reconcile --plan-out)")
+    source.add_argument("--staged", help="knock's StagedRebuilds (reconcile --staged-out); a missing file means nothing was held")
     s.add_argument("--results", required=True)
     s.add_argument("--out", required=True)
+    s.add_argument("--transit", help="name of the registry rebuilds are held in; trusted, not checked. Without it, no source to repair is approved")
     s.set_defaults(run=cmd_approve)
 
     s = sub.add_parser("dt-plan", help="the placed fleet vs Dependency-Track: what to send, what to retire")

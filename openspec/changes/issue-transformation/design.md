@@ -139,15 +139,29 @@ alors qu'elle est refusée, et `approve` gagnerait une recherche.
 **D7 — Une reconstruction refusée n'est tentée qu'une fois ; les autres essais sont bornés ; une
 ligne rouvre.** D6 donne la tentative unique sans logique nouvelle. Deux règles de plus :
 
-- *La borne.* Un verdict non concluant ou une promotion en échec font reconstruire au screening
-  suivant, sous une empreinte neuve à chaque fois. `approve` compte les lignes d'images retenues
-  dont `source` vaut l'empreinte, écrites depuis la dernière ligne sur l'empreinte source
-  elle-même, et n'approuve plus à partir de **trois**. Rien n'est écrit : la source garde son
-  état, et `approve` la compte parmi les écartées.
+- *La borne.* Un verdict non concluant fait reconstruire au screening suivant, sous une
+  empreinte neuve à chaque fois. `approve` compte les lignes d'images retenues **non
+  concluantes** dont `source` vaut l'empreinte, écrites depuis la dernière ligne sur l'empreinte
+  source elle-même, et n'approuve plus à partir de **trois**. Rien n'est écrit : la source garde
+  son état, et `approve` la compte parmi les écartées. Une réparation réussie ne compte pas :
+  sinon trois variantes saines épuiseraient leur source (relecture finale, I3).
+- *Une ligne plus ancienne ne s'écrit pas.* `append` écarte une ligne dont la date précède la
+  dernière ligne du même digest. C'est ce qui tient « une source close reste close » quand une
+  étape de consignation est rejouée, sans dépendre de l'ordre des fichiers ni du workflow
+  (relecture finale, I1). Le répertoire propre à la seconde porte (D4) reste, en ceinture.
 - *La réouverture.* Une ligne ajoutée à la main sur l'empreinte source — `state: inconclusive`,
   `reason: uske/reopened` — la rend due : `pending` la fait rejuger, la suite reprend, et le
-  compte repart de zéro. Aucun code nouveau. Le journal vivant sur un volume, le geste demande un
+  compte repart de zéro. Sa date doit être celle du geste : plus ancienne que la dernière ligne
+  de la source, elle serait écartée. Aucun code nouveau. Le journal vivant sur un volume, le geste demande un
   pod jetable, et le `README.md` le décrit.
+
+Trois plafonds de la borne, nommés plutôt que cachés (relecture finale, I2 et I3) : elle
+compte des lignes, pas des screenings, donc quatre variantes et une panne du juge épuisent une
+source en un passage — la corriger demande un identifiant de passage, que le journal n'a pas ;
+elle suppose une empreinte neuve à chaque reconstruction, ce que le marquage horodaté de `knock`
+garantit aujourd'hui — une reconstruction reproductible répéterait sa ligne, que `append`
+écarterait ; et elle ne voit pas une promotion en échec, que le journal ne distingue pas d'une
+réussite.
 
 Trois limites, assumées :
 
