@@ -50,21 +50,15 @@ spec:
       level: critical
       tags: [version, allege, redhibitoire]
       options:
-        # Identifiants SPDX courants. `GPL-2.0` et `GPL-3.0` sont dépréciés
-        # depuis SPDX 3.0 : écrits ainsi, on ne sait pas si la règle ne
-        # correspond à rien ou si elle correspond à tout.
+        # Identifiants SPDX courants. La famille GPL n'y est plus : elle mettait
+        # en quarantaine toute base dont Syft lit les paquets — Alpine (busybox
+        # en GPL-2.0-only), Debian, Ubuntu, distroless. Restent les licences qui
+        # visent le service rendu, pas la distribution.
         #
-        # PÉRIMÈTRE À ARBITRER — spécification DEBT-13. Cette liste met en
-        # quarantaine toute image dont Syft remonte une licence GPL : c'est le
-        # cas des paquets apk d'Alpine (busybox en GPL-2.0-only). Sur l'image
-        # Ubuntu de Hasura (regis/2026-09-07/), Syft ne remonte aucune licence
-        # deb et la règle ne voit rien. La question n'est pas technique : elle
-        # est de savoir ce qu'une redistribution *interne* engage réellement.
+        # PÉRIMÈTRE À ARBITRER — spécification DEBT-13. La question n'est pas
+        # technique : elle est de savoir ce qu'une redistribution *interne*
+        # engage réellement.
         blocklist:
-          - GPL-2.0-only
-          - GPL-2.0-or-later
-          - GPL-3.0-only
-          - GPL-3.0-or-later
           - AGPL-3.0-only
           - AGPL-3.0-or-later
           - SSPL-1.0
