@@ -9,7 +9,9 @@ metadata:
 
 spec:
   # Trois issues. Premier tier vrai l'emporte. La distinction
-  # réparable / rédhibitoire sur les failles repose entièrement sur `cve-fixable`.
+  # réparable / rédhibitoire sur les failles repose entièrement sur `cve-fixable`,
+  # qui se lit à l'envers de son nom : la règle `fix-available` de `regis` PASSE
+  # quand aucune faille n'a de correctif, et ÉCHOUE quand il en existe.
   tiers:
     - name: Placement direct
       condition:
@@ -26,19 +28,21 @@ spec:
           - { var: rules.no-secret.passed }
           - { var: rules.no-licence-toxique.passed }
           # Une faille critique est acceptable ICI si et seulement si
-          # un correctif existe : la transformation l'appliquera.
+          # un correctif existe : la transformation l'appliquera. « Un correctif
+          # existe », c'est `cve-fixable` en ÉCHEC.
           - or:
               - { var: rules.cve-critical.passed }
-              - { var: rules.cve-fixable.passed }
+              - { "!": [{ var: rules.cve-fixable.passed }] }
 
     - name: Quarantaine
       condition:
         or:
           - { "!": [{ var: rules.no-secret.passed }] }
           - { "!": [{ var: rules.no-licence-toxique.passed }] }
+          # Une faille critique, et aucun correctif nulle part dans l'image.
           - and:
               - { "!": [{ var: rules.cve-critical.passed }] }
-              - { "!": [{ var: rules.cve-fixable.passed }] }
+              - { var: rules.cve-fixable.passed }
 
   rules:
     # ===== RÉDHIBITOIRE : rien ne les répare =====
@@ -68,7 +72,11 @@ spec:
 
     # ===== LE COUPLE QUI DÉCIDE =====
     # cve-critical dit qu'il y a un problème.
-    # cve-fixable dit si on peut le corriger à la mise à disposition.
+    # cve-fixable dit si on peut le corriger à la mise à disposition : en échec,
+    # des correctifs existent. Limite : `regis` compte les correctifs de toutes
+    # sévérités, pas ceux des seules failles critiques. Une image peut donc partir
+    # en réparation sans que sa faille critique soit corrigeable ; c'est le
+    # jugement de l'image reconstruite qui le dira.
     - provider: cve
       criterion: cve-count
       slug: cve-critical
