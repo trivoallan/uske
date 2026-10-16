@@ -240,7 +240,7 @@ spec:
                     classify --playbook {{inputs.parameters.playbook}}
                     --ref {{inputs.parameters.ref}} --digest {{inputs.parameters.digest}}
                     --report /work/reports/{{inputs.parameters.key}}/report.json
-                    --report-link /results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html
+                    --report-link /results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}/{{workflow.name}}.html
                     --regis-exit {{steps.regis.exitCode}}
                     --source-ref "{{inputs.parameters.source-ref}}"
                     --source-digest "{{inputs.parameters.source-digest}}"
@@ -249,7 +249,7 @@ spec:
                     --run "{{workflow.name}}"
                 - {name: out, value: "/work/{{inputs.parameters.lines}}/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
                 - {name: html, value: "/work/reports/{{inputs.parameters.key}}/report.html"}
-                - {name: link, value: "/results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html"}
+                - {name: link, value: "/results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}/{{workflow.name}}.html"}
 
     - name: checkout
       # Container steps only: a retry on a steps template would replay the whole policy.
