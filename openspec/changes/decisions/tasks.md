@@ -53,7 +53,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 1. Une fixture cohérente
 
-- [ ] 1.1 Remplacer la ligne 5 de `tests/fixtures/repo/policies/projets/a-4711/redis-7.journal.jsonl`
+- [x] 1.1 Remplacer la ligne 5 de `tests/fixtures/repo/policies/projets/a-4711/redis-7.journal.jsonl`
   (l'exception sur `redis:7.2.8`) par exactement cette ligne. L'exception lève désormais la raison
   de sa quarantaine, et son motif parle de licence :
 
@@ -61,10 +61,10 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   {"ts":"2026-10-09T09:00:00Z","ref":"docker.io/library/redis:7.2.8","digest":"sha256:5b3e8f1c07a4d296e8b1f5c3a907d24e6b8f1a03c5d79e2b4f6a8c1d3e5079b2","state":"placed-by-exception","reason":"sbom/license-blocklist","ruleset":"sha256:9e2b7c1a4d0f6835b2e9c7a1d4f60b83e5c2a9d7f1b46e0c3a8d5f2b9e6c1a40","arbitration":{"by":"cao-data","date":"2026-10-09","reason":"Licence acceptée par le service juridique pour un usage interne."}}
   ~~~
 
-- [ ] 1.2 Lancer `uv run python -m pytest tests/test_orchestrator.py --no-cov -q`. Attendu : la
+- [x] 1.2 Lancer `uv run python -m pytest tests/test_orchestrator.py --no-cov -q`. Attendu : la
   dernière ligne finit par `passed`, sans `failed`. `test_refusal_line_has_the_journal_keys` lit
   la première `quarantine` (ligne 1), que rien ne touche.
-- [ ] 1.3 Commit :
+- [x] 1.3 Commit :
 
   ~~~bash
   git add tests/fixtures/repo/policies/projets/a-4711/redis-7.journal.jsonl
