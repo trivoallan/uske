@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/trivoallan/uske/compare/v0.2.1...v0.3.0) (2026-10-16)
+
+
+### Features
+
+* une image reconstruite montre aussi sa source et ses sœurs ([#27](https://github.com/trivoallan/uske/issues/27)) ([8b7773b](https://github.com/trivoallan/uske/commit/8b7773bdd87c2dd31029c958ebbdfae19f0490d0))
+
 ## [0.2.1](https://github.com/trivoallan/uske/compare/v0.2.0...v0.2.1) (2026-10-16)
 
 
