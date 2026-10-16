@@ -216,29 +216,62 @@ class Text(Journal):
 
 
 class Markdown(Journal):
-    def test_one_period_per_run_and_a_link_to_it(self):
-        def at(ts: str, **fields) -> dict:
-            return {
-                "policy": "p",
-                "ts": ts,
-                "digest": D1,
-                "state": "quarantine",
-                **fields,
-            }
+    def test_one_section_per_run_and_state_coloured_by_state(self):
+        def at(ts: str, state: str, **fields) -> dict:
+            return {"policy": "p", "ts": ts, "digest": D1, "state": state, **fields}
 
         md = decisions.render_md(
             [
-                at("2026-10-16T12:01:00Z", run="https://ci.example/runs/41"),
-                at("2026-10-16T12:10:00Z", run="https://ci.example/runs/41"),
-                at("2026-10-16T12:21:00Z", run="wf-abc"),
-                at("2026-10-16T12:30:00Z"),
+                at(
+                    "2026-10-16T12:01:00Z",
+                    "quarantine",
+                    run="https://ci.example/runs/41",
+                ),
+                at(
+                    "2026-10-16T12:02:00Z",
+                    "quarantine",
+                    run="https://ci.example/runs/41",
+                ),
+                at(
+                    "2026-10-16T12:10:00Z",
+                    "direct-placement",
+                    run="https://ci.example/runs/41",
+                ),
+                at("2026-10-16T12:30:00Z", "rejected-by-hand", arbitration={"by": "x"}),
             ]
         )
-        self.assertIn("    run 41 : quarantine — — : quarantine — —\n", md)
-        self.assertIn("    run wf-abc : quarantine — —\n", md)
-        self.assertIn("    2026-10-16 12#58;30 : quarantine — —\n", md)
+        self.assertIn(
+            "    section run 41\n        quarantine : — : —\n"
+            "    section run 41\n        direct-placement : —\n"
+            "    section 2026-10-16 12#58;30\n        rejected-by-hand : —\n",
+            md,
+        )
+        init = json.loads(md.split("%%{init: ", 1)[1].split("}%%", 1)[0])
+        colours = init["themeVariables"]
+        self.assertEqual(
+            [colours[f"cScale{i}"] for i in range(3)],
+            [
+                decisions.COLOURS["quarantine"],
+                decisions.COLOURS["direct-placement"],
+                decisions.OTHER_COLOUR,
+            ],
+        )
         self.assertIn("| 2026-10-16T12:01:00Z | [41](https://ci.example/runs/41) |", md)
-        self.assertIn("| 2026-10-16T12:21:00Z | wf-abc |", md)
+
+    def test_more_sections_than_colours_reuse_them(self):
+        lines = [
+            {
+                "policy": "p",
+                "ts": f"2026-10-16T12:{m:02d}:00Z",
+                "digest": D1,
+                "state": "quarantine",
+            }
+            for m in range(13)
+        ]
+        md = decisions.render_md(lines)
+        self.assertEqual(md.count("    section "), 13)
+        self.assertIn('"cScale11"', md)
+        self.assertNotIn('"cScale12"', md)
 
     def test_the_volume_is_named_only_for_a_path_on_it(self):
         on_volume = {
@@ -289,7 +322,7 @@ class Markdown(Journal):
             ),
         )
         md = decisions.render_md(decisions.load(self.dir, "m")[0])
-        self.assertIn("inconclusive — uske/reopened (antidatée) (arbitrage absent)", md)
+        self.assertIn("inconclusive : uske/reopened (antidatée) (arbitrage absent)", md)
         self.assertIn("|  | antidatée; arbitrage absent |", md)
 
 

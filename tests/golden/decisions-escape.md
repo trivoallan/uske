@@ -3,9 +3,13 @@
 `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 
 ```mermaid
+%%{init: {"theme": "default", "themeVariables": {"cScale0": "#0969da", "cScaleLabel0": "#ffffff", "cScale1": "#cf222e", "cScaleLabel1": "#ffffff"}}}%%
 timeline
     title r.example/a#58;1
-    2026-10-01 00#58;00 : placed-by-exception — r#58;1 #35;2#59; 3#37;#37; 4|5 6 : quarantine — —
+    section 2026-10-01 00#58;00
+        placed-by-exception : r#58;1 #35;2#59; 3#37;#37; 4|5 6
+    section 2026-10-01 00#58;00
+        quarantine : —
 ```
 
 | ts | run | state | reason | ruleset | report | details |
