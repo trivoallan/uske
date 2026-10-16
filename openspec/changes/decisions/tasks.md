@@ -900,3 +900,5 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ~~~
+
+Proposition refusée : pipeline (2026-10-16)
