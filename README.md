@@ -127,7 +127,8 @@ left without a verdict is retried, three times at most.
 
 The journal keeps both verdicts and the link: the source's line, the held image's line (with its
 `source` and the order's `epoch`), and a placement line on the source naming the digest `knock`
-wrote (`placed`).
+wrote (`placed`): at `--apply-plan` for a copy or a transform-only rebuild, after `knock promote`
+for a repaired image.
 
 To reopen a source, append one line to the policy's results file, dated when you write it:
 
