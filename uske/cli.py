@@ -169,8 +169,8 @@ def _now() -> str:
 
 def cmd_record(args) -> None:
     policy = _policy(args.policy)
-    if not args.lines and not args.applied:
-        raise Failure("record needs --lines, --applied, or both")
+    if not (args.lines or args.applied or args.promoted):
+        raise Failure("record needs --lines, --applied or --promoted")
     files: list[Path] = []
     if args.lines:
         source = Path(args.lines)
@@ -188,6 +188,17 @@ def cmd_record(args) -> None:
         lines.extend(
             gate.from_applied(
                 _read_json(args.applied),
+                policy,
+                journal,
+                ts=_now(),
+                run=args.run_id or None,
+            )
+        )
+    if args.promoted:
+        journal = results.read(results.path_for(args.results, policy.name))
+        lines.extend(
+            gate.from_promoted(
+                _read_staged(args.promoted),
                 policy,
                 journal,
                 ts=_now(),
@@ -458,6 +469,12 @@ def parser() -> argparse.ArgumentParser:
         default="",
         help="knock's AppliedOperations (reconcile --applied-out): placements, and the orders "
         "knock withheld; a missing file means knock applied nothing",
+    )
+    s.add_argument(
+        "--promoted",
+        default="",
+        help="the StagedRebuilds `knock promote` placed, once it succeeded: a placement line "
+        "per source, naming the promoted digest",
     )
     s.add_argument("--run", dest="run_id", default="", help="the screening that writes")
     s.set_defaults(run=cmd_record)

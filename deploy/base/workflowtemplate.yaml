@@ -400,6 +400,16 @@ spec:
                   value: >-
                     promote /work/policies/{{inputs.parameters.name}}
                     --staged /work/staged/{{inputs.parameters.name}}.approved.json
+        - - name: record-promoted  # the source → promoted digest link, once promote has placed it all
+            template: uske
+            when: "{{steps.promote.status}} == Succeeded"
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{inputs.parameters.path}} --results /results
+                    --promoted /work/staged/{{inputs.parameters.name}}.approved.json
+                    --run "{{workflow.name}}"
 
     - name: knock-once  # no retry: a retried apply rebuilds every held image under a new digest
       inputs:

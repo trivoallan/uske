@@ -1259,6 +1259,39 @@ class Applied(Workdir):
             "repairable", lines[0]
         )  # a repaired image is never repaired again
 
+    def promoted(self, value: dict) -> int:
+        return run(
+            "record",
+            "--policy",
+            self.POLICY,
+            "--results",
+            str(self.results),
+            "--promoted",
+            self.write("promoted.json", value),
+        )[1]["written"]
+
+    def test_a_promotion_links_the_source_to_the_promoted_digest_once(self):
+        self.judge_source(D1, self.REPAIR)
+        value = staged(self.NAME, [("1.0", D1, S1)])
+        self.assertEqual(self.promoted(value), 1)
+        line = self.journal()[-1]
+        self.assertEqual(
+            (line["digest"], line["state"], line["placed"]),
+            (D1, "transformation-required", S1),
+        )
+        self.assertEqual(self.promoted(value), 0)  # replaying the step adds nothing
+        # the placement does not hide the verdict: a later rebuild renews the order
+        self.assertEqual(
+            self.approve(plan(self.NAME, [("1.0", D1)]), "--transit", "t")[0][
+                "ordered"
+            ],
+            1,
+        )
+
+    def test_another_policy_s_promotions_are_not_recorded(self):
+        self.judge_source(D1, self.REPAIR)
+        self.assertEqual(self.promoted(staged("another-policy", [("1.0", D1, S1)])), 0)
+
     def test_a_held_candidate_carries_its_epoch(self):
         value = staged(self.NAME, [("1.0", D1, S1)])
         value["entries"][0]["epoch"] = "e1"

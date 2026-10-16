@@ -179,6 +179,33 @@ def from_applied(
     return out
 
 
+def from_promoted(
+    promoted: dict, policy: Policy, lines: list[dict], *, ts: str, run: str | None
+) -> list[dict]:
+    """A placement line per image `knock promote` placed: the source, and the held digest, which
+    promote copies by digest, so it is the digest placed. Read only once promote has succeeded.
+
+    ponytail: all or nothing — a promote that fails on one entry records none; the failed
+    entries are planned and judged again next screening, the placed ones get their line then.
+    """
+    last = last_verdicts(lines)
+    out: list[dict] = []
+    for e in entries(promoted, policy):
+        source = last.get(e["sourceDigest"]) or {}
+        out.append(
+            ResultLine(
+                ts=ts,
+                ref=source.get("ref") or f"{e['source']}:{e['sourceTag']}",
+                digest=e["sourceDigest"],
+                state=source.get("state") or Outcome.DIRECT_PLACEMENT.value,
+                ruleset=source.get("ruleset") or "none",
+                run=run,
+                placed=e["stagedDigest"],
+            ).to_dict()
+        )
+    return out
+
+
 def entries(staged: dict, policy: Policy) -> list[dict]:
     return [e for e in staged.get("entries") or [] if e.get("policy") == policy.name]
 
