@@ -94,3 +94,43 @@ def annotate(lines: list[dict]) -> list[dict]:
         newest[key] = max(line["ts"], newest.get(key, ""))
         out.append(line)
     return out
+
+
+def digest_of(image: str) -> str | None:
+    """The digest an argument names, if it names one: `sha256:…` or `<repository>@sha256:…`."""
+    if "@" in image:
+        return image.split("@", 1)[1]
+    return image if image.startswith("sha256:") else None
+
+
+def select(
+    lines: list[dict],
+    image: str | None = None,
+    states: set[str] | None = None,
+    since: date | None = None,
+) -> list[dict]:
+    """The lines on an image (and on what was rebuilt from it), in a state, from a UTC day on."""
+    if image is not None:
+        digest = digest_of(image)
+        # ponytail: exact match only; a short reference could name another repository
+        wanted = (
+            {digest}
+            if digest
+            else {l["digest"] for l in lines if l.get("ref") == image}
+        )
+        lines = [
+            l
+            for l in lines
+            if wanted & {l["digest"], l.get("source"), l.get("rebuilt")}
+        ]
+    if states is not None:
+        lines = [l for l in lines if l["state"] in states]
+    if since is not None:
+        day = since.isoformat()
+        lines = [l for l in lines if l["ts"][:10] >= day]
+    return lines
+
+
+def suggest(lines: list[dict], image: str) -> list[str]:
+    """Full references in the journal that end with `/<image>`: a hint, never a match."""
+    return sorted({l["ref"] for l in lines if l.get("ref", "").endswith("/" + image)})

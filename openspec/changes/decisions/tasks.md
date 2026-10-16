@@ -281,7 +281,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 3. Choisir les décisions : image, état, date
 
-- [ ] 3.1 Ajouter à `tests/test_decisions.py`, avant toute autre classe de rendu :
+- [x] 3.1 Ajouter à `tests/test_decisions.py`, avant toute autre classe de rendu :
 
   ~~~python
   class Select(Journal):
@@ -334,11 +334,11 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
           self.assertEqual([l.get("backdated") for l in lines], [None, True])
   ~~~
 
-- [ ] 3.2 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les tests
+- [x] 3.2 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les tests
   de `Select` échouent sur `AttributeError: module 'uske.decisions' has no attribute …`
   (`select` ou `suggest`), sauf `test_a_backdated_line_keeps_its_place_and_is_marked`, qui passe
   déjà.
-- [ ] 3.3 Ajouter à la fin de `uske/decisions.py` :
+- [x] 3.3 Ajouter à la fin de `uske/decisions.py` :
 
   ~~~python
   def digest_of(image: str) -> str | None:
@@ -373,9 +373,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
       return sorted({l["ref"] for l in lines if l.get("ref", "").endswith("/" + image)})
   ~~~
 
-- [ ] 3.4 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
+- [x] 3.4 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `13 passed`.
-- [ ] 3.5 Commit :
+- [x] 3.5 Commit :
 
   ~~~bash
   git add uske/decisions.py tests/test_decisions.py

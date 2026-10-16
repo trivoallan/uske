@@ -98,3 +98,66 @@ class Read(Journal):
                 path = self.write("bad.jsonl", line(), "", text)
                 with self.assertRaisesRegex(decisions.JournalError, f"^{path}:3: "):
                     decisions.read_journal(path)
+
+
+class Select(Journal):
+    def lines(self, **filters) -> list[dict]:
+        return decisions.select(decisions.load(self.dir)[0], **filters)
+
+    def test_by_reference(self):
+        found = self.lines(image=R728)
+        self.assertEqual(
+            [l["state"] for l in found], ["quarantine", "placed-by-exception"]
+        )
+
+    def test_by_digest_with_or_without_repository(self):
+        for image in (D726, f"docker.io/library/redis@{D726}"):
+            with self.subTest(image):
+                found = self.lines(image=image)
+                self.assertEqual(
+                    [l["state"] for l in found], ["quarantine", "abandoned"]
+                )
+
+    def test_a_short_reference_matches_nothing(self):
+        self.assertEqual(self.lines(image="redis:7.2.8"), [])
+
+    def test_a_short_reference_gets_suggestions_never_matches(self):
+        lines = decisions.load(self.dir)[0]
+        self.assertEqual(decisions.suggest(lines, "redis:7.2.8"), [R728])
+        self.assertEqual(decisions.suggest(lines, "nginx:1.27"), [])
+
+    def test_a_source_by_its_reference_shows_its_rebuilds(self):
+        self.write(
+            "repair.jsonl",
+            line(ref="hub/app:1", digest=S, state="transformation-required"),
+            line(ref="transit/app:1-r", digest=H, source=S, report="r.html"),
+            line(ref="hub/app:1", digest=S, rebuilt=H, reason="uske/rebuild-refused"),
+        )
+        found = self.lines(image="hub/app:1")
+        self.assertEqual([l["digest"] for l in found], [S, H, S])
+        self.assertEqual(found[1]["report"], "r.html")
+
+    def test_state_and_since_add_up(self):
+        found = self.lines(
+            states={"placed-by-exception", "abandoned"}, since=date(2026, 9, 21)
+        )
+        self.assertEqual(
+            [(l["ts"], l["state"]) for l in found],
+            [
+                ("2026-09-21T14:03:07Z", "abandoned"),
+                ("2026-10-09T09:00:00Z", "placed-by-exception"),
+            ],
+        )
+
+    def test_since_is_inclusive_on_the_utc_day(self):
+        found = self.lines(since=date(2026, 10, 9))
+        self.assertEqual([l["ts"] for l in found], ["2026-10-09T09:00:00Z"])
+
+    def test_a_backdated_line_keeps_its_place_and_is_marked(self):
+        self.write(
+            "late.jsonl",
+            line(ts="2026-10-05T00:00:00Z"),
+            line(ts="2026-10-02T00:00:00Z"),
+        )
+        lines = decisions.load(self.dir, "late")[0]
+        self.assertEqual([l.get("backdated") for l in lines], [None, True])
