@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/trivoallan/uske/compare/v0.6.0...v0.7.0) (2026-10-16)
+
+
+### Features
+
+* distinguer le meilleur tier manqué et expliquer chaque raison du journal ([#36](https://github.com/trivoallan/uske/issues/36)) ([d437470](https://github.com/trivoallan/uske/commit/d437470ad7752e90d7c369d6c8f85a5d5bfe1192))
+* ordonner la réparation d'une source refusée sur une règle réparable ([#38](https://github.com/trivoallan/uske/issues/38)) ([02faeba](https://github.com/trivoallan/uske/commit/02faeba67c0507ef70c4f57212c0f35a5c6c6f7c))
+
 ## [0.6.0](https://github.com/trivoallan/uske/compare/v0.5.0...v0.6.0) (2026-10-16)
 
 
