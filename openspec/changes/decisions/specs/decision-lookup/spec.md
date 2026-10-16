@@ -95,7 +95,7 @@ références complètes ; la sortie standard n'en est pas changée.
 
 Les lignes SHALL être rendues groupées par politique puis par empreinte, et, dans un groupe, dans
 l'ordre du fichier, qui fait foi puisque le journal n'est qu'en ajout. Les groupes se suivent dans
-l'ordre de leur première ligne. Une ligne dont le `ts` est antérieur à celui de la ligne précédente
+l'ordre de leur première ligne. Une ligne dont le `ts` est antérieur à celui d'une ligne précédente
 du même groupe MUST être marquée comme antidatée en `text` et en `md`, et porter `"backdated": true`
 en `json`.
 
@@ -166,12 +166,14 @@ marquée « arbitrage absent ».
 
 ### Requirement: Le Markdown porte une chronologie Mermaid et le tableau complet
 
-`--format md` SHALL rendre, pour chaque groupe, un titre qui nomme la politique et l'empreinte, un
-bloc ```` ```mermaid ```` de type `timeline` dont chaque période est une date UTC `AAAA-MM-JJ` et
+`--format md` SHALL rendre, pour chaque groupe, un titre qui nomme la politique et la référence,
+l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` dont chaque période est une date UTC `AAAA-MM-JJ` et
 porte les décisions de ce jour, puis un tableau Markdown des colonnes du format `text`. Dans le
 bloc Mermaid, titre compris, `#` puis `%`, `:` et `;` MUST être remplacés par leurs entités
 (`#35;`, `#37;`, `#58;`, `#59;`) et tout `\r` ou `\n` par une espace. Dans le tableau, `|` MUST
-être échappé et tout `\r` ou `\n` remplacé par une espace. Le `report` y SHALL être rendu en code,
+être échappé et tout `\r` ou `\n` remplacé par une espace ; dans le titre et dans le format
+`text`, tout `\r` ou `\n` d'une valeur MUST aussi devenir une espace, pour qu'une ligne écrite à
+la main ne puisse pas fabriquer une fausse ligne ni un faux titre. Le `report` y SHALL être rendu en code,
 suivi de `(volume uske-results)` : le lecteur du ticket ne peut pas l'ouvrir, il doit savoir où il
 se trouve.
 
@@ -192,10 +194,12 @@ se trouve.
 
 Une ligne de journal qui n'est pas un objet JSON, à qui manque `ts`, `digest` ou `state`, dont
 l'une de ces clés, ou `ref`, `reason`, `ruleset`, `report`, `source` ou `rebuilt` si elle est
-présente, n'est pas une chaîne, dont le `ts` n'est pas au format `%Y-%m-%dT%H:%M:%SZ`, ou qui
-porte déjà une clé `policy`, MUST faire
+présente, n'est pas une chaîne, dont le `ts` n'est pas exactement au format `%Y-%m-%dT%H:%M:%SZ` (zéros compris), qui contient
+`NaN` ou `Infinity`, ou qui porte déjà une clé `policy`, MUST faire
 échouer la commande avec `error:`, le fichier et le numéro de ligne sur la sortie d'erreur, et le
-code 1. La commande MUST NOT rendre une sortie partielle qui laisserait croire le journal complet.
+code 1 ; un journal illisible comme fichier (droits, encodage autre qu'UTF-8) aussi, avec son
+chemin. Les lignes se séparent sur `\n` seulement : un U+2028 dans une valeur ne coupe pas la
+ligne. La commande MUST NOT rendre une sortie partielle qui laisserait croire le journal complet.
 
 #### Scenario: Une ligne corrompue
 
