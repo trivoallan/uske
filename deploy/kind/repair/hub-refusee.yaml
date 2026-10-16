@@ -1,6 +1,6 @@
 # Demonstration policy for the kind environment (change issue-transformation).
 # A source the full playbook sends to repair ("Transformation requise", measured with regis on
-# 2026-10-10): knock rebuilds it in the transit, regis judges what it built.
+# 2026-10-10): uske orders a remediation, knock repairs it in the transit, regis judges what it built.
 # What the bench expects of it: refused, then its source closed: its findings sit in its own binary, which upgradePackages cannot touch.
 apiVersion: knock.io/v1alpha1
 kind: MirrorPolicy
@@ -23,7 +23,8 @@ spec:
         semverOnly: false
       transform:
         - rewritePackageSources: { mirror: bench }
-        - upgradePackages: { epoch: "2026-10-10" }
+      remediate:
+        - upgradePackages: {}  # applied on uske's order; the epoch comes with it
       destinations:
         - registry: local
           project: hub

@@ -53,6 +53,12 @@ SECRET_FAILED = {
     "passed": False,
     "status": "failed",
 }
+CVE_FAILED = {
+    "slug": "cve-critical",
+    "level": "critical",
+    "passed": False,
+    "status": "failed",
+}
 SECRET_INCOMPLETE = {
     "slug": "no-secret",
     "level": "critical",
@@ -80,7 +86,13 @@ class Workdir(unittest.TestCase):
         return str(path)
 
     def classify(
-        self, playbook: Path, ref: str, digest: str, value, regis_exit: int = 0
+        self,
+        playbook: Path,
+        ref: str,
+        digest: str,
+        value,
+        regis_exit: int = 0,
+        *extra: str,
     ) -> dict:
         path = (
             self.write(f"report-{digest[-4:]}.json", value)
@@ -99,6 +111,7 @@ class Workdir(unittest.TestCase):
             path,
             "--regis-exit",
             str(regis_exit),
+            *extra,
         )
         self.assertEqual(code, 0)
         return line
@@ -681,7 +694,8 @@ class Rebuild(Workdir):
     NAME = "fixture-standard"
     SOURCE = "harbor.example/producer/app:1.0"
     HELD = "harbor.example/transit/shared-test/app:1.0"
-    REPAIR = report("Transformation requise puis placement")
+    # a critical CVE with a fix: the tier says repair, and `cve-critical` is repairable (standard)
+    REPAIR = report("Transformation requise puis placement", [CVE_FAILED])
 
     def record(self, name: str, lines) -> int:
         return run(
@@ -696,7 +710,8 @@ class Rebuild(Workdir):
 
     def judge_source(self, digest: str, value) -> None:
         self.record(
-            f"src-{digest[-4:]}.json", self.classify(FULL, self.SOURCE, digest, value)
+            f"src-{digest[-4:]}.json",
+            self.classify(FULL, self.SOURCE, digest, value, 0, "--track", "standard"),
         )
 
     def approve(self, value: dict, *extra: str) -> tuple[dict, list[str]]:
@@ -786,26 +801,75 @@ class Rebuild(Workdir):
             1,
         )  # unreadable is still a failure
 
-    def test_a_source_to_repair_needs_a_rebuild_and_a_transit(self):
+    def test_a_source_to_repair_is_ordered_only_with_a_transit(self):
         self.judge_source(D1, self.REPAIR)
+        for transformed in (True, False, None):  # a copy-only import is remediated too
+            with self.subTest(transformed=transformed):
+                value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
+                self.assertEqual(
+                    self.approve(value, "--transit", "transit")[1], ["1.0"]
+                )
+                approved = json.loads((self.tmp / "approved.json").read_text())
+                self.assertTrue(approved["operations"][0]["remediate"]["epoch"])
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
-        self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], ["1.0"])
         self.assertEqual(
-            self.approve(rebuilt), ({"approved": 0, "discarded": {"no-transit": 1}}, [])
+            self.approve(rebuilt),
+            ({"approved": 0, "ordered": 0, "discarded": {"no-transit": 1}}, []),
         )
         self.assertEqual(
             self.approve(rebuilt, "--transit", "")[0]["discarded"], {"no-transit": 1}
         )  # what Argo passes when unset
-        copied = plan(self.NAME, [("1.0", D1)], transformed=False)
+
+    def test_without_a_transit_the_source_is_recorded_inconclusive(self):
+        self.judge_source(D1, self.REPAIR)
+        out = self.tmp / "approve-lines.json"
+        self.approve(plan(self.NAME, [("1.0", D1)]), "--lines-out", str(out))
+        [line] = json.loads(out.read_text())
         self.assertEqual(
-            self.approve(copied, "--transit", "transit")[0]["discarded"],
-            {"not-rebuilt": 1},
+            (line["digest"], line["state"], line["reason"]),
+            (D1, "inconclusive", "uske/no-transit"),
         )
-        silent = plan(self.NAME, [("1.0", D1)])
+
+    def test_the_order_carries_the_screening_epoch(self):
+        self.judge_source(D1, self.REPAIR)
+        self.approve(
+            plan(self.NAME, [("1.0", D1)]),
+            "--transit",
+            "t",
+            "--epoch",
+            "20261016T020000Z",
+        )
+        approved = json.loads((self.tmp / "approved.json").read_text())
         self.assertEqual(
-            self.approve(silent, "--transit", "transit")[0]["discarded"],
-            {"not-rebuilt": 1},
+            approved["operations"][0]["remediate"], {"epoch": "20261016T020000Z"}
         )
+
+    def test_a_refusal_outside_the_repairable_rules_is_not_ordered(self):
+        for rules in (
+            [CVE_FAILED, SECRET_FAILED],
+            [],
+        ):  # mixed; or nothing failed at all
+            with self.subTest(rules=rules):
+                self.results = self.tmp / f"results-{len(rules)}"
+                self.judge_source(
+                    D1, report("Transformation requise puis placement", rules)
+                )
+                self.assertEqual(
+                    self.approve(plan(self.NAME, [("1.0", D1)]), "--transit", "t")[0][
+                        "discarded"
+                    ],
+                    {"refused": 1},
+                )
+
+    def test_a_regime_without_repairable_rules_orders_nothing(self):
+        line = self.classify(
+            FULL, self.SOURCE, D1, self.REPAIR, 0, "--track", "derogation"
+        )
+        self.assertNotIn("repairable", line)
+        line = self.classify(
+            FULL, self.SOURCE, D1, self.REPAIR, 0, "--track", "standard"
+        )
+        self.assertTrue(line["repairable"])
 
     def test_a_sound_source_is_approved_rebuilt_or_not(self):
         self.judge_source(D1, report("Placement direct"))
@@ -901,7 +965,7 @@ class Rebuild(Workdir):
         )
         self.assertEqual(
             (closing["digest"], closing["ref"], closing["state"], closing["reason"]),
-            (D1, self.SOURCE, "quarantine", "uske/rebuild-refused"),
+            (D1, self.SOURCE, "quarantine", "uske/remediation-refused"),
         )
         self.assertEqual(
             (closing["rebuilt"], closing["ruleset"], closing["report"]),
@@ -918,7 +982,7 @@ class Rebuild(Workdir):
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
         self.assertEqual(
             self.approve(rebuilt, "--transit", "transit"),
-            ({"approved": 0, "discarded": {"refused": 1}}, []),
+            ({"approved": 0, "ordered": 0, "discarded": {"refused": 1}}, []),
         )
         todo = run(
             "pending",
@@ -953,7 +1017,7 @@ class Rebuild(Workdir):
         self.record("held-third.json", self.judge_held(D1, S3, report(None)))
         self.assertEqual(
             self.approve(rebuilt, "--transit", "transit"),
-            ({"approved": 0, "discarded": {"attempts-exhausted": 1}}, []),
+            ({"approved": 0, "ordered": 0, "discarded": {"attempts-exhausted": 1}}, []),
         )
         self.assertEqual(
             self.journal()[-1]["digest"], S3
@@ -999,7 +1063,7 @@ class Rebuild(Workdir):
             )[1],
             {"written": 0, "stale": 1},
         )
-        self.assertEqual(self.journal()[-1]["reason"], "uske/rebuild-refused")
+        self.assertEqual(self.journal()[-1]["reason"], "uske/remediation-refused")
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
         self.assertEqual(self.approve(rebuilt, "--transit", "transit")[1], [])
 
@@ -1036,7 +1100,7 @@ class Rebuild(Workdir):
         self.record("held.json", self.judge_held(D1, S1, self.REPAIR))
         closing = self.journal()[-1]
         self.assertEqual(
-            (closing["digest"], closing["reason"]), (D1, "uske/rebuild-refused")
+            (closing["digest"], closing["reason"]), (D1, "uske/remediation-refused")
         )
         self.assertEqual(closing["state"], "quarantine")
         rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
@@ -1051,7 +1115,7 @@ class Rebuild(Workdir):
             [(l["digest"], l["state"]) for l in lines],
             [(S1, "quarantine"), (D1, "quarantine")],
         )
-        self.assertEqual(lines[1]["reason"], "uske/rebuild-refused")
+        self.assertEqual(lines[1]["reason"], "uske/remediation-refused")
         self.record("held.json", lines)
         self.assertEqual(
             self.approve_held(staged(self.NAME, [("1.0", D1, S1)])),
@@ -1070,19 +1134,135 @@ class Rebuild(Workdir):
         value = staged("another-policy", [("1.0", D1, S1)])
         self.assertEqual(self.approve_held(value), ({"approved": 0}, []))
 
-    def test_the_bound_covers_a_sound_source_and_spares_a_copy(self):
+    def test_a_sound_source_is_never_held_so_never_exhausted(self):
         self.judge_source(D1, report("Placement direct"))
-        for held in (S1, S2, S3):
-            self.record(
-                f"held-{held[-4:]}.json", self.judge_held(D1, held, report(None))
-            )
-        rebuilt = plan(self.NAME, [("1.0", D1)], transformed=True)
+        for transformed in (True, False):
+            with self.subTest(transformed=transformed):
+                value = plan(self.NAME, [("1.0", D1)], transformed=transformed)
+                result, tags = self.approve(value)
+                self.assertEqual((tags, result["ordered"]), (["1.0"], 0))
+
+
+class Applied(Workdir):
+    """What knock did, read back from its AppliedOperations (reconcile --applied-out)."""
+
+    # Rebuild's steps, borrowed rather than inherited: inheriting would run its tests twice
+    POLICY, NAME, SOURCE, HELD, REPAIR = (
+        Rebuild.POLICY,
+        Rebuild.NAME,
+        Rebuild.SOURCE,
+        Rebuild.HELD,
+        Rebuild.REPAIR,
+    )
+    record = Rebuild.record
+    judge_source = Rebuild.judge_source
+    approve = Rebuild.approve
+    journal = Rebuild.journal
+    pending_held = Rebuild.pending_held
+
+    def applied(self, operations: list[dict]) -> int:
+        doc = {
+            "apiVersion": "knock.io/v1alpha1",
+            "kind": "AppliedOperations",
+            "operations": operations,
+        }
+        return run(
+            "record",
+            "--policy",
+            self.POLICY,
+            "--results",
+            str(self.results),
+            "--applied",
+            self.write("applied.json", doc),
+        )[1]["written"]
+
+    def op(self, **over: str) -> dict:
+        return {
+            "policy": self.NAME,
+            "destination": "harbor.example/shared-test/app",
+            "tag": "1.0",
+            "kind": "imported",
+            "sourceDigest": D1,
+            **over,
+        }
+
+    def test_a_placement_links_the_source_to_the_placed_digest_once(self):
+        self.judge_source(D1, report("Placement direct"))
+        self.assertEqual(self.applied([self.op(writtenDigest=S1)]), 1)
+        line = self.journal()[-1]
         self.assertEqual(
-            self.approve(rebuilt)[0]["discarded"], {"attempts-exhausted": 1}
+            (line["digest"], line["state"], line["placed"]),
+            (D1, "direct-placement", S1),
         )
         self.assertEqual(
-            self.approve(plan(self.NAME, [("1.0", D1)], transformed=False))[1], ["1.0"]
+            self.applied([self.op(writtenDigest=S1)]), 0
+        )  # replay adds nothing
+        # the placement does not hide the verdict: a repaired source is still ordered again
+        self.assertEqual(self.approve(plan(self.NAME, [("1.0", D1)]))[1], ["1.0"])
+
+    def test_an_order_knock_could_not_honour_is_journaled(self):
+        self.judge_source(D1, self.REPAIR)
+        self.applied([self.op(kind="withheld", reason="remediation-undeclared")])
+        line = self.journal()[-1]
+        self.assertEqual(
+            (line["state"], line["reason"]),
+            ("quarantine", "uske/remediation-undeclared"),
         )
+        self.assertEqual(
+            self.approve(plan(self.NAME, [("1.0", D1)]), "--transit", "t")[0][
+                "discarded"
+            ],
+            {"refused": 1},
+        )  # no new order until the source is reopened
+
+    def test_an_unstaged_order_is_judged_again(self):
+        self.judge_source(D1, self.REPAIR)
+        self.applied([self.op(kind="withheld", reason="remediation-unstaged")])
+        line = self.journal()[-1]
+        self.assertEqual(
+            (line["state"], line["reason"]), ("inconclusive", "uske/no-transit")
+        )
+
+    def test_a_missing_applied_file_means_nothing_applied(self):
+        code, result = run(
+            "record",
+            "--policy",
+            self.POLICY,
+            "--results",
+            str(self.results),
+            "--applied",
+            str(self.tmp / "absent.json"),
+        )
+        self.assertEqual((code, result), (0, {"written": 0}))
+
+    def test_a_held_line_carries_the_order_s_epoch(self):
+        path = self.write("held-epoch.json", report("Placement direct"))
+        _, lines = run(
+            "classify",
+            "--playbook",
+            str(FULL),
+            "--ref",
+            self.HELD,
+            "--digest",
+            S1,
+            "--report",
+            path,
+            "--source-ref",
+            self.SOURCE,
+            "--source-digest",
+            D1,
+            "--epoch",
+            "20261016T020000Z",
+        )
+        self.assertEqual(lines[0]["epoch"], "20261016T020000Z")
+        self.assertNotIn(
+            "repairable", lines[0]
+        )  # a repaired image is never repaired again
+
+    def test_a_held_candidate_carries_its_epoch(self):
+        value = staged(self.NAME, [("1.0", D1, S1)])
+        value["entries"][0]["epoch"] = "e1"
+        self.assertEqual(self.pending_held(value)[0]["epoch"], "e1")
 
 
 class NothingHardcoded(unittest.TestCase):

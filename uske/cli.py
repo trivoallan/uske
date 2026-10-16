@@ -117,6 +117,11 @@ def cmd_classify(args) -> None:
         except (OSError, json.JSONDecodeError):
             report = None  # unreadable is inconclusive, not a failure
         outcome, reason = outcomes.classify(report, playbook, args.regis_exit)
+    repairable = (
+        outcome is outcomes.Outcome.TRANSFORMATION_REQUIRED
+        and not args.source_digest  # a repaired image is judged, never repaired again
+        and outcomes.repairable(report, playbooks.repairable(args.track or None))
+    )
     line = results.ResultLine(
         ts=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         ref=args.ref,
@@ -127,16 +132,21 @@ def cmd_classify(args) -> None:
         # what a human opens, when the workflow kept it; else what was read, for a local run
         report=(args.report_link or str(report_path)) if report is not None else None,
         run=args.run_id or None,  # Argo passes an empty string when it has none
+        repairable=True if repairable else None,
     )
     if not args.source_digest:  # first gate; Argo passes an empty string
         _json(line.to_dict())
         return
-    lines = [dataclasses.replace(line, source=args.source_digest).to_dict()]
+    lines = [
+        dataclasses.replace(
+            line, source=args.source_digest, epoch=args.epoch or None
+        ).to_dict()
+    ]
     if outcome in (
         outcomes.Outcome.TRANSFORMATION_REQUIRED,
         outcomes.Outcome.QUARANTINE,
     ):
-        # the rebuild was judged and refused: close the source, one attempt only
+        # the repaired image was judged and refused: close the source, one attempt only
         lines.append(
             results.ResultLine(
                 ts=line.ts,
@@ -144,7 +154,7 @@ def cmd_classify(args) -> None:
                 digest=args.source_digest,
                 state=outcomes.Outcome.QUARANTINE.value,
                 ruleset=ruleset,
-                reason=gate.REBUILD_REFUSED,
+                reason=gate.REMEDIATION_REFUSED,
                 report=line.report,
                 run=line.run,
                 rebuilt=args.digest,
@@ -153,18 +163,37 @@ def cmd_classify(args) -> None:
     _json(lines)
 
 
+def _now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def cmd_record(args) -> None:
     policy = _policy(args.policy)
-    source = Path(args.lines)
-    # a directory holds one line per digest, written by each `classify` of the fan-out
-    if source.is_dir():
-        files = sorted(source.glob("*.json"))
-    else:  # no directory: no candidate this screening
-        files = [source] if source.exists() or source.suffix else []
+    if not args.lines and not args.applied:
+        raise Failure("record needs --lines, --applied, or both")
+    files: list[Path] = []
+    if args.lines:
+        source = Path(args.lines)
+        # a directory holds one line per digest, written by each `classify` of the fan-out
+        if source.is_dir():
+            files = sorted(source.glob("*.json"))
+        else:  # no directory: no candidate this screening
+            files = [source] if source.exists() or source.suffix else []
     lines = []
     for f in files:
         value = _read_json(str(f))
         lines.extend(value if isinstance(value, list) else [value])
+    if args.applied and Path(args.applied).exists():
+        journal = results.read(results.path_for(args.results, policy.name))
+        lines.extend(
+            gate.from_applied(
+                _read_json(args.applied),
+                policy,
+                journal,
+                ts=_now(),
+                run=args.run_id or None,
+            )
+        )
     for line in lines:
         try:
             datetime.strptime(line["ts"], "%Y-%m-%dT%H:%M:%SZ")
@@ -185,10 +214,23 @@ def cmd_approve(args) -> None:
         approved = gate.approve_staged(_read_staged(args.staged), policy, lines)
         count = {"approved": len(approved["entries"])}
     else:
-        approved, discarded = gate.approve(
-            _read_json(args.plan), policy, lines, args.transit
+        approved, discarded, written = gate.approve(
+            _read_json(args.plan),
+            policy,
+            lines,
+            args.transit,
+            epoch=args.epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
+            ts=_now(),
+            run=args.run_id or None,
         )
-        count = {"approved": len(approved["operations"]), "discarded": discarded}
+        count = {
+            "approved": len(approved["operations"]),
+            "ordered": gate.ordered(approved),
+            "discarded": discarded,
+        }
+        if args.lines_out:
+            Path(args.lines_out).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.lines_out).write_text(json.dumps(written, ensure_ascii=False))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(approved, indent=2))
@@ -386,6 +428,16 @@ def parser() -> argparse.ArgumentParser:
         "--source-digest", default="", help="for a held image: that source's digest"
     )
     s.add_argument(
+        "--track",
+        default="",
+        help="the policy's regime: its repairable rules mark a refusal `repairable`",
+    )
+    s.add_argument(
+        "--epoch",
+        default="",
+        help="for a held image: the remediation order it was built under",
+    )
+    s.add_argument(
         "--run",
         dest="run_id",  # `run` is the subcommand's handler
         default="",
@@ -398,9 +450,16 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--results", required=True)
     s.add_argument(
         "--lines",
-        required=True,
+        default="",
         help="JSON file (a line or a list), or a directory of them",
     )
+    s.add_argument(
+        "--applied",
+        default="",
+        help="knock's AppliedOperations (reconcile --applied-out): placements, and the orders "
+        "knock withheld; a missing file means knock applied nothing",
+    )
+    s.add_argument("--run", dest="run_id", default="", help="the screening that writes")
     s.set_defaults(run=cmd_record)
 
     s = sub.add_parser(
@@ -417,7 +476,22 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--out", required=True)
     s.add_argument(
         "--transit",
-        help="name of the registry rebuilds are held in; trusted, not checked. Without it, no source to repair is approved",
+        help="name of the registry remediated images are held in; trusted, not checked. Without "
+        "it, no source to repair is approved: each is recorded inconclusive (uske/no-transit)",
+    )
+    s.add_argument(
+        "--epoch",
+        default="",
+        help="the remediation orders' epoch: the screening's start, UTC, YYYYMMDDTHHMMSSZ "
+        "(default: now)",
+    )
+    s.add_argument(
+        "--lines-out",
+        default="",
+        help="where to write the journal lines this decision calls for (uske/no-transit)",
+    )
+    s.add_argument(
+        "--run", dest="run_id", default="", help="the screening that decides"
     )
     s.set_defaults(run=cmd_approve)
 

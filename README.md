@@ -25,7 +25,7 @@ policy, it runs one **screening**.
 
 > **Status — a seed.** The decisions of one screening, exposed as subcommands that an Argo Workflows
 > `CronWorkflow` chains. Of the four outcomes a verdict can route to, two are acted on: direct
-> placement, and transformation required when `knock` rebuilds the image. Quarantine and
+> placement, and remediation when the source is refused on repairable rules. Quarantine and
 > inconclusive are recorded and place nothing. Not deployed anywhere yet.
 
 ## What it knows
@@ -89,16 +89,26 @@ Each line's state and reason are explained in [`docs/reference/raisons.md`](docs
 For the auditor, the same pod with other arguments:
 `decisions --state placed-by-exception,abandoned --since 2026-09-01 --results /results --format md`.
 
-## Rebuilds
+## Rebuilds and repairs
 
-A source the playbook sends to repair is rebuilt only when `knock` says so in its plan
-(`transformed: true`) and the workflow names a transit. That needs **`knock` 0.13.0 or later**:
-with an older one nothing is repaired, and nothing says why.
+`knock` applies two lists of a policy. `transform:` (internal CAs, package mirrors, timezone) is
+applied to every rebuild, which is placed directly: it is not judged again. `remediate:`
+(`upgradePackages`) is applied only to an operation `uske` orders remediated, and the repaired
+image is judged before it is placed. That needs a `knock` with remediation orders (`remediate:`
+and `--applied-out`); an older one refuses the plan.
+
+`uske` orders a remediation when the source's verdict is the tier *Transformation requise* and its
+failed rules are all in its regime's repairable list (`REPAIRABLE` in
+[`uske/playbooks.py`](uske/playbooks.py): `standard` repairs `cve-critical`), with at least one of
+them failed. The order carries the screening's epoch (its start, UTC). A refusal outside that list
+is not ordered.
 
 An overlay must provide:
 
-- the workflow parameter `transit`, a name of `KNOCK_REGISTRIES` (default `transit`). It is
-  **required**: without that entry `knock` refuses to apply and nothing is placed, copies included;
+- the workflow parameter `transit`, a name of `KNOCK_REGISTRIES` (default `transit`). It is passed
+  to `knock` only when the plan carries an order. Without it, an operation to repair is withheld
+  and its source recorded `inconclusive` (`uske/no-transit`), to be judged again; copies and
+  transform-only rebuilds are still placed;
 - that entry **on the destination's host**, as a path prefix (`harbor.example/transit`). `regis`
   authenticates to one host, and `knock` opens one session per host: one `knock` identity writes
   to both the destination and the transit, and `regis` reads the transit;
@@ -109,9 +119,15 @@ An overlay must provide:
   The bench's `buildkitd` listens in clear on the cluster network, which is fine for a throwaway
   cluster only: elsewhere, restrict who can reach it (mTLS, a NetworkPolicy).
 
-A rebuild that is judged and refused closes its source: the journal gets a `quarantine` line on
-the source digest, reason `uske/rebuild-refused`, and that source is not rebuilt again. A held
-image left without a verdict is retried, three times at most.
+A source is repaired once. A repaired image that is judged and refused closes its source: the
+journal gets a `quarantine` line on the source digest, reason `uske/remediation-refused` (older
+lines say `uske/rebuild-refused`), and that source is not ordered again. An order on an import
+that declares no `remediate:` closes the source too (`uske/remediation-undeclared`). A held image
+left without a verdict is retried, three times at most.
+
+The journal keeps both verdicts and the link: the source's line, the held image's line (with its
+`source` and the order's `epoch`), and a placement line on the source naming the digest `knock`
+wrote (`placed`).
 
 To reopen a source, append one line to the policy's results file, dated when you write it:
 
