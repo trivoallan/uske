@@ -195,7 +195,8 @@ class Classify(Workdir):
         repair = "Transformation requise puis placement"
         line = self.classify(FULL, "r:1", D1, report(repair, [age_unread]))
         self.assertEqual(
-            (line["state"], line["reason"]), ("inconclusive", "freshness/age")
+            (line["state"], line["reason"]),
+            ("inconclusive", "uske/better-tier-missed:freshness/age"),
         )
         # a rule that did fail decides, whatever else did not finish
         line = self.classify(FULL, "r:1", D2, report(repair, [critical, age_unread]))

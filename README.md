@@ -84,6 +84,8 @@ rule that refused it and who decided an exception. References are matched in ful
 journals it read, a suggestion) may show up before the Markdown: leave them out of the ticket.
 The volume is `ReadWriteOnce`: if a screening is running on another node, wait for it to finish.
 
+Each line's state and reason are explained in [`docs/reference/raisons.md`](docs/reference/raisons.md).
+
 For the auditor, the same pod with other arguments:
 `decisions --state placed-by-exception,abandoned --since 2026-09-01 --results /results --format md`.
 

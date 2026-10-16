@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -64,5 +65,141 @@ def classify(
         # and an evaluation that did not conclude decides nothing (D-23)
         unfinished = next((r for r in rules if r.get("status") == "incomplete"), None)
         if unfinished:
-            return Outcome.INCONCLUSIVE, reason(unfinished)
+            # its own reason: the same slug under inconclusive also means a critical rule did
+            # not finish, and the reader must tell the two apart
+            return Outcome.INCONCLUSIVE, BETTER_TIER_MISSED + reason(unfinished)
     return outcome, reason(failed) if failed else None
+
+
+@dataclass(frozen=True)
+class Reason:
+    """One reason as the journal writes it; `<...>` marks a part filled in when written."""
+
+    code: str
+    states: tuple[Outcome, ...]
+    meaning: str  # prose, so French (SDR-0002): docs/reference/raisons.md is generated from it
+    action: str
+
+
+BETTER_TIER_MISSED = "uske/better-tier-missed:"
+
+# Every reason uske writes. tests/test_reasons.py fails on a reason literal missing here.
+REASONS = (
+    Reason(
+        "<provider>/<criterion>",
+        (Outcome.QUARANTINE, Outcome.TRANSFORMATION_REQUIRED),
+        "La première règle critique du playbook qui a échoué. C'est la première, pas la seule "
+        "cause : le report les donne toutes.",
+        "Lire la règle dans le report, et sa définition dans la référence des règles de "
+        "`regis` (`docs/reference/rules`).",
+    ),
+    Reason(
+        "<provider>/<criterion>",
+        (Outcome.INCONCLUSIVE,),
+        "Une règle critique n'a pas abouti : un outil a échoué, ou une donnée manquait. "
+        "Rien n'est décidé sur l'image (D-23).",
+        "Lire dans le report pourquoi la règle est `incomplete`. Le prochain criblage la rejuge.",
+    ),
+    Reason(
+        BETTER_TIER_MISSED + "<provider>/<criterion>",
+        (Outcome.INCONCLUSIVE,),
+        "Aucune règle critique n'a échoué, mais cette règle non critique n'a pas abouti : "
+        "l'image a peut-être manqué un meilleur tier. Une évaluation qui ne conclut pas ne "
+        "décide rien (D-23).",
+        "Lire dans le report pourquoi la règle est `incomplete`. L'image est peut-être saine ; "
+        "le prochain criblage la rejuge.",
+    ),
+    Reason(
+        "regis/exit-1",
+        (Outcome.INCONCLUSIVE,),
+        "`regis` a échoué techniquement, après les nouvelles tentatives d'Argo. Ce n'est pas "
+        "un verdict sur l'image.",
+        "Lire les journaux de l'étape `regis` du workflow.",
+    ),
+    Reason(
+        "regis/exit-3",
+        (Outcome.INCONCLUSIVE,),
+        "L'appel à `regis` était mal formé : les métadonnées ne satisfont pas un schéma "
+        "déclaré par le playbook. Ce n'est pas un verdict sur l'image.",
+        "Corriger le playbook ou les métadonnées ; le report liste les champs en défaut.",
+    ),
+    Reason(
+        "regis/exit-<N>",
+        (Outcome.INCONCLUSIVE,),
+        "`regis` s'est arrêté sur un autre code (2 : ligne de commande refusée).",
+        "Lire les journaux de l'étape `regis` du workflow.",
+    ),
+    Reason(
+        "regis/no-report",
+        (Outcome.INCONCLUSIVE,),
+        "`regis` n'a laissé aucun report lisible.",
+        "Lire les journaux de l'étape `regis`, puis vérifier le volume de travail.",
+    ),
+    Reason(
+        "regis/no-verdict",
+        (Outcome.INCONCLUSIVE,),
+        "Le report ne contient aucun résultat de playbook.",
+        "Vérifier que le workflow passe bien un playbook à `regis`.",
+    ),
+    Reason(
+        "regis/unknown-tier",
+        (Outcome.INCONCLUSIVE,),
+        "Le tier rendu n'est aucun de ceux que `uske` connaît : "
+        + ", ".join(f"`{name}`" for name in TIERS)
+        + ".",
+        "Aligner le nom des tiers du playbook sur cette liste.",
+    ),
+    Reason(
+        "uske/unknown-track",
+        (Outcome.INCONCLUSIVE,),
+        "La politique désigne un régime sans playbook connu : l'image n'a pas été évaluée "
+        "(D-21).",
+        "Ajouter le playbook de ce régime, ou corriger le régime de la politique.",
+    ),
+    Reason(
+        "uske/rebuild-refused",
+        (Outcome.QUARANTINE,),
+        "Ligne de clôture sur la source : son image reconstruite a été jugée et refusée. Ce "
+        "n'est pas un verdict sur la source (SDR-0016).",
+        "Lire le report de l'image reconstruite (clé `rebuilt`). Pour réessayer, rouvrir la "
+        "source.",
+    ),
+    Reason(
+        "uske/reopened",
+        (Outcome.INCONCLUSIVE,),
+        "Ligne écrite à la main : une personne a rouvert la source (SDR-0016).",
+        "Rien : le prochain criblage la rejuge.",
+    ),
+    Reason(
+        "",
+        (Outcome.DIRECT_PLACEMENT, Outcome.TRANSFORMATION_REQUIRED),
+        "Aucune raison. En `transformation-required`, le tier vient d'une condition du "
+        "playbook qui ne nomme aucune règle critique échouée.",
+        "Rien pour un placement direct ; sinon, lire le report.",
+    ),
+)
+
+
+def reference() -> str:
+    """docs/reference/raisons.md, generated: the page cannot drift from the code."""
+    out = [
+        "# Raisons du journal",
+        "",
+        "<!-- Engendré par `uv run python -m uske.outcomes`. Ne pas modifier à la main. -->",
+        "",
+        "Chaque ligne du journal porte un état et, souvent, une raison. **Lisez le couple** :",
+        "une même raison ne dit pas la même chose sous deux états. `<...>` marque une partie",
+        "remplie à l'écriture ; `<provider>/<criterion>` est une règle du playbook.",
+        "",
+        "| Raison | État | Ce qu'elle dit | Que faire |",
+        "| --- | --- | --- | --- |",
+    ]
+    for r in REASONS:
+        code = f"`{r.code}`" if r.code else "*(aucune)*"
+        states = ", ".join(f"`{s.value}`" for s in r.states)
+        out.append(f"| {code} | {states} | {r.meaning} | {r.action} |")
+    return "\n".join(out) + "\n"
+
+
+if __name__ == "__main__":  # pragma: no cover
+    print(reference(), end="")
