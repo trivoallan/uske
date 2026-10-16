@@ -23,6 +23,7 @@ WRITTEN = (
     "reason",
     "ruleset",
     "report",
+    "run",
     "source",
     "rebuilt",
 )
@@ -217,7 +218,9 @@ def render_text(lines: list[dict]) -> str:
             head = f"{line['ts']}  {_flat(line['state'])}  {_flat(line.get('reason') or '—')}"
             out.append(head + "".join(f"  [{m}]" for m in marks(line)))
             out.extend(
-                f"    {k}: {_flat(line[k])}" for k in ("ruleset", "report") if k in line
+                f"    {k}: {_flat(line[k])}"
+                for k in ("run", "ruleset", "report")
+                if k in line
             )
             out.extend(f"    {_flat(e)}" for e in extras(line))
         blocks.append("\n".join(out))
@@ -236,6 +239,27 @@ def _report(path: str | None) -> str:
     return f"`{path}` (volume uske-results)" if path.startswith("/") else f"`{path}`"
 
 
+def _run_label(run: str) -> str:
+    """A run is an id, or the URL of its page: the label is the id, the URL's last segment."""
+    if run.startswith(("http://", "https://")):
+        return run.rstrip("/").rsplit("/", 1)[-1]
+    return run
+
+
+def _period(line: dict) -> str:
+    """The timeline period of a line: its screening, else its UTC minute."""
+    if "run" in line:
+        return f"run {_run_label(line['run'])}"
+    return f"{line['ts'][:10]} {line['ts'][11:16]}"
+
+
+def _run_cell(run: str | None) -> str:
+    if run is None:
+        return ""
+    label = _run_label(run)
+    return f"[{label}]({run})" if label != run else run
+
+
 def render_md(lines: list[dict]) -> str:
     """Render the lines as Markdown: a Mermaid timeline and a table per (policy, digest)."""
     blocks = []
@@ -250,19 +274,23 @@ def render_md(lines: list[dict]) -> str:
             "timeline",
         ]
         out.append(f"    title {ref.translate(MERMAID)}")
-        # periods group events by UTC day: a backdated event is drawn under its own day,
-        # with its "antidatée" mark, not at its place in the file
-        days: dict[str, list[str]] = {}
+        # one period per screening (SDR-0018); a line written before the run was recorded, or
+        # by hand, gets its UTC minute. Periods follow the file: a backdated event keeps its mark
+        periods: dict[str, list[str]] = {}
         for line in group:
             event = f"{line['state']} — {line.get('reason') or '—'}"
             event += "".join(f" ({m})" for m in marks(line))
-            days.setdefault(line["ts"][:10], []).append(event.translate(MERMAID))
-        out.extend(f"    {day} : " + " : ".join(events) for day, events in days.items())
-        out += ["```", "", "| ts | state | reason | ruleset | report | details |"]
-        out.append("| --- | --- | --- | --- | --- | --- |")
+            periods.setdefault(_period(line), []).append(event.translate(MERMAID))
+        out.extend(
+            f"    {period.translate(MERMAID)} : " + " : ".join(events)
+            for period, events in periods.items()
+        )
+        out += ["```", "", "| ts | run | state | reason | ruleset | report | details |"]
+        out.append("| --- | --- | --- | --- | --- | --- | --- |")
         for line in group:
             cells = [
                 line["ts"],
+                _run_cell(line.get("run")),
                 line["state"],
                 line.get("reason") or "—",
                 line.get("ruleset", ""),

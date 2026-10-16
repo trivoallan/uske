@@ -18,6 +18,7 @@ class ResultLine:
     ruleset: str
     reason: str | None = None
     report: str | None = None
+    run: str | None = None  # the screening that wrote the line: an id or its URL
     source: str | None = (
         None  # on a held image's line: the source digest it was built from
     )
