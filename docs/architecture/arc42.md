@@ -126,9 +126,10 @@ qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc.
 
 # Context and Scope
 
-> Niveau LEAN : une table par contexte, sans diagramme. La frontière tient en une phrase —
-> `uske` et son journal sont dedans, tout ce qu'il appelle est dehors — et une table la dit sans
-> outil de rendu, ce que [`SDR-0008`](../adr/SDR-0008-documentation.md) (`tool: aucun`) demande.
+> Niveau LEAN : un diagramme et une table par contexte. La frontière tient en une phrase —
+> `uske` et son journal sont dedans, tout ce qu'il appelle est dehors. Les diagrammes de ce
+> document sont en Mermaid, que GitHub affiche sans outil : c'est ce que
+> [`SDR-0008`](../adr/SDR-0008-documentation.md) (`tool: aucun`) permet.
 > Les `IF-nn` sont ceux de ce document : un `IF-nn` cité dans le code vient du dossier de
 > référence, et ne désigne pas la même interface.
 
@@ -137,6 +138,29 @@ qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc.
 `uske` est **au milieu et ne tient rien** : chaque partenaire ci-dessous juge, place, recense
 ou suit, et `uske` ne fait que leur passer ce que l'autre a produit. La seule chose qu'il
 possède est le **journal des résultats** — c'est pourquoi il est dedans, et non un partenaire.
+
+```mermaid
+flowchart LR
+  U["<b>uske</b><br>et son journal"]
+  plan(["Planificateur"])
+  depot[("Dépôt des politiques<br>et des jeux de règles")]
+  knock["Placeur<br>knock"]
+  regis["Juge<br>regis"]
+  reg[("Registre")]
+  dt["Suivi des vulnérabilités"]
+  oracle["Oracle d'usage"]
+  rp(["Responsable plateforme"])
+  lect(["Équipe applicative,<br>auditeur"])
+  plan <-->|"IF-01 déclenchement / issue"| U
+  depot -->|"IF-02 politiques, jeux de règles"| U
+  knock <-->|"IF-03 plan / plan moins les refus"| U
+  regis <-->|"IF-04 verdict / empreinte, jeu de règles"| U
+  reg -->|"IF-05 ce qui y est"| U
+  U <-->|"IF-06 inventaires signés, retraits"| dt
+  U <-->|"IF-09 suspects / dernier usage"| oracle
+  rp <-->|"IF-07 rejeu, réouverture / chronologie"| U
+  lect <-->|"IF-08 une image / ses décisions"| U
+```
 
 | ID | Partenaire | Ce qui entre dans `uske` | Ce qui sort de `uske` |
 |----|------------|--------------------------|-----------------------|
@@ -219,7 +243,7 @@ simple enchaînement ne ferait pas. Le rang des objectifs le permet ; la ligne 4
 
 # Building Block View
 
-> Niveau LEAN : le niveau 1 seul, en table. Un bloc est un groupe de modules de `uske/`, ou le
+> Niveau LEAN : le niveau 1 seul, en diagramme et en table. Un bloc est un groupe de modules de `uske/`, ou le
 > workflow de `deploy/base` ; aucun ne descend au fichier près plus qu'il ne le faut — le paquet
 > compte dix modules à plat, et quatre blocs n'en ont qu'un.
 
@@ -229,6 +253,26 @@ simple enchaînement ne ferait pas. Le rang des objectifs le permet ; la ligne 4
 décident ; tout le reste lit, écrit ou parle à un partenaire. C'est la forme que vise
 [`SDR-0003`](../adr/SDR-0003-architecture.md), à moitié atteinte : les deux sont déjà purs, mais
 rien dans l'arborescence ne sépare le domaine des adaptateurs (`DEBT-01`).
+
+```mermaid
+flowchart TD
+  W["Workflow<br><code>deploy/base/</code>"]
+  S["Sous-commandes<br><code>cli.py</code>"]
+  P["Porte<br><code>gate.py</code>"]:::pure
+  I["Issues<br><code>outcomes.py</code>"]:::pure
+  Pol["Politiques<br><code>policies.py</code>, <code>playbooks.py</code>"]
+  J["Journal<br><code>results.py</code>, <code>decisions.py</code>"]
+  R["Recensement<br><code>census.py</code>"]
+  Sy["Synchronisation du suivi<br><code>dtsync.py</code>"]
+  W -->|"ligne de commande"| S
+  S --> P & I & Pol & J & R & Sy
+  P --> I & Pol & J
+  J --> I
+  Sy --> Pol
+  classDef pure stroke-width:3px
+```
+
+Trait épais : sans entrée-sortie. Chaque flèche est une dépendance d'import, sauf la première.
 
 | Bloc | Responsabilité | Source | Dépend de | Interfaces | Entrées-sorties |
 |------|----------------|--------|-----------|------------|-----------------|
@@ -258,13 +302,51 @@ et un appel HTTP. Rapprocher le code, c'est séparer ces deux moitiés dans chac
 
 # Runtime View
 
-> Niveau LEAN : cinq scénarios en prose numérotée, sans diagramme. Les noms en italique sont
+> Niveau LEAN : cinq scénarios en prose numérotée ; les deux portes, R-1 et R-2, ont aussi leur
+> diagramme de séquence. Les noms en italique sont
 > les blocs de *Building Block View* ; les `IF-nn`, les interfaces de *Context and Scope*. Chaque
 > étape nommée en `code` est une étape de [`deploy/base/workflowtemplate.yaml`](../../deploy/base/workflowtemplate.yaml).
 
 ## R-1 — Un screening, une copie placée
 
-Le cas nominal : une image saine, copiée telle quelle.
+Le cas nominal : une image saine, copiée telle quelle. Le diagramme montre aussi la branche de
+R-3.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant W as Workflow
+  participant K as knock
+  participant R as regis
+  participant S as Sous-commandes
+  participant J as Journal
+  W->>S: list
+  loop chaque politique, une à la fois
+    W->>K: reconcile --plan-out
+    K-->>W: plan, sur /work
+    W->>S: pending, resolve
+    S->>J: ce qui est déjà décidé
+    loop chaque empreinte encore due
+      W->>R: regis analyze
+      R-->>W: rapport et code de sortie
+      W->>S: classify (Issues)
+      alt rapport lisible
+        S-->>W: l'issue du verdict
+      else juge en échec, rapport illisible (R-3)
+        S-->>W: inconclusive
+      end
+    end
+    W->>S: record
+    S->>J: ajoute les lignes
+    W->>S: approve (Porte)
+    S-->>W: plan moins les refus
+    W->>K: reconcile --apply-plan
+    K-->>W: ce qui a été placé
+    W->>S: record-applied
+    S->>J: lien source vers placé
+  end
+```
+
 
 1. Le planificateur lance un screening (IF-01) ; le *Workflow* extrait le dépôt des politiques
    (`checkout`, IF-02), puis `list` en tire les politiques actives.
@@ -279,6 +361,35 @@ Le cas nominal : une image saine, copiée telle quelle.
 6. `record-applied` consigne ce qui a été placé. Le screening se termine en succès.
 
 ## R-2 — Une source à réparer, et la seconde porte
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant W as Workflow
+  participant K as knock
+  participant R as regis
+  participant S as Sous-commandes
+  participant J as Journal
+  W->>S: approve (Porte)
+  S-->>W: plan approuvé, avec un ordre de réparation
+  W->>K: reconcile --apply-plan --stage-to transit
+  K-->>W: images retenues dans le transit
+  loop chaque image retenue
+    W->>R: regis analyze, par son empreinte
+    R-->>W: rapport
+    W->>S: classify (Issues)
+  end
+  W->>S: record, puis approve
+  S->>J: lignes de la seconde porte
+  alt placement direct
+    S-->>W: liste à promouvoir
+    W->>K: promote
+    W->>S: record-promoted
+  else refusée
+    S->>J: quarantine, uske/rebuild-refused : la source est close
+  end
+```
+
 
 1. Comme R-1 jusqu'à l'étape 4 ; le verdict est *transformation requise*.
 2. La *Porte* rend l'opération avec un ordre de réparation, seulement si le workflow nomme un
@@ -340,6 +451,27 @@ Le scénario qui démontre l'objectif de **Contestabilité**.
 
 Un namespace Kubernetes, avec Argo Workflows. Rien d'autre ne tourne en permanence : chaque
 screening est une suite de pods qui meurent avec lui.
+
+```mermaid
+flowchart LR
+  subgraph ns["Namespace Kubernetes, avec Argo Workflows"]
+    c1["CronWorkflow <code>uske</code><br>toutes les 5 min, Forbid"]
+    c2["CronWorkflow <code>dt-sync</code><br>toutes les 15 min"]
+    wt["WorkflowTemplate<br><code>uske-screening</code>"]
+    pods["Pods d'étape<br>images uske, regis, knock, git"]
+    work[("<code>work</code> 1 Gi RWO<br>un par screening")]
+    res[("<code>uske-results</code> 5 Gi RWO<br>journal, rapports HTML")]
+    sec["Secrets<br><code>uske-repository</code>, <code>uske-harbor</code>,<br><code>uske-knock</code>, <code>uske-dt</code>"]
+    c1 --> wt --> pods
+    c2 --> pods
+    pods --- work
+    pods --- res
+    sec -.->|"environnement"| pods
+  end
+  pods -->|"HTTPS"| git[("Dépôt des politiques")]
+  pods -->|"HTTPS"| reg[("Registre")]
+  pods -->|"HTTPS"| dt["Dependency-Track"]
+```
 
 | Élément | Ce qu'il porte | Réglage qui compte |
 |---------|----------------|--------------------|
