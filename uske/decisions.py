@@ -124,20 +124,25 @@ def digest_of(image: str) -> str | None:
 
 
 def _family(lines: list[dict], wanted: set[str]) -> set[str]:
-    """The digests linked to `wanted` by `source` or `rebuilt`, both ways, until nothing is added:
-    a rebuild brings its source (the first gate) and its siblings, a source its rebuilds."""
-    family = set(wanted)
-    while True:
-        grown = set(family)
-        for l in lines:
-            links = {l.get("source"), l.get("rebuilt")} - {None}
-            if l["digest"] in family:
-                grown |= links
-            elif links & family:
-                grown.add(l["digest"])
-        if grown == family:
-            return family
-        family = grown
+    """`wanted`, its ancestors and its descendants by `source` and `rebuilt`: a rebuild brings
+    its source (the first gate), a source its rebuilds; never a rebuild's siblings."""
+
+    def closure(up: bool) -> set[str]:
+        found = set(wanted)
+        while True:
+            grown = set(found)
+            for l in lines:
+                if up and l["digest"] in found and l.get("source"):
+                    grown.add(l["source"])  # a held image's source
+                if not up and l.get("source") in found:
+                    grown.add(l["digest"])  # a source's rebuild
+                if not up and l["digest"] in found and l.get("rebuilt"):
+                    grown.add(l["rebuilt"])  # the rebuild a closing line refused
+            if grown == found:
+                return found
+            found = grown
+
+    return closure(up=True) | closure(up=False)
 
 
 def select(
