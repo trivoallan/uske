@@ -265,6 +265,44 @@ def _run_cell(run: str | None) -> str:
     return f"[{label}]({run})" if label != run else run
 
 
+# a colour per state; the period box of a section takes it, the reasons sit under it
+COLOURS = {
+    "direct-placement": "#1a7f37",
+    "transformation-required": "#9a6700",
+    "quarantine": "#cf222e",
+    "inconclusive": "#6e7781",
+    "placed-by-exception": "#0969da",
+    "abandoned": "#24292f",
+}
+OTHER_COLOUR = "#8250df"
+
+
+def _sections(group: list[dict]) -> list[tuple[str, str, list[str]]]:
+    """(period, state, reasons) in file order: one section per screening and state, the UTC
+    minute standing in for a line without a run (SDR-0018). A backdated line keeps its place."""
+    sections: list[tuple[str, str, list[str]]] = []
+    for line in group:
+        reason = line.get("reason") or "—"
+        reason += "".join(f" ({m})" for m in marks(line))
+        key = (_period(line), line["state"])
+        if sections and sections[-1][:2] == key:
+            sections[-1][2].append(reason.translate(MERMAID))
+        else:
+            sections.append((*key, [reason.translate(MERMAID)]))
+    return sections
+
+
+def _colours(states: list[str]) -> str:
+    """The init directive that paints section i in the colour of its state."""
+    # ponytail: Mermaid has 12 section colours (cScale0-11); a 13th section reuses the first
+    variables = {}
+    for i, state in enumerate(states[:12]):
+        variables[f"cScale{i}"] = COLOURS.get(state, OTHER_COLOUR)
+        variables[f"cScaleLabel{i}"] = "#ffffff"
+    init = {"theme": "default", "themeVariables": variables}
+    return f"%%{{init: {json.dumps(init)}}}%%"
+
+
 def render_md(lines: list[dict]) -> str:
     """Render the lines as Markdown: a Mermaid timeline and a table per (policy, digest)."""
     blocks = []
@@ -275,21 +313,13 @@ def render_md(lines: list[dict]) -> str:
             "",
             f"`{digest}`",
             "",
-            "```mermaid",
-            "timeline",
         ]
+        sections = _sections(group)
+        out += ["```mermaid", _colours([state for _, state, _ in sections]), "timeline"]
         out.append(f"    title {ref.translate(MERMAID)}")
-        # one period per screening (SDR-0018); a line written before the run was recorded, or
-        # by hand, gets its UTC minute. Periods follow the file: a backdated event keeps its mark
-        periods: dict[str, list[str]] = {}
-        for line in group:
-            event = f"{line['state']} — {line.get('reason') or '—'}"
-            event += "".join(f" ({m})" for m in marks(line))
-            periods.setdefault(_period(line), []).append(event.translate(MERMAID))
-        out.extend(
-            f"    {period.translate(MERMAID)} : " + " : ".join(events)
-            for period, events in periods.items()
-        )
+        for period, state, reasons in sections:
+            out.append(f"    section {period.translate(MERMAID)}")
+            out.append(f"        {state.translate(MERMAID)} : " + " : ".join(reasons))
         out += ["```", "", "| ts | run | state | reason | ruleset | report | details |"]
         out.append("| --- | --- | --- | --- | --- | --- | --- |")
         for line in group:

@@ -180,9 +180,13 @@ marquée « arbitrage absent ».
 ### Requirement: Le Markdown porte une chronologie Mermaid et le tableau complet
 
 `--format md` SHALL rendre, pour chaque groupe, un titre qui nomme la politique et la référence,
-l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` dont chaque période est un
-criblage, `run <id>` (SDR-0018), et porte les décisions qu'il a écrites ; une ligne sans `run`
-(écrite avant SDR-0018, ou à la main) a pour période sa minute UTC `AAAA-MM-JJ HH:MM`. Suit
+l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` fait d'une section par
+criblage et par état, dans l'ordre du fichier : la section porte le criblage, `run <id>`
+(SDR-0018), ou, pour une ligne sans `run` (écrite avant SDR-0018, ou à la main), sa minute UTC
+`AAAA-MM-JJ HH:MM` ; sa période porte l'état, ses événements les raisons. Chaque section SHALL
+prendre la couleur de son état (placement direct vert, transformation requise ambre, quarantaine
+rouge, non concluant gris, placement par exception bleu, abandon noir, tout autre état violet),
+fixée par une directive `%%{init}%%` ; au-delà de douze sections, Mermaid réemploie ses couleurs. Suit
 un tableau Markdown des colonnes du format `text`, dont `run`, rendu en lien quand c'est une URL.
 Dans le
 bloc Mermaid, titre compris, `#` puis `%`, `:` et `;` MUST être remplacés par leurs entités
