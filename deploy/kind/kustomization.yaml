@@ -10,7 +10,7 @@ resources:
 images:
   - {name: uske, newName: uske, newTag: dev}
   - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:cdecd15fc81c3322bc2119dd2a3ed3964ab88dd67e07fb6e9c1fa0a5cdde0207"}  # 0.39.1-full
-  - {name: knock, newName: ghcr.io/trivoallan/knock, digest: "sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9"}  # 0.13.0
+  - {name: knock, newName: ghcr.io/trivoallan/knock, digest: "sha256:57e6dca82e3a05756a688d7b5396a24999b762b8d75414a350c641d6f610020c"}  # 0.16.0
 patches:
   # Rounds are started by hand here.
   - target: {kind: CronWorkflow, name: uske}

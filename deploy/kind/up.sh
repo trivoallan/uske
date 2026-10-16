@@ -12,7 +12,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$ROOT/deploy/kind"
 CLUSTER=uske
 NS=uske
-KNOCK="ghcr.io/trivoallan/knock@sha256:f6e23a2b1e0298439efff8922ab302787524c5fea49ae368cd8bb01c19a019e9"  # 0.13.0
+KNOCK="ghcr.io/trivoallan/knock@sha256:57e6dca82e3a05756a688d7b5396a24999b762b8d75414a350c641d6f610020c"  # 0.16.0
 REGISTRY="registry.$NS.svc.cluster.local:5000"
 
 CRANE="gcr.io/go-containerregistry/crane/debug@sha256:94f61956845714bea3b788445454ae4827f49a90dcd9dac28255c4cccb6220ad"  # v0.20.3
