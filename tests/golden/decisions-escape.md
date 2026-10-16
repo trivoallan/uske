@@ -1,0 +1,14 @@
+## p · r.example/a:1
+
+`sha256:1111111111111111111111111111111111111111111111111111111111111111`
+
+```mermaid
+timeline
+    title r.example/a#58;1
+    2026-10-01 : placed-by-exception — r#58;1 #35;2#59; 3#37;#37; 4|5 6 : quarantine — —
+```
+
+| ts | state | reason | ruleset | report | details |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-01T00:00:00Z | placed-by-exception | r:1 #2; 3%% 4\|5 6 | none |  | arbitration: {"by": "b", "reason": "x\|y\r\nz"} |
+| 2026-10-01T00:00:00Z | quarantine | — |  |  |  |

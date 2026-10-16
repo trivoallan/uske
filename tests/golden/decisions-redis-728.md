@@ -1,0 +1,15 @@
+## a-4711-redis-7 · docker.io/library/redis:7.2.8
+
+`sha256:5b3e8f1c07a4d296e8b1f5c3a907d24e6b8f1a03c5d79e2b4f6a8c1d3e5079b2`
+
+```mermaid
+timeline
+    title docker.io/library/redis#58;7.2.8
+    2026-10-06 : quarantine — sbom/license-blocklist
+    2026-10-09 : placed-by-exception — sbom/license-blocklist
+```
+
+| ts | state | reason | ruleset | report | details |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-06T04:10:00Z | quarantine | sbom/license-blocklist | sha256:9e2b7c1a4d0f6835b2e9c7a1d4f60b83e5c2a9d7f1b46e0c3a8d5f2b9e6c1a40 | `regis/2026-10-06/redis-7.2.8.html` (volume uske-results) |  |
+| 2026-10-09T09:00:00Z | placed-by-exception | sbom/license-blocklist | sha256:9e2b7c1a4d0f6835b2e9c7a1d4f60b83e5c2a9d7f1b46e0c3a8d5f2b9e6c1a40 |  | arbitration: {"by": "cao-data", "date": "2026-10-09", "reason": "Licence acceptée par le service juridique pour un usage interne."} |
