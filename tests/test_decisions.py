@@ -202,6 +202,19 @@ class Text(Journal):
 
 
 class Markdown(Journal):
+    def test_the_volume_is_named_only_for_a_path_on_it(self):
+        on_volume = {
+            "policy": "p",
+            "ts": "2026-10-01T00:00:00Z",
+            "digest": D1,
+            "state": "quarantine",
+        }
+        md = decisions.render_md([{**on_volume, "report": "/results/reports/p/x.html"}])
+        self.assertIn("| `/results/reports/p/x.html` (volume uske-results) |", md)
+        md = decisions.render_md([{**on_volume, "report": "results/reports/p/x.md"}])
+        self.assertIn("| `results/reports/p/x.md` |", md)
+        self.assertNotIn("volume", md)
+
     def test_golden(self):
         found = decisions.select(decisions.load(self.dir)[0], image=R728)
         expected = (GOLDEN / "decisions-redis-728.md").read_text().rstrip("\n")
