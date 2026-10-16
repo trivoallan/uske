@@ -620,6 +620,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 - [x] 5.6 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `20 passed`.
+- [x] 5.8 Corrections de revue (lecture stricte, sauts de ligne, tests) : ce commit
 - [ ] 5.7 Ouvrir `tests/golden/decisions-redis-728.md` dans l'aperçu Markdown de GitHub ou de
   l'éditeur (Mermaid activé). Attendu : une frise à deux dates, sans erreur de syntaxe Mermaid,
   puis le tableau à deux lignes.

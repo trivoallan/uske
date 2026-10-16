@@ -24,9 +24,9 @@ S = "sha256:" + "a" * 64  # a source
 H = "sha256:" + "b" * 64  # the held image rebuilt from it
 
 
-def line(**fields) -> str:
+def line(ensure_ascii: bool = True, **fields) -> str:
     base = {"ts": "2026-10-01T00:00:00Z", "digest": D1, "state": "quarantine"}
-    return json.dumps({**base, **fields})
+    return json.dumps({**base, **fields}, ensure_ascii=ensure_ascii)
 
 
 class Journal(unittest.TestCase):
@@ -92,6 +92,8 @@ class Read(Journal):
             "reserved key": line(policy="x"),
             "ref not a string": line(ref=None),
             "state not a string": line(state=1),
+            "ts not zero-padded": line(ts="2026-1-1T0:0:0Z"),
+            "NaN": line().replace("}", ', "n": NaN}'),
         }
         for case, text in bad.items():
             with self.subTest(case):
@@ -238,3 +240,51 @@ class Markdown(Journal):
         md = decisions.render_md(decisions.load(self.dir, "m")[0])
         self.assertIn("inconclusive — uske/reopened (antidatée) (arbitrage absent)", md)
         self.assertIn("|  | antidatée; arbitrage absent |", md)
+
+
+class Strict(Journal):
+    def test_a_file_that_is_not_utf8_names_its_path(self):
+        path = self.dir / "bin.jsonl"
+        path.write_bytes(b"\xff\xfe\n")
+        with self.assertRaisesRegex(decisions.JournalError, f"^{path}: "):
+            decisions.read_journal(path)
+
+    def test_u2028_in_a_value_does_not_split_the_line(self):
+        path = self.dir / "sep.jsonl"
+        path.write_text(
+            line(reason="a\u2028b", ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        found = decisions.read_journal(path)
+        self.assertEqual([l["reason"] for l in found], ["a\u2028b"])
+
+    def test_crlf_line_endings_are_accepted(self):
+        path = self.dir / "crlf.jsonl"
+        path.write_bytes((line() + "\r\n" + line() + "\r\n").encode())
+        self.assertEqual(len(decisions.read_journal(path)), 2)
+
+    def test_a_newline_in_a_value_stays_on_one_line_in_text(self):
+        self.write("n.jsonl", line(ref="x\ny", reason="a\nb", report="c\rd"))
+        text = decisions.render_text(decisions.load(self.dir, "n")[0])
+        self.assertIn("quarantine  a b\n", text)
+        self.assertIn("== n · x y · ", text)
+        self.assertIn("    report: c d", text)
+        self.assertEqual(len(text.split("\n")), 3)
+
+    def test_a_newline_in_a_ref_cannot_make_a_second_heading_in_md(self):
+        self.write("n.jsonl", line(ref="x\n## z"))
+        md = decisions.render_md(decisions.load(self.dir, "n")[0])
+        self.assertEqual(
+            [l for l in md.split("\n") if l.startswith("## ")], ["## n · x ## z"]
+        )
+
+    def test_who_is_unsigned(self):
+        self.assertTrue(decisions.unsigned(json.loads(line(state="abandoned"))))
+        self.assertFalse(
+            decisions.unsigned(
+                json.loads(line(reason="uske/reopened", arbitration={"by": "x"}))
+            )
+        )
+
+    def test_a_raw_carriage_return_becomes_a_space(self):
+        self.assertEqual("a\rb".translate(decisions.MERMAID), "a b")
+        self.assertEqual(decisions._cell("a\rb"), "a b")

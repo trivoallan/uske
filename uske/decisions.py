@@ -38,16 +38,29 @@ class JournalError(Exception):
     """A journal that cannot be read in full: nothing is rendered."""
 
 
+def _no_constant(name: str):
+    raise ValueError(f"{name} is not valid JSON")
+
+
 def read_journal(path: Path) -> list[dict]:
+    """Parse one journal strictly; any unreadable file or line raises JournalError."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise JournalError(f"{path}: {exc}") from exc
     lines = []
-    for number, raw in enumerate(path.read_text().splitlines(), 1):
+    # split on "\n" only: splitlines() would also cut on U+2028 and friends
+    for number, raw in enumerate(text.split("\n"), 1):
+        raw = raw.removesuffix("\r")
         if not raw.strip():
             continue
         where = f"{path}:{number}"
         try:
-            line = json.loads(raw)
+            line = json.loads(raw, parse_constant=_no_constant)
         except json.JSONDecodeError as exc:
             raise JournalError(f"{where}: {exc.msg}") from exc
+        except ValueError as exc:
+            raise JournalError(f"{where}: {exc}") from exc
         if not isinstance(line, dict):
             raise JournalError(f"{where}: not a JSON object")
         missing = [k for k in REQUIRED if k not in line]
@@ -57,7 +70,9 @@ def read_journal(path: Path) -> list[dict]:
             if key in line and not isinstance(line[key], str):
                 raise JournalError(f"{where}: {key} must be a string")
         try:
-            datetime.strptime(line["ts"], TS)
+            # the round trip rejects what strptime forgives, such as "2026-1-1T0:0:0Z"
+            if datetime.strptime(line["ts"], TS).strftime(TS) != line["ts"]:
+                raise ValueError(line["ts"])
         except (TypeError, ValueError) as exc:
             raise JournalError(f"{where}: ts must be {TS}, got {line['ts']!r}") from exc
         if "policy" in line:
@@ -155,6 +170,7 @@ def unsigned(line: dict) -> bool:
 
 
 def marks(line: dict) -> list[str]:
+    """The labels a line carries in the renderings: backdated, unsigned."""
     return [
         mark
         for mark, on in (
@@ -174,17 +190,22 @@ def extras(line: dict) -> list[str]:
     ]
 
 
+def _flat(text: str) -> str:
+    return text.replace("\r", " ").replace("\n", " ")
+
+
 def render_text(lines: list[dict]) -> str:
+    """Render the lines as plain text, one block per (policy, digest), one value per line."""
     blocks = []
     for (policy, digest), group in groups(lines).items():
-        out = [f"== {policy} · {group[0].get('ref', '—')} · {digest}"]
+        out = [f"== {policy} · {_flat(group[0].get('ref', '—'))} · {_flat(digest)}"]
         for line in group:
-            head = f"{line['ts']}  {line['state']}  {line.get('reason') or '—'}"
+            head = f"{line['ts']}  {_flat(line['state'])}  {_flat(line.get('reason') or '—')}"
             out.append(head + "".join(f"  [{m}]" for m in marks(line)))
             out.extend(
-                f"    {k}: {line[k]}" for k in ("ruleset", "report") if k in line
+                f"    {k}: {_flat(line[k])}" for k in ("ruleset", "report") if k in line
             )
-            out.extend(f"    {e}" for e in extras(line))
+            out.extend(f"    {_flat(e)}" for e in extras(line))
         blocks.append("\n".join(out))
     return "\n\n".join(blocks)
 
@@ -194,11 +215,21 @@ def _cell(text: str) -> str:
 
 
 def render_md(lines: list[dict]) -> str:
+    """Render the lines as Markdown: a Mermaid timeline and a table per (policy, digest)."""
     blocks = []
     for (policy, digest), group in groups(lines).items():
         ref = group[0].get("ref", "—")
-        out = [f"## {policy} · {ref}", "", f"`{digest}`", "", "```mermaid", "timeline"]
+        out = [
+            f"## {policy} · {_flat(ref)}",
+            "",
+            f"`{digest}`",
+            "",
+            "```mermaid",
+            "timeline",
+        ]
         out.append(f"    title {ref.translate(MERMAID)}")
+        # periods group events by UTC day: a backdated event is drawn under its own day,
+        # with its "antidatée" mark, not at its place in the file
         days: dict[str, list[str]] = {}
         for line in group:
             event = f"{line['state']} — {line.get('reason') or '—'}"
