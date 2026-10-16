@@ -663,6 +663,16 @@ class Attempts(unittest.TestCase):
         )
 
 
+class Read(unittest.TestCase):
+    def test_a_raw_line_separator_inside_a_value_stays_in_its_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "p.jsonl"
+            path.write_text(
+                f'{{"digest": "{D1}", "reason": "a\u2028b"}}\r\n\n', "utf-8"
+            )
+            self.assertEqual(results.read(path), [{"digest": D1, "reason": "a\u2028b"}])
+
+
 class Rebuild(Workdir):
     """The second gate: a source to repair is rebuilt, its output judged, then promoted or closed."""
 
