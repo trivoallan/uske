@@ -114,17 +114,15 @@ relisent avant — cette section et le glossaire les premiers.
 | **`regis` et `knock` sont des dépôts tiers** | technique | `uske` ne les connaît que par leur ligne de commande et leur code de sortie ; il ne partage avec eux ni code ni modèle de données. Leurs cycles de version ne sont pas les siens. | Rien ici : c'est la séparation que sert l'objectif de **Minceur**, et l'abandonner viderait `uske` de sa raison d'être. |
 
 **La méthode est une contrainte, pas une décision, et c'est ce qui explique la forme de
-*Architecture Decisions*.** Les douze ADR de ce dépôt n'ont pas été choisis : ils ont été posés,
-avec leurs numéros et leurs questions. Ce que ce dépôt décide, c'est la **réponse** à chacun —
-pas l'existence de la question. Un lecteur qui prendrait le journal des décisions pour une
+*Architecture Decisions*.** Les onze ADR hérités de la méthode n'ont pas été choisis : ils ont
+été posés, avec leurs numéros et leurs questions. Ce que ce dépôt décide, c'est la **réponse** à
+chacun — pas l'existence de la question. Un lecteur qui prendrait le journal des décisions pour une
 délibération libre se tromperait sur ce qui a réellement été arbitré ici.
 
 **La voie de recours est nommée, et elle est asymétrique.** Une question qui ne se pose pas dans
 ce dépôt reçoit le verdict `rejected` avec son motif, ce qui la fait taire entièrement ; une
 règle particulière se déroge par un ADR local qui écrit son motif. Mais certaines clés n'admettent
-qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc. L'analyse complète
-des contraintes que ce dépôt fait peser sur des tiers qui ne l'ont pas adopté vit sous
-`## More Information` de [`SDR-0013`](../adr/SDR-0013-frontend.md).
+qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc.
 
 # Context and Scope
 
@@ -288,17 +286,20 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Treize questions posées à ce jour, douze statuées. Douze sont héritées de la méthode — voir
-*Architecture Constraints* : onze questions qu'elle pose à tout dépôt qui l'adopte, et la règle
+Douze questions posées à ce jour, douze statuées. Onze sont héritées de la méthode — voir
+*Architecture Constraints* : dix questions qu'elle pose à tout dépôt qui l'adopte, et la règle
 qui dit comment on y répond. Une seule est propre à `uske`, `SDR-0016`. Une nouvelle décision s'écrit
 quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
 ou contraint les changes suivants.
 
 **La numérotation est celle de la méthode, trous compris.** Elle saute de `SDR-0011` à
-`SDR-0013` : **`SDR-0012` n'existe pas en amont non plus** — vérifié le 2026-09-20 dans les
-ressources du paquet, où ce numéro ne sert que de nom d'ADR orphelin dans un test de l'outil. Un
-trou dans la suite ne signale donc **aucune décision perdue**, et ce dépôt ne renumérote pas :
-il porterait alors des numéros que la méthode ne reconnaîtrait plus.
+`SDR-0016`. **`SDR-0012` n'existe pas en amont non plus** — vérifié le 2026-09-20 dans les
+ressources du paquet, où ce numéro ne sert que de nom d'ADR orphelin dans un test de l'outil.
+**`SDR-0013` a été retiré le 2026-10-16, avant l'ouverture du dépôt** : il résumait des
+prescriptions internes de l'employeur, et la question qu'il posait (le front) ne se pose pas
+ici, puisque `uske` ne sert aucune interface. `SDR-0014` et `SDR-0015` n'ont jamais été écrits
+dans ce dépôt. Un trou dans la suite ne signale donc **aucune décision perdue**, et ce dépôt ne
+renumérote pas : il porterait alors des numéros que la méthode ne reconnaîtrait plus.
 
 **Ce journal liste aussi les questions encore ouvertes.** Un ADR `proposed` est une question
 posée et non tranchée : il ne contraint rien, et le dépôt ne s'y conforme ni ne s'en écarte. Il
@@ -325,7 +326,6 @@ et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un
 | [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | oui |
 | [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted | 2026-09-20 | Opérabilité | oui |
 | [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
-| [SDR-0013](../adr/SDR-0013-frontend.md) | Framework du front et thème du design system | **proposed** | — | — | sans objet — question non tranchée |
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
 
 ## Écarts ouverts
