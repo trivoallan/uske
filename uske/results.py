@@ -34,7 +34,10 @@ def path_for(results_dir: str | Path, policy_name: str) -> Path:
 def read(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    # Split on "\n" only: splitlines() also breaks on U+2028, U+2029, \x0b, \x0c and
+    # \x1c, which JSON allows raw inside a string (a hand-written arbitration line).
+    lines = (line.removesuffix("\r") for line in path.read_text("utf-8").split("\n"))
+    return [json.loads(line) for line in lines if line.strip()]
 
 
 def last_states(lines: list[dict]) -> dict[str, str]:
