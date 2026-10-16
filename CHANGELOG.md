@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/trivoallan/uske/compare/v0.1.0...v0.2.0) (2026-10-16)
+
+
+### Features
+
+* uske decisions lit le journal pour l'équipe applicative et l'auditeur ([#22](https://github.com/trivoallan/uske/issues/22)) ([625513b](https://github.com/trivoallan/uske/commit/625513b85c65a412e3c3fa443ffcfe1c9da6ec67))
+
+
+### Bug Fixes
+
+* relire le journal même quand une valeur contient un U+2028 ([#23](https://github.com/trivoallan/uske/issues/23)) ([b301d29](https://github.com/trivoallan/uske/commit/b301d29fce99a72328a0ee8afc149245fb49479a))
+
 ## 0.1.0 (2026-10-16)
 
 
