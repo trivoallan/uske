@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/trivoallan/uske/compare/v0.3.0...v0.4.0) (2026-10-16)
+
+
+### Features
+
+* une ligne du journal nomme son criblage, une colonne par criblage ([#29](https://github.com/trivoallan/uske/issues/29)) ([2b938d0](https://github.com/trivoallan/uske/commit/2b938d0010a88ecaa3b14673fe35195ae0593d94))
+
 ## [0.3.0](https://github.com/trivoallan/uske/compare/v0.2.1...v0.3.0) (2026-10-16)
 
 
