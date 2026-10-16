@@ -71,6 +71,32 @@ def classify(
     return outcome, reason(failed) if failed else None
 
 
+def repairable(report: dict | None, slugs: frozenset[str]) -> bool:
+    """Whether a refusal can be remediated: the tier is "Transformation requise" (never
+    Quarantaine: the playbook said nothing repairs it), at least one failed rule is repairable,
+    and every failed critical rule is. An unfinished rule is not a failure here; classify has
+    already made an incomplete critical rule inconclusive (D-23)."""
+    if not slugs or not isinstance(report, dict):
+        return False
+    results = report.get("playbooks") or []
+    if not results or not isinstance(results[0], dict):
+        return False
+    result = results[0]
+    if TIERS.get(result.get("tier")) is not Outcome.TRANSFORMATION_REQUIRED:
+        return False
+    failed = [
+        r
+        for r in result.get("rules") or []
+        if isinstance(r, dict)
+        and not r.get("passed")
+        and r.get("status") != "incomplete"
+    ]
+    critical = {
+        r.get("slug") for r in failed if str(r.get("level", "")).lower() == "critical"
+    }
+    return any(r.get("slug") in slugs for r in failed) and critical <= slugs
+
+
 @dataclass(frozen=True)
 class Reason:
     """One reason as the journal writes it; `<...>` marks a part filled in when written."""
@@ -157,12 +183,36 @@ REASONS = (
         "Ajouter le playbook de ce régime, ou corriger le régime de la politique.",
     ),
     Reason(
+        "uske/remediation-refused",
+        (Outcome.QUARANTINE,),
+        "Ligne de clôture sur la source : son image réparée a été jugée et refusée. Une seule "
+        "tentative par source ; ce n'est pas un nouveau verdict sur la source (SDR-0016).",
+        "Lire le report de l'image réparée (clé `rebuilt`). Pour réessayer, rouvrir la source.",
+    ),
+    Reason(
         "uske/rebuild-refused",
         (Outcome.QUARANTINE,),
-        "Ligne de clôture sur la source : son image reconstruite a été jugée et refusée. Ce "
-        "n'est pas un verdict sur la source (SDR-0016).",
+        "Ancienne ligne de clôture, écrite avant la réparation sur ordre : l'image reconstruite "
+        "de la source a été jugée et refusée (SDR-0016). Les nouvelles lignes disent "
+        "`uske/remediation-refused`.",
         "Lire le report de l'image reconstruite (clé `rebuilt`). Pour réessayer, rouvrir la "
         "source.",
+    ),
+    Reason(
+        "uske/remediation-undeclared",
+        (Outcome.QUARANTINE,),
+        "La source était réparable selon le régime, mais l'import de la politique ne déclare "
+        "aucune étape `remediate:` : `knock` a retenu l'opération.",
+        "Déclarer `remediate:` dans la politique, puis rouvrir la source ; ou retirer la règle "
+        "de la liste réparable du régime.",
+    ),
+    Reason(
+        "uske/no-transit",
+        (Outcome.INCONCLUSIVE,),
+        "La source était à réparer, mais aucun transit n'était configuré pour tenir l'image "
+        "réparée avant son verdict : l'opération a été retirée. Les copies du criblage ont été "
+        "placées.",
+        "Nommer le transit du workflow. Le prochain criblage rejuge la source.",
     ),
     Reason(
         "uske/reopened",

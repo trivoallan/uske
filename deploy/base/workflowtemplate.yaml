@@ -1,7 +1,9 @@
 # One screening: every policy, one after the other; for each, knock plans, regis judges the plan's
-# digests, and knock applies only the approved operations (D-30, knock's gate). What knock rebuilds
-# is held in a transit registry, judged there by its own digest, and promoted only if it is sound
-# (change `issue-transformation`).
+# digests, and knock applies only the approved operations (D-30, knock's gate). A source refused on
+# rules its regime lists as repairable is handed back with a remediation order: knock repairs that
+# digest, holds it in a transit registry, where it is judged by its own digest and promoted only if
+# it is sound (change `split-knock-policy-transform-remediate`). A transform-only rebuild is placed
+# directly. The transit is passed to knock only when the plan carries an order.
 # Change `socle-amorce-orchestrateur`, design decisions 3 and 6 to 10.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -19,8 +21,12 @@ spec:
         value: policies/pilote
       - name: playbooks  # in that repository too
         value: playbooks
-      - name: transit  # a name of KNOCK_REGISTRIES: where rebuilt images are held until judged
+      - name: transit  # a name of KNOCK_REGISTRIES: where remediated images are held until judged
         value: transit
+      # The remediation orders' epoch: the screening's start, UTC. Written into the repair's RUN,
+      # so a later screening never reuses an earlier upgrade layer.
+      - name: epoch
+        value: "{{workflow.creationTimestamp.Y}}{{workflow.creationTimestamp.m}}{{workflow.creationTimestamp.d}}T{{workflow.creationTimestamp.H}}{{workflow.creationTimestamp.M}}{{workflow.creationTimestamp.S}}Z"
   volumeClaimTemplates:
     - metadata:
         name: work
@@ -106,6 +112,7 @@ spec:
                 - {name: digest, value: "{{item.digest}}"}
                 - {name: target, value: "{{item.target}}"}
                 - {name: key, value: "{{item.key}}"}
+                - {name: track, value: "{{=jsonpath(steps.resolve.outputs.result, '$.track') ?? ''}}"}
           - name: unevaluated  # unknown regime: never sent to regis (D-21)
             template: classify
             withParam: "{{steps.pending.outputs.result}}"
@@ -132,10 +139,36 @@ spec:
                     approve --policy {{inputs.parameters.path}} --results /results
                     --plan /work/plans/{{inputs.parameters.name}}.json
                     --out /work/plans/{{inputs.parameters.name}}.approved.json
-                    --transit {{workflow.parameters.transit}}
-        - - name: place  # knock's gate, step 2: copies are placed, rebuilds are held in the transit
+                    --transit "{{workflow.parameters.transit}}"
+                    --epoch {{workflow.parameters.epoch}}
+                    --lines-out /work/approve-lines/{{inputs.parameters.name}}.json
+                    --run "{{workflow.name}}"
+        - - name: record-approve  # a source to repair without a transit: judged again next time
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{inputs.parameters.path}} --results /results
+                    --lines /work/approve-lines/{{inputs.parameters.name}}.json
+        - - name: place  # knock's gate, step 2, no order: copies and transform-only rebuilds placed
             template: knock-once
-            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            when: >-
+              {{=jsonpath(steps.approve.outputs.result, '$.approved') > 0 &&
+              jsonpath(steps.approve.outputs.result, '$.ordered') == 0}}
+            continueOn:  # what was placed must still be recorded
+              failed: true
+              error: true
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    reconcile /work/policies/{{inputs.parameters.name}}
+                    --apply-plan /work/plans/{{inputs.parameters.name}}.approved.json
+                    --applied-out /work/applied/{{inputs.parameters.name}}.json
+          - name: place-staged  # with orders: the remediated images are held in the transit
+            template: knock-once
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
             continueOn:  # one failed build must not withhold the images that were held
               failed: true
               error: true
@@ -147,9 +180,20 @@ spec:
                     --apply-plan /work/plans/{{inputs.parameters.name}}.approved.json
                     --stage-to {{workflow.parameters.transit}}
                     --staged-out /work/staged/{{inputs.parameters.name}}.json
+                    --applied-out /work/applied/{{inputs.parameters.name}}.json
+        - - name: record-applied  # the source → placed link, and the orders knock withheld
+            template: uske
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{inputs.parameters.path}} --results /results
+                    --applied /work/applied/{{inputs.parameters.name}}.json
+                    --run "{{workflow.name}}"
         - - name: second-gate
             template: staged
-            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
             arguments:
               parameters:
                 - {name: name, value: "{{inputs.parameters.name}}"}
@@ -157,7 +201,9 @@ spec:
                 - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
         - - name: place-failed  # the failure stays visible once everything held has been handled
             template: fail
-            when: "{{steps.place.status}} == Failed || {{steps.place.status}} == Error"
+            when: >-
+              {{steps.place.status}} == Failed || {{steps.place.status}} == Error ||
+              {{steps.place-staged.status}} == Failed || {{steps.place-staged.status}} == Error
 
     - name: evaluate
       inputs:
@@ -173,6 +219,8 @@ spec:
           - {name: source-ref, value: ""}
           - {name: source-digest, value: ""}
           - {name: lines, value: lines}
+          - {name: track, value: ""}  # first gate: the regime whose repairable rules apply
+          - {name: epoch, value: ""}  # held image: the remediation order it was built under
       steps:
         - - name: regis
             template: regis-analyze
@@ -196,6 +244,8 @@ spec:
                     --regis-exit {{steps.regis.exitCode}}
                     --source-ref "{{inputs.parameters.source-ref}}"
                     --source-digest "{{inputs.parameters.source-digest}}"
+                    --track "{{inputs.parameters.track}}"
+                    --epoch "{{inputs.parameters.epoch}}"
                     --run "{{workflow.name}}"
                 - {name: out, value: "/work/{{inputs.parameters.lines}}/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
                 - {name: html, value: "/work/reports/{{inputs.parameters.key}}/report.html"}
@@ -291,7 +341,7 @@ spec:
         image: knock
         command: [sh, -c]  # the executor needs a command: it does not read an image's entrypoint
         # --plan-out does not create its parent directory
-        args: ["mkdir -p /work/plans /work/staged && knock {{inputs.parameters.args}}"]
+        args: ["mkdir -p /work/plans /work/staged /work/applied && knock {{inputs.parameters.args}}"]
         envFrom:
           - secretRef: {name: uske-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
         volumeMounts:
@@ -322,6 +372,7 @@ spec:
                 - {name: key, value: "{{item.key}}"}
                 - {name: source-ref, value: "{{item.sourceRef}}"}
                 - {name: source-digest, value: "{{item.source}}"}
+                - {name: epoch, value: "{{item.epoch}}"}
                 - {name: lines, value: staged-lines}
         - - name: record
             template: uske
@@ -357,7 +408,7 @@ spec:
       container:
         image: knock
         command: [sh, -c]
-        args: ["mkdir -p /work/plans /work/staged && knock {{inputs.parameters.args}}"]
+        args: ["mkdir -p /work/plans /work/staged /work/applied && knock {{inputs.parameters.args}}"]
         envFrom:
           - secretRef: {name: uske-knock}
         volumeMounts:
