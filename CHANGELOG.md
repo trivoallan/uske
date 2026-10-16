@@ -1,0 +1,25 @@
+# Changelog
+
+## 0.1.0 (2026-10-16)
+
+
+### Features
+
+* adopter le socle commun ([#17](https://github.com/trivoallan/uske/issues/17)) ([09649d6](https://github.com/trivoallan/uske/commit/09649d6318f2d291b4ce3895a8ed4abda083c361))
+* le screening fait juger ce que knock reconstruit avant de le promouvoir ([#13](https://github.com/trivoallan/uske/issues/13)) ([9488526](https://github.com/trivoallan/uske/commit/9488526f23053403b1d113635e4f0df76699f31a))
+* une source à réparer passe par le transit, sa sortie est jugée avant d'être promue ([#11](https://github.com/trivoallan/uske/issues/11)) ([1531d8b](https://github.com/trivoallan/uske/commit/1531d8b621842aed057a79e0a9a7cdaa5c09b27e))
+* uske beats time between regis and knock, and records ([bb28090](https://github.com/trivoallan/uske/commit/bb28090d3db29d648b1746fb43d6cb5364c90338))
+
+
+### Bug Fixes
+
+* aligner le playbook figé sur la lecture corrigée de cve-fixable ([#10](https://github.com/trivoallan/uske/issues/10)) ([5723d6a](https://github.com/trivoallan/uske/commit/5723d6a871464ad4684815902599b1e6e0226ecb))
+* aligner les playbooks figés sur la liste de licences du dossier ([#8](https://github.com/trivoallan/uske/issues/8)) ([dc18bf1](https://github.com/trivoallan/uske/commit/dc18bf14644434d3e8ec30f788faa23077c80ffa))
+
+
+### Documentation
+
+* archiver issue-transformation ([#14](https://github.com/trivoallan/uske/issues/14)) ([27d2020](https://github.com/trivoallan/uske/commit/27d20200d7f1383a8e3e1bfeaf3294de9e22b1bd))
+* écrire les contraintes et nommer les écarts ouverts ([#4](https://github.com/trivoallan/uske/issues/4)) ([35529a6](https://github.com/trivoallan/uske/commit/35529a61b7fc98fd8875a2f0eb2af003fad3b289))
+* faire entrer le dépôt dans la méthode ([#3](https://github.com/trivoallan/uske/issues/3)) ([073e771](https://github.com/trivoallan/uske/commit/073e7714878cbe5912f19ba96f66d6c74a0ca333))
+* proposer l'issue « transformation requise », par le transit de knock ([#9](https://github.com/trivoallan/uske/issues/9)) ([4dd1cb9](https://github.com/trivoallan/uske/commit/4dd1cb94ba348ada912989d8e590dfe128b5a24f))
