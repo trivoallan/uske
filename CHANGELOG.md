@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/trivoallan/uske/compare/v0.7.0...v0.8.0) (2026-10-16)
+
+
+### Features
+
+* lier la source au digest promu dans le journal ([#40](https://github.com/trivoallan/uske/issues/40)) ([2970b30](https://github.com/trivoallan/uske/commit/2970b30843711e12f74fe2ef18e36124e8adbd87))
+
 ## [0.7.0](https://github.com/trivoallan/uske/compare/v0.6.0...v0.7.0) (2026-10-16)
 
 
