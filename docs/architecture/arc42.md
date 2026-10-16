@@ -15,9 +15,10 @@ contributors. See <https://arc42.org>.
 
 # Introduction and Goals
 
-> État de ce document au 2026-09-20 : les sections *Introduction and Goals*, *Architecture
-> Constraints* et *Architecture Decisions* sont rédigées. Les neuf autres portent encore le texte
-> du gabarit : elles s'écrivent quand un change déplace ce qu'elles décrivent.
+> État de ce document au 2026-10-17 : les sections *Introduction and Goals*, *Architecture
+> Constraints*, *Context and Scope*, *Solution Strategy*, *Building Block View* et *Architecture
+> Decisions* sont rédigées. Les six autres portent encore le texte du gabarit : elles s'écrivent
+> quand un change déplace ce qu'elles décrivent.
 
 ## Requirements Overview
 
@@ -126,94 +127,135 @@ qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc.
 
 # Context and Scope
 
+> Niveau LEAN : une table par contexte, sans diagramme. La frontière tient en une phrase —
+> `uske` et son journal sont dedans, tout ce qu'il appelle est dehors — et une table la dit sans
+> outil de rendu, ce que [`SDR-0008`](../adr/SDR-0008-documentation.md) (`tool: aucun`) demande.
+> Les `IF-nn` sont ceux de ce document : un `IF-nn` cité dans le code vient du dossier de
+> référence, et ne désigne pas la même interface.
+
 ## Business Context
 
-**\<Diagram or Table\>**
+`uske` est **au milieu et ne tient rien** : chaque partenaire ci-dessous juge, place, recense
+ou suit, et `uske` ne fait que leur passer ce que l'autre a produit. La seule chose qu'il
+possède est le **journal des résultats** — c'est pourquoi il est dedans, et non un partenaire.
 
-**\<optionally: Explanation of external domain interfaces\>**
+| ID | Partenaire | Ce qui entre dans `uske` | Ce qui sort de `uske` |
+|----|------------|--------------------------|-----------------------|
+| IF-01 | **Planificateur** | Le déclenchement d'un screening | Une issue : réussi (refus et non-concluants compris) ou échec technique, à rejouer |
+| IF-02 | **Dépôt des politiques et des jeux de règles** | Les politiques actives et leur régime ; les jeux de règles | rien — lu, jamais écrit |
+| IF-03 | **Placeur** (`knock`) | Son plan ; ce qu'il a retenu en transit ; ce qu'il a placé | Le plan moins les opérations refusées ; la liste à promouvoir |
+| IF-04 | **Juge** (`regis`) | Un verdict et son rapport, par empreinte | Une empreinte et le jeu de règles que le régime appelle |
+| IF-05 | **Registre** | Ce qui y est | rien — lu, jamais écrit ; `uske` n'y place ni n'en retire rien |
+| IF-06 | **Suivi des vulnérabilités** | Ce qu'il suit déjà | Les inventaires signés par le placeur ; le retrait de ce qui a quitté le registre |
+| IF-07 | **Responsable plateforme** | Le rejeu d'un screening ; une ligne de réouverture ajoutée au journal | La chronologie des décisions d'une image |
+| IF-08 | **Équipe applicative, auditeur** | Une image, ou un état et une période | Les décisions, le jeu de règles et la raison de chacune — en lecture seule |
+| IF-09 | **Oracle d'usage** — la commande que la rétention de la maison lance déjà | La dernière fois qu'une image a servi, ou rien | Les seules images suspectes de contournement, une par une |
+
+**Hors frontière, même si on les croit dedans :**
+
+- **Le transit.** `uske` le nomme au placeur, mais n'y lit ni n'y écrit : le placeur y retient,
+  le juge y lit. Le fermer aux consommateurs est le travail du registre.
+- **La signature et l'attestation** : c'est le placeur qui signe ; `uske` vérifie une signature
+  avant d'envoyer un inventaire (IF-06), il n'en produit aucune.
+- **Les règles de jugement** : elles sont dans les jeux de règles (IF-02) et chez le juge. La
+  seule table que `uske` tient est celle qui associe un régime à un jeu de règles.
+
+Le reste du hors-périmètre — colle générique, interface graphique — est fixé en *Business
+Context* de la première section.
 
 ## Technical Context
 
-**\<Diagram or Table\>**
+Chaque interface métier a un seul canal. **`uske` n'appelle ni `regis` ni `knock`** : chacun
+tourne dans sa propre image, à sa propre étape du workflow, et les étapes se passent des fichiers
+sur le volume `/work` du screening (*Architecture Constraints*). `uske` ne parle HTTP qu'aux deux
+API qu'il connaît par leur nom.
 
-**\<optionally: Explanation of technical interfaces\>**
-
-**\<Mapping Input/Output to Channels\>**
+| ID | Canal | Format | Authentification |
+|----|-------|--------|------------------|
+| IF-01 | Argo Workflows : un `CronWorkflow` enchaîne les sous-commandes de `uske` ([`deploy/base`](../../deploy/base)) | Arguments en ligne de commande, JSON sur la sortie standard ; code de sortie 0 (issue métier) ou 1 (échec technique, qu'Argo rejoue) | Le compte de service du `CronWorkflow` |
+| IF-02 | `git` : le dépôt est extrait à chaque screening, à l'étape `checkout` | YAML (politiques, jeux de règles) | Celle du dépôt ; nommé par le paramètre `repository` de l'overlay |
+| IF-03 | Étapes Argo à part, image `knock` : `reconcile --plan-out`, `--apply-plan`, `--stage-to`, `promote` ; fichiers sur `/work` | JSON (plan, audit) | Les identifiants de registre de `knock` (`KNOCK_REGISTRIES`) |
+| IF-04 | Étape Argo à part, image `regis` : `regis analyze` ; son code de sortie est passé à `uske classify` (`--regis-exit`) | JSON (rapport), sur `/work` | Les identifiants de registre de `regis`, sur l'hôte de la destination |
+| IF-05 | HTTP, API Harbor `/api/v2.0` (`uske census`) | JSON | Basique : `HARBOR_URL`, `HARBOR_USER`, `HARBOR_PASSWORD` |
+| IF-06 | HTTP, API Dependency-Track `/api` (`uske dt-plan`, `dt-publish`, `dt-retire`) | JSON ; inventaires CycloneDX | Clé d'API : `DT_URL`, `DT_API_KEY` |
+| IF-07 | `kubectl` : un pod jetable qui monte le volume `uske-results` (README, *Why was an image not placed?*) | Une ligne JSON ajoutée au fichier de résultats ; Markdown en sortie de `uske decisions` | Les droits Kubernetes de la personne sur le namespace |
+| IF-08 | Le même pod, volume monté en lecture seule | Markdown (chronologie Mermaid et tableau) | Idem |
+| IF-09 | Processus enfant de `uske census` : la commande nommée par `KNOCK_USAGE_ORACLE_CMD` | JSON sur l'entrée standard ; `{"last_seen": …}` en sortie, code 0 pour répondre | Celle de la commande |
 
 # Solution Strategy
 
+> Niveau LEAN : ce qui a été choisi et le motif en une ligne. Le pourquoi complet est dans
+> l'ADR nommé ; une ligne sans ADR est une décision qui n'en a pas encore.
+
+**Un enchaîneur de commandes qui échoue fermé.** Chaque étape d'un screening est une
+sous-commande courte de `uske` — elle lit des fichiers, appelle un outil, écrit du JSON — et
+c'est le planificateur qui les enchaîne. `uske` ne garde aucun état en mémoire d'une étape à
+l'autre : ce qui passe d'une étape à la suivante est un fichier, et ce qui reste après le
+screening est une ligne du journal. Tout ce qui n'est pas un verdict lisible de placement direct
+se lit comme un refus.
+
+## Choix techniques
+
+| Sujet | Choix | Motif | Où |
+|-------|-------|-------|----|
+| Langage | Python ≥ 3.12 | L'un des trois que la méthode recommande ; celui de `regis` et `knock`, donc un seul outillage pour les trois dépôts | [`SDR-0004`](../adr/SDR-0004-languages.md) |
+| Enchaînement | Argo Workflows : un `CronWorkflow`, une sous-commande par étape | Le rejeu, les reprises et la trace de chaque étape viennent de l'outil, pas de `uske` | **aucun ADR** — `DEBT-07` |
+| Intégration | `regis` et `knock` à leurs propres étapes du workflow, par fichiers ; Harbor et Dependency-Track par HTTP, en bibliothèque standard | Ne partager ni code ni image avec les outils enchaînés ; une seule dépendance d'exécution (`pyyaml`) | *Architecture Constraints* |
+| Persistance | Un fichier JSON Lines par politique, en ajout seul, sur un volume | Un fichier se lit, se copie et se conteste sans serveur ; l'ajout seul se vérifie dans son historique | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md) ; le support lui-même : **aucun ADR** — `DEBT-08` |
+| Structure du code | Hexagonale : le domaine sans entrée-sortie | Un agent modifie et teste une règle sans environnement qui tourne | [`SDR-0003`](../adr/SDR-0003-architecture.md) — non tenu, `DEBT-01` |
+| Validation | `pydantic` aux frontières, JSON Schema pour les fichiers | Un champ absent devient une erreur nommée, pas un défaut silencieux | [`SDR-0005`](../adr/SDR-0005-validation.md) — non tenu, `DEBT-02` |
+
+## Approche par objectif qualité
+
+| Objectif | Mécanisme principal | Où |
+|----------|---------------------|----|
+| 1. **Sûreté** `#safe` | **Échec fermé** : un rapport absent ou illisible devient `inconclusive` (`outcomes.py`, D-23 du dossier de référence). N'est rendu au placeur que le placement direct, et la transformation requise quand le placeur dit qu'il reconstruira. Le placeur n'applique une opération que si son empreinte source n'a pas changé depuis le plan (`gate.py`, D-30). Ce qu'il reconstruit passe une **seconde porte**, depuis un transit obligatoire. | `SDR-0016` ; *Runtime View*, à écrire |
+| 2. **Contestabilité** `#secure` | **Journal en ajout seul, qui n'avance que vers l'avant** : une ligne plus ancienne que la dernière du même digest n'est pas écrite. Chaque ligne porte son état, son jeu de règles, sa raison et son screening (`run`) ; `uske decisions` les rend lisibles. | `SDR-0016`, `SDR-0018` |
+| 3. **Opérabilité** `#operable` | **Des étapes séparées et rejouables** : JSON sur la sortie, code de sortie 0 pour toute issue métier et 1 pour un échec technique, qu'Argo rejoue. Le journal à sens unique rend un rejeu sans effet sur ce qui est déjà écrit ; une image retenue sans verdict est retentée trois fois au plus. | *Runtime View*, *Deployment View*, à écrire |
+| 4. **Minceur** `#flexible` | **Rien à juger, rien à placer** : la seule table métier est celle qui associe un régime à un jeu de règles (`playbooks.py`). Les autres outils ne sont connus que par leur ligne de commande ou leur API. | *Architecture Constraints* |
+
+**La Sûreté coûte déjà de la Minceur, et c'est voulu** : `gate.py` compte lui-même les
+tentatives et clôt une source dont la reconstruction a été refusée, ce qu'un `uske` réduit à un
+simple enchaînement ne ferait pas. Le rang des objectifs le permet ; la ligne 4 de *Quality Goals* l'avait annoncé.
+
 # Building Block View
+
+> Niveau LEAN : le niveau 1 seul, en table. Un bloc est un groupe de modules de `uske/`, ou le
+> workflow de `deploy/base` ; aucun ne descend au fichier près plus qu'il ne le faut — le paquet
+> compte dix modules à plat, et quatre blocs n'en ont qu'un.
 
 ## Whitebox Overall System
 
-***\<Overview Diagram\>***
+**Deux blocs au centre, sans entrée-sortie, et des adaptateurs autour.** *Issues* et *Porte*
+décident ; tout le reste lit, écrit ou parle à un partenaire. C'est la forme que vise
+[`SDR-0003`](../adr/SDR-0003-architecture.md), à moitié atteinte : les deux sont déjà purs, mais
+rien dans l'arborescence ne sépare le domaine des adaptateurs (`DEBT-01`).
 
-Motivation  
-*\<text explanation\>*
+| Bloc | Responsabilité | Source | Dépend de | Interfaces | Entrées-sorties |
+|------|----------------|--------|-----------|------------|-----------------|
+| **Workflow** | Enchaîner les étapes d'un screening : extraire le dépôt, lancer `knock`, `regis` et les sous-commandes de `uske`, chacun dans son image, et leur passer des fichiers sur `/work` | `deploy/base/` | toutes les sous-commandes, par leur ligne de commande | IF-01, IF-02, IF-03, IF-04 | oui — c'est sa raison d'être |
+| **Sous-commandes** | Une sous-commande par étape : lire les fichiers et l'environnement, appeler le bloc qui décide, écrire du JSON, et traduire l'issue en code de sortie (0 métier, 1 technique) | `uske/cli.py` | tous les blocs ci-dessous | IF-01, IF-07, IF-08 | oui |
+| **Issues** | Ramener un rapport du juge à l'une des quatre issues, en échouant fermé | `uske/outcomes.py` | — | IF-04, par le rapport que lui passent les sous-commandes | **non** |
+| **Porte** | Rendre le plan moins les refus ; compter les tentatives d'une reconstruction et clore une source refusée | `uske/gate.py` | Issues, Politiques, Journal (les derniers états, déjà lus) | IF-03, par le plan que lui passent les sous-commandes | **non** |
+| **Politiques** | Lire les politiques ; associer un régime à un jeu de règles — la seule table métier de `uske` | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | lecture seule |
+| **Journal** | Écrire une ligne par décision, en ajout seul et vers l'avant ; relire le journal pour une personne | `uske/results.py`, `uske/decisions.py` | Issues | IF-07, IF-08 | oui |
+| **Recensement** | Compter le contournement : ce qui est au registre, moins ce qui est passé par la porte, puis demander l'usage des seuls suspects | `uske/census.py` | — | IF-05, IF-09 | oui |
+| **Synchronisation du suivi** | Envoyer au suivi des vulnérabilités les inventaires signés, après en avoir vérifié la signature ; retirer ce qui a quitté le registre | `uske/dtsync.py` | Politiques | IF-06 | oui |
 
-Contained Building Blocks  
-*\<Description of contained building block (black boxes)\>*
+**Aucune dépendance circulaire.** *Issues*, *Politiques* et *Recensement* n'importent rien de
+`uske` ; le *Journal* ne dépend que d'*Issues*, et la *Porte* de trois blocs qui ne dépendent pas
+d'elle. *Issues* est un bloc à part pour cette raison : rangé avec la *Porte*,
+il faisait un cycle — la *Porte* lit le *Journal*, et le *Journal* écrit des issues.
 
-Important Interfaces  
-*\<Description of important interfaces\>*
+**Le Journal appartient à `uske`, et c'est le seul bloc à garder un état** d'un screening à
+l'autre. Tout le reste se recalcule : *Issues* et la *Porte* d'un rapport et d'un plan, le Recensement et la
+Synchronisation du registre lui-même.
 
-### \<Name black box 1\>
-
-*\<Purpose/Responsibility\>*
-
-*\<Interface(s)\>*
-
-*\<(Optional) Quality/Performance Characteristics\>*
-
-*\<(Optional) Directory/File Location\>*
-
-*\<(Optional) Fulfilled Requirements\>*
-
-*\<(optional) Open Issues/Problems/Risks\>*
-
-### \<Name black box 2\>
-
-*\<black box template\>*
-
-### \<Name black box n\>
-
-*\<black box template\>*
-
-### \<Name interface 1\>
-
-…​
-
-### \<Name interface m\>
-
-## Level 2
-
-### White Box *\<building block 1\>*
-
-*\<white box template\>*
-
-### White Box *\<building block 2\>*
-
-*\<white box template\>*
-
-…​
-
-### White Box *\<building block m\>*
-
-*\<white box template\>*
-
-## Level 3
-
-### White Box \<\_building block x.1\_\>
-
-*\<white box template\>*
-
-### White Box \<\_building block x.2\_\>
-
-*\<white box template\>*
-
-### White Box \<\_building block y.1\_\>
-
-*\<white box template\>*
+**Ce que la table dit de `DEBT-01`.** La colonne *Entrées-sorties* trace la frontière que
+l'hexagone demande : seules *Issues*, la *Porte* et la table des régimes en sont déjà du bon côté. Le
+Journal et les Politiques mêlent une règle (n'écrire que vers l'avant, lire un régime) et la
+lecture d'un fichier ; le Recensement et la Synchronisation mêlent une règle (soustraire, planifier)
+et un appel HTTP. Rapprocher le code, c'est séparer ces deux moitiés dans chacun des quatre.
 
 # Runtime View
 
@@ -286,10 +328,10 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Treize ADR à ce jour, tous statués, dont deux dépassés par `SDR-0017` ; onze sont donc en
+Quatorze ADR à ce jour, tous statués, dont deux dépassés par `SDR-0017` ; douze sont donc en
 vigueur. Onze sont hérités de la méthode — voir *Architecture Constraints* : dix questions
-qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment on y répond. Deux sont
-propres à `uske`, `SDR-0016` et `SDR-0017`. Une nouvelle décision s'écrit
+qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment on y répond. Trois sont
+propres à `uske` : `SDR-0016`, `SDR-0017` et `SDR-0018`. Une nouvelle décision s'écrit
 quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
 ou contraint les changes suivants.
 
@@ -330,14 +372,16 @@ dépasse `SDR-0006` et `SDR-0010`.
 | [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | oui — release-please branché le 2026-10-16 |
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
 | [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
+| [SDR-0018](../adr/SDR-0018-journal-run.md) | Une ligne du journal nomme le criblage qui l'a écrite (clé `run`) | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui — `classify --run` reçoit `{{workflow.name}}` du `WorkflowTemplate` |
 
 ## Écarts ouverts
 
 Cinq décisions disaient où le dépôt allait, pas où il était ; chacune écrit son écart sous son
 titre *Consequences*, et aucun n'a été réglé par le change qui a statué. `SDR-0017` en a refermé
 trois le 2026-10-16 (`DEBT-03`, `DEBT-04` et `DEBT-05`) ; `DEBT-01` et `DEBT-02` restent ouverts.
-Un sixième ne vient d'aucune décision — il a été relevé en revue, et reste ouvert. Trois écarts
-sont donc ouverts à ce jour. **Tous portent un identifiant dès maintenant, avant que
+Un sixième ne vient d'aucune décision — il a été relevé en revue, et reste ouvert. Deux autres,
+relevés en rédigeant *Solution Strategy*, sont l'inverse : des décisions prises dans le code et
+le déploiement, que rien n'a statuées. Cinq écarts sont donc ouverts à ce jour. **Tous portent un identifiant dès maintenant, avant que
 *Risks and Technical Debts* existe** : un écart sans nom ne se referme pas, il s'oublie. Ces
 identifiants sont stables — un écart réglé se marque *Closed* et garde son numéro, il ne
 disparaît pas de la table.
@@ -350,6 +394,8 @@ disparaît pas de la table.
 | DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | [`SDR-0007`](../adr/SDR-0007-tests.md) | *Closed* 2026-10-16. Un instrument branché, et une première mesure prise |
 | DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. L'outil de release installé — il dépend de DEBT-03 |
 | DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | aucune — relevé en revue le 2026-09-20 | Le contrôle ajouté à la cible `lint` du `Makefile`, ou dit manuel dans un ADR qui dépasse [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
+| DEBT-07 | Argo Workflows enchaîne les étapes, et rien ne dit pourquoi : c'est lui qui rend un rejeu possible (objectif d'Opérabilité), et le quitter réécrirait tout `deploy/` | aucune — relevé le 2026-10-17 en écrivant *Solution Strategy* | Un ADR qui statue le planificateur, options écartées comprises |
+| DEBT-08 | Le journal est un fichier JSON Lines par politique sur un volume, et rien ne dit pourquoi : `SDR-0016` fixe son vocabulaire, pas son support ; l'objectif de Contestabilité repose sur ce support | aucune — relevé le 2026-10-17 en écrivant *Solution Strategy* | Un ADR qui statue le support du journal, options écartées comprises |
 
 **`DEBT-06` n'a pas la même provenance que les cinq autres, et c'est le plus intéressant.** Les
 cinq premiers sont déclarés par la décision qui les crée : quelqu'un a statué, et a écrit ce que
@@ -363,9 +409,13 @@ des deux automatisée. C'est le seul motif qui s'est répété dans cette table,
 qu'il faut surveiller — un dépôt qui décide des contrôles sans les brancher finit par croire ses décisions
 tenues.
 
-**Ces six lignes sont la matière de *Risks and Technical Debts***, qui les reprendra telles
+**`DEBT-07` et `DEBT-08` sont le cas inverse de `DEBT-06`** : là, une vérification décidée
+sans être branchée ; ici, une décision branchée sans être décidée. Les deux trompent de la même
+façon — le journal des décisions ne dit pas ce que le dépôt fait.
+
+**Ces huit lignes sont la matière de *Risks and Technical Debts***, qui les reprendra telles
 quelles avec leur probabilité et leur impact quand un change l'écrira. D'ici là, elles vivent
-ici : c'est le seul endroit du dépôt où les six se lisent ensemble.
+ici : c'est le seul endroit du dépôt où les huit se lisent ensemble.
 
 **La colonne « Le dépôt s'y conforme ? » du journal ci-dessus dit la même chose en prose.** Le
 jour où *Risks and Technical Debts* existe, c'est vers ces `DEBT-nn` qu'elle renverra, au lieu
