@@ -386,7 +386,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 4. Le rendu texte
 
-- [ ] 4.1 Créer `tests/golden/decisions-redis-728.txt`, sans saut de ligne final :
+- [x] 4.1 Créer `tests/golden/decisions-redis-728.txt`, sans saut de ligne final :
 
   ~~~text
   == a-4711-redis-7 · docker.io/library/redis:7.2.8 · sha256:5b3e8f1c07a4d296e8b1f5c3a907d24e6b8f1a03c5d79e2b4f6a8c1d3e5079b2
@@ -398,7 +398,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
       arbitration: {"by": "cao-data", "date": "2026-10-09", "reason": "Licence acceptée par le service juridique pour un usage interne."}
   ~~~
 
-- [ ] 4.2 Ajouter à `tests/test_decisions.py` :
+- [x] 4.2 Ajouter à `tests/test_decisions.py` :
 
   ~~~python
   class Text(Journal):
@@ -430,9 +430,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
           self.assertIn(f"    source: {S}\n    rebuilt: {H}", text)
   ~~~
 
-- [ ] 4.3 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les quatre
+- [x] 4.3 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les quatre
   tests de `Text` échouent sur `AttributeError: … has no attribute 'render_text'`.
-- [ ] 4.4 Ajouter à la fin de `uske/decisions.py` :
+- [x] 4.4 Ajouter à la fin de `uske/decisions.py` :
 
   ~~~python
   def groups(lines: list[dict]) -> dict[tuple[str, str], list[dict]]:
@@ -479,9 +479,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
       return "\n\n".join(blocks)
   ~~~
 
-- [ ] 4.5 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
+- [x] 4.5 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `17 passed`.
-- [ ] 4.6 Commit :
+- [x] 4.6 Commit :
 
   ~~~bash
   git add uske/decisions.py tests/test_decisions.py tests/golden/decisions-redis-728.txt

@@ -161,3 +161,39 @@ class Select(Journal):
         )
         lines = decisions.load(self.dir, "late")[0]
         self.assertEqual([l.get("backdated") for l in lines], [None, True])
+
+
+class Text(Journal):
+    def test_golden(self):
+        found = decisions.select(decisions.load(self.dir)[0], image=R728)
+        expected = (GOLDEN / "decisions-redis-728.txt").read_text().rstrip("\n")
+        self.assertEqual(decisions.render_text(found), expected)
+
+    def test_one_group_per_policy_and_digest(self):
+        self.write(
+            "b.jsonl",
+            line(ref="r:1", state="placed-by-exception", arbitration={"by": "x"}),
+        )
+        self.write("a.jsonl", line(ref="r:1"))
+        text = decisions.render_text(decisions.load(self.dir)[0])
+        self.assertIn(f"== a · r:1 · {D1}", text)
+        self.assertIn(f"== b · r:1 · {D1}", text)
+
+    def test_marks_and_missing_reason(self):
+        self.write(
+            "m.jsonl",
+            line(ts="2026-10-05T00:00:00Z", state="direct-placement"),
+            line(
+                ts="2026-10-02T00:00:00Z", state="inconclusive", reason="uske/reopened"
+            ),
+        )
+        text = decisions.render_text(decisions.load(self.dir, "m")[0])
+        self.assertIn("2026-10-05T00:00:00Z  direct-placement  —\n", text)
+        self.assertIn(
+            "inconclusive  uske/reopened  [antidatée]  [arbitrage absent]", text
+        )
+
+    def test_source_and_rebuilt_are_shown(self):
+        self.write("s.jsonl", line(source=S, rebuilt=H))
+        text = decisions.render_text(decisions.load(self.dir, "s")[0])
+        self.assertIn(f"    source: {S}\n    rebuilt: {H}", text)

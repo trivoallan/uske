@@ -134,3 +134,52 @@ def select(
 def suggest(lines: list[dict], image: str) -> list[str]:
     """Full references in the journal that end with `/<image>`: a hint, never a match."""
     return sorted({l["ref"] for l in lines if l.get("ref", "").endswith("/" + image)})
+
+
+def groups(lines: list[dict]) -> dict[tuple[str, str], list[dict]]:
+    """(policy, digest) -> its lines, groups in the order of their first line."""
+    out: dict[tuple[str, str], list[dict]] = {}
+    for line in lines:
+        out.setdefault((line["policy"], line["digest"]), []).append(line)
+    return out
+
+
+def unsigned(line: dict) -> bool:
+    """A decision uske did not take (another state, or a reopening), with nobody named for it."""
+    by_hand = line["state"] not in STATES or line.get("reason") == "uske/reopened"
+    return by_hand and "arbitration" not in line
+
+
+def marks(line: dict) -> list[str]:
+    return [
+        mark
+        for mark, on in (
+            ("antidatée", line.get("backdated")),
+            ("arbitrage absent", unsigned(line)),
+        )
+        if on
+    ]
+
+
+def extras(line: dict) -> list[str]:
+    """`source`, `rebuilt` and every key uske does not write, as `key: value`, in file order."""
+    return [
+        f"{k}: {v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)}"
+        for k, v in line.items()
+        if k in ("source", "rebuilt") or (k not in WRITTEN and k not in ADDED)
+    ]
+
+
+def render_text(lines: list[dict]) -> str:
+    blocks = []
+    for (policy, digest), group in groups(lines).items():
+        out = [f"== {policy} · {group[0].get('ref', '—')} · {digest}"]
+        for line in group:
+            head = f"{line['ts']}  {line['state']}  {line.get('reason') or '—'}"
+            out.append(head + "".join(f"  [{m}]" for m in marks(line)))
+            out.extend(
+                f"    {k}: {line[k]}" for k in ("ruleset", "report") if k in line
+            )
+            out.extend(f"    {e}" for e in extras(line))
+        blocks.append("\n".join(out))
+    return "\n\n".join(blocks)
