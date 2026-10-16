@@ -288,3 +288,82 @@ class Strict(Journal):
     def test_a_raw_carriage_return_becomes_a_space(self):
         self.assertEqual("a\rb".translate(decisions.MERMAID), "a b")
         self.assertEqual(decisions._cell("a\rb"), "a b")
+
+
+class Command(Journal):
+    def test_json_by_default_with_the_policy(self):
+        code, out, err = self.call(R728)
+        found = json.loads(out)
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            [l["state"] for l in found], ["quarantine", "placed-by-exception"]
+        )
+        self.assertEqual({l["policy"] for l in found}, {"a-4711-redis-7"})
+        self.assertIn("a-4711-redis-7.jsonl: 5 lines", err)
+
+    def test_text_and_md(self):
+        for fmt, golden in (
+            ("text", "decisions-redis-728.txt"),
+            ("md", "decisions-redis-728.md"),
+        ):
+            with self.subTest(fmt):
+                code, out, _ = self.call(R728, "--format", fmt)
+                self.assertEqual(
+                    (code, out), (0, (GOLDEN / golden).read_text().rstrip("\n") + "\n")
+                )
+
+    def test_one_policy_by_its_name(self):
+        self.write("other.jsonl", line())
+        _code, out, _ = self.call("--policy-name", "a-4711-redis-7")
+        self.assertEqual({l["policy"] for l in json.loads(out)}, {"a-4711-redis-7"})
+
+    def test_an_unknown_policy_name_lists_the_present_ones(self):
+        code, out, err = self.call("--policy-name", "redis-7")
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("present: a-4711-redis-7", err)
+
+    def test_the_exceptions_of_a_period(self):
+        _code, out, _ = self.call(
+            "--state", "placed-by-exception,abandoned", "--since", "2026-09-21"
+        )
+        self.assertEqual(
+            [l["state"] for l in json.loads(out)], ["abandoned", "placed-by-exception"]
+        )
+
+    def test_nothing_matches(self):
+        self.assertEqual(self.call("--state", "direct-placement")[:2], (0, "[]\n"))
+        code, out, _ = self.call("--state", "direct-placement", "--format", "text")
+        self.assertEqual((code, out), (0, ""))
+
+    def test_a_short_reference_gets_the_full_one_on_stderr(self):
+        code, out, err = self.call("redis:7.2.8")
+        self.assertEqual((code, out), (0, "[]\n"))
+        self.assertIn(f"did you mean: {R728}", err)
+
+    def test_a_reference_nothing_extends_is_reminded(self):
+        code, out, err = self.call("nginx:1.27")
+        self.assertEqual((code, out), (0, "[]\n"))
+        self.assertIn("full references", err)
+
+    def test_a_bad_date_is_a_usage_error_that_says_the_form(self):
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as caught, contextlib.redirect_stderr(err):
+            cli.main(["decisions", "--results", str(self.dir), "--since", "21/09/2026"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("expected YYYY-MM-DD", err.getvalue())
+
+    def test_unreadable_or_empty_is_a_technical_failure_with_nothing_on_stdout(self):
+        self.write("bad.jsonl", line(), line(), "{")
+        code, out, err = self.call()
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("bad.jsonl:3: ", err)
+        empty = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, empty)
+        self.dir = empty
+        self.assertEqual(self.call()[0], 1)
+
+    def test_the_journal_is_left_untouched(self):
+        path = self.dir / "a-4711-redis-7.jsonl"
+        before = (path.read_bytes(), path.stat().st_mtime_ns)
+        self.call("--format", "md")
+        self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)

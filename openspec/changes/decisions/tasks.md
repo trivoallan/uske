@@ -620,7 +620,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 - [x] 5.6 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `20 passed`.
-- [x] 5.8 Corrections de revue (lecture stricte, sauts de ligne, tests) : ce commit
+- [x] 5.9 Corrections de revue (lecture stricte, sauts de ligne, tests) : 74c37b2
 - [ ] 5.7 Ouvrir `tests/golden/decisions-redis-728.md` dans l'aperçu Markdown de GitHub ou de
   l'éditeur (Mermaid activé). Attendu : une frise à deux dates, sans erreur de syntaxe Mermaid,
   puis le tableau à deux lignes.
@@ -635,7 +635,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 6. La sous-commande
 
-- [ ] 6.1 Ajouter à `tests/test_decisions.py` :
+- [x] 6.1 Ajouter à `tests/test_decisions.py` :
 
   ~~~python
   class Command(Journal):
@@ -706,9 +706,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
           self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)
   ~~~
 
-- [ ] 6.2 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les onze
+- [x] 6.2 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les onze
   tests de `Command` échouent (`invalid choice: 'decisions'`, levé comme `SystemExit: 2`).
-- [ ] 6.3 Dans `uske/cli.py`, remplacer la docstring du module par :
+- [x] 6.3 Dans `uske/cli.py`, remplacer la docstring du module par :
 
   ~~~python
   """One subcommand per workflow step, plus `decisions`, which reads the journal for a person.
@@ -719,11 +719,11 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   """
   ~~~
 
-- [ ] 6.4 Dans `uske/cli.py`, remplacer `from datetime import UTC, datetime` par
+- [x] 6.4 Dans `uske/cli.py`, remplacer `from datetime import UTC, datetime` par
   `from datetime import UTC, date, datetime` (`date` sert à l'annotation de `_day`), et ajouter
   `decisions` à l'import groupé :
   `from uske import census, decisions, dtsync, gate, outcomes, playbooks, policies, results`.
-- [ ] 6.5 Dans `uske/cli.py`, ajouter cette fonction juste avant `def parser(`:
+- [x] 6.5 Dans `uske/cli.py`, ajouter cette fonction juste avant `def parser(`:
 
   ~~~python
   def _day(text: str) -> date:
@@ -759,7 +759,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
           print(render(found))
   ~~~
 
-- [ ] 6.6 Dans `uske/cli.py`, dans `parser()`, juste avant `return p`, ajouter :
+- [x] 6.6 Dans `uske/cli.py`, dans `parser()`, juste avant `return p`, ajouter :
 
   ~~~python
       s = sub.add_parser(
@@ -780,11 +780,11 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
       s.set_defaults(run=cmd_decisions)
   ~~~
 
-- [ ] 6.7 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
+- [x] 6.7 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `31 passed`.
-- [ ] 6.8 Lancer `uv run uske decisions --help`. Attendu : l'aide liste `image`, `--results`,
+- [x] 6.8 Lancer `uv run uske decisions --help`. Attendu : l'aide liste `image`, `--results`,
   `--policy-name`, `--state`, `--since` et `--format {json,text,md}`.
-- [ ] 6.9 Commit :
+- [x] 6.9 Commit :
 
   ~~~bash
   git add uske/cli.py tests/test_decisions.py

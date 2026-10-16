@@ -1,7 +1,8 @@
-"""One subcommand per workflow step. JSON on stdout.
+"""One subcommand per workflow step, plus `decisions`, which reads the journal for a person.
 
-A business outcome is never an exit code: quarantine and inconclusive exit 0.
-Exit 1 is a technical failure (Argo retries it), exit 2 a usage error (argparse).
+JSON on stdout unless asked otherwise. A business outcome is never an exit code: quarantine and
+inconclusive exit 0. Exit 1 is a technical failure (Argo retries it), exit 2 a usage error
+(argparse).
 """
 
 from __future__ import annotations
@@ -12,12 +13,12 @@ import hashlib
 import json
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import yaml
 
-from uske import census, dtsync, gate, outcomes, playbooks, policies, results
+from uske import census, decisions, dtsync, gate, outcomes, playbooks, policies, results
 
 
 class Failure(Exception):
@@ -301,6 +302,39 @@ def cmd_dt_retire(args) -> None:
     _json({"retired": args.uuid})
 
 
+def _day(text: str) -> date:
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected YYYY-MM-DD (a UTC day), got {text!r}"
+        ) from exc
+
+
+def cmd_decisions(args) -> None:
+    try:
+        lines, read = decisions.load(Path(args.results), args.policy_name)
+    except decisions.JournalError as exc:
+        raise Failure(str(exc)) from exc
+    for entry in read:
+        print(entry, file=sys.stderr)
+    states = set(args.state.split(",")) if args.state else None
+    found = decisions.select(lines, args.image, states, args.since)
+    if args.image and not found:
+        close = decisions.suggest(lines, args.image)
+        hint = (
+            f"did you mean: {', '.join(close)}"
+            if close
+            else "the journal holds full references (docker.io/library/…) or digests"
+        )
+        print(f"no decision on {args.image}; {hint}", file=sys.stderr)
+    if args.format == "json":
+        _json(found)
+    elif found:
+        render = decisions.render_text if args.format == "text" else decisions.render_md
+        print(render(found))
+
+
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="uske", description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
@@ -432,6 +466,26 @@ def parser() -> argparse.ArgumentParser:
         "--suspects-out", help="write the suspect artifacts here, to name the teams"
     )
     s.set_defaults(run=cmd_census)
+    s = sub.add_parser(
+        "decisions",
+        help="read the journal for a person: which decisions, on which image, why",
+    )
+    s.add_argument(
+        "image", nargs="?", help="a full reference, a digest, or <repository>@sha256:…"
+    )
+    s.add_argument(
+        "--results", required=True, help="where the uske-results volume is mounted"
+    )
+    s.add_argument(
+        "--policy-name", help="a policy's metadata.name: read its journal only"
+    )
+    s.add_argument(
+        "--state",
+        help="comma-separated, any state (e.g. placed-by-exception,abandoned)",
+    )
+    s.add_argument("--since", type=_day, help="YYYY-MM-DD, a UTC day, inclusive")
+    s.add_argument("--format", choices=("json", "text", "md"), default="json")
+    s.set_defaults(run=cmd_decisions)
     return p
 
 
