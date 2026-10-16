@@ -19,9 +19,19 @@ from uske.policies import Policy
 
 # knock audit's CoverageReport, a published contract since knock 0.12.0 (additive within a version).
 AUDIT_API = ("knock.io/v1alpha1", "CoverageReport")
-AUDIT_FIELDS = ("image_ref", "digest", "covered", "signed", "sbom", "sbom_formats", "policy")
+AUDIT_FIELDS = (
+    "image_ref",
+    "digest",
+    "covered",
+    "signed",
+    "sbom",
+    "sbom_formats",
+    "policy",
+)
 SBOM_FORMAT = "cyclonedx-json"  # what Dependency-Track reads
-MANAGED_TAG = "dt-sync"  # every project dt-sync writes carries it: the only ones it may retire
+MANAGED_TAG = (
+    "dt-sync"  # every project dt-sync writes carries it: the only ones it may retire
+)
 DIGEST_GROUP, DIGEST_NAME = "oci", "digest"
 CYCLONEDX = "https://cyclonedx.org/bom"
 
@@ -36,8 +46,15 @@ class SyncError(Exception):
 def placed(audit: dict) -> list[dict]:
     """knock audit's outcomes that are stamped, signed and carry an SBOM. Another report version,
     or a missing field, fails: better no send than a wrong one."""
-    if not isinstance(audit, dict) or (audit.get("apiVersion"), audit.get("kind")) != AUDIT_API:
-        found = (audit.get("apiVersion"), audit.get("kind")) if isinstance(audit, dict) else None
+    if (
+        not isinstance(audit, dict)
+        or (audit.get("apiVersion"), audit.get("kind")) != AUDIT_API
+    ):
+        found = (
+            (audit.get("apiVersion"), audit.get("kind"))
+            if isinstance(audit, dict)
+            else None
+        )
         raise SyncError(f"knock audit: expected {AUDIT_API}, got {found}")
     outcomes = audit.get("outcomes")
     if not isinstance(outcomes, list):
@@ -48,7 +65,9 @@ def placed(audit: dict) -> list[dict]:
             continue  # an unreadable image is knock's to report, not ours to guess
         missing = [f for f in AUDIT_FIELDS if f not in outcome]
         if missing:
-            raise SyncError(f"knock audit: {outcome.get('image_ref', '?')} lacks {', '.join(missing)}")
+            raise SyncError(
+                f"knock audit: {outcome.get('image_ref', '?')} lacks {', '.join(missing)}"
+            )
         if outcome["covered"] and outcome["signed"] and outcome["sbom"]:
             fleet.append(outcome)
     return fleet
@@ -98,18 +117,26 @@ def plan(fleet: list[dict], policies: dict[str, Policy], tracked: list[dict]) ->
             continue
         policy = policies.get(image["policy"])
         if policy is None:
-            report.append({"ref": image["image_ref"], "reason": "unknown-policy", "policy": image["policy"]})
+            report.append(
+                {
+                    "ref": image["image_ref"],
+                    "reason": "unknown-policy",
+                    "policy": image["policy"],
+                }
+            )
         known = by_key.get((project, version))
         if known and known["digest"] == image["digest"] and known["active"]:
             continue
-        send.append({
-            "ref": repository,
-            "digest": image["digest"],
-            "project": project,
-            "version": version,
-            "tags": tags(image["policy"], policy),
-            "uuid": known["uuid"] if known else None,
-        })
+        send.append(
+            {
+                "ref": repository,
+                "digest": image["digest"],
+                "project": project,
+                "version": version,
+                "tags": tags(image["policy"], policy),
+                "uuid": known["uuid"] if known else None,
+            }
+        )
     retire = [
         {"uuid": t["uuid"], "project": t["project"], "version": t["version"]}
         for t in tracked
@@ -129,14 +156,23 @@ class DependencyTrack:
     def call(self, method: str, path: str, body=None, query: dict | None = None):
         url = self.api + path + ("?" + urllib.parse.urlencode(query) if query else "")
         data = json.dumps(body).encode() if body is not None else None
-        request = urllib.request.Request(url, data=data, method=method, headers={
-            "X-Api-Key": self.key, "Content-Type": "application/json", "Accept": "application/json",
-        })
+        request = urllib.request.Request(
+            url,
+            data=data,
+            method=method,
+            headers={
+                "X-Api-Key": self.key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 raw = response.read()
         except urllib.error.HTTPError as exc:
-            raise SyncError(f"Dependency-Track {method} {path}: HTTP {exc.code}") from exc
+            raise SyncError(
+                f"Dependency-Track {method} {path}: HTTP {exc.code}"
+            ) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             raise SyncError(f"Dependency-Track {method} {path}: {exc}") from exc
         return json.loads(raw) if raw else None
@@ -145,38 +181,72 @@ class DependencyTrack:
         # ponytail: one property call per version; fine for a pilot's fleet, batch if it grows
         out, page = [], 1
         while True:
-            projects = self.call("GET", f"/v1/project/tag/{MANAGED_TAG}", query={"pageNumber": page, "pageSize": 100})
+            projects = self.call(
+                "GET",
+                f"/v1/project/tag/{MANAGED_TAG}",
+                query={"pageNumber": page, "pageSize": 100},
+            )
             for p in projects or []:
                 properties = self.call("GET", f"/v1/project/{p['uuid']}/property") or []
-                digest = next((x.get("propertyValue") for x in properties
-                               if x.get("groupName") == DIGEST_GROUP and x.get("propertyName") == DIGEST_NAME), None)
-                out.append({"uuid": p["uuid"], "project": p["name"], "version": p.get("version"),
-                            "digest": digest, "active": p.get("active", True)})
+                digest = next(
+                    (
+                        x.get("propertyValue")
+                        for x in properties
+                        if x.get("groupName") == DIGEST_GROUP
+                        and x.get("propertyName") == DIGEST_NAME
+                    ),
+                    None,
+                )
+                out.append(
+                    {
+                        "uuid": p["uuid"],
+                        "project": p["name"],
+                        "version": p.get("version"),
+                        "digest": digest,
+                        "active": p.get("active", True),
+                    }
+                )
             if not projects or len(projects) < 100:
                 return out
             page += 1
 
     def publish(self, item: dict, bom: dict) -> str:
-        uploaded = self.call("PUT", "/v1/bom", {
-            "projectName": item["project"],
-            "projectVersion": item["version"],
-            "autoCreate": True,
-            "projectTags": [{"name": t} for t in item["tags"]],
-            "bom": base64.b64encode(json.dumps(bom).encode()).decode(),
-        })
+        uploaded = self.call(
+            "PUT",
+            "/v1/bom",
+            {
+                "projectName": item["project"],
+                "projectVersion": item["version"],
+                "autoCreate": True,
+                "projectTags": [{"name": t} for t in item["tags"]],
+                "bom": base64.b64encode(json.dumps(bom).encode()).decode(),
+            },
+        )
         uuid = item.get("uuid") or (uploaded or {}).get("projectUuid")
         if not uuid:
-            raise SyncError(f"{item['project']} {item['version']}: no project uuid after upload")
+            raise SyncError(
+                f"{item['project']} {item['version']}: no project uuid after upload"
+            )
         # an existing version keeps its old tags and state through a BOM upload: set them
-        self.call("PATCH", f"/v1/project/{uuid}", {"active": True, "tags": [{"name": t} for t in item["tags"]]})
-        prop = {"groupName": DIGEST_GROUP, "propertyName": DIGEST_NAME,
-                "propertyValue": item["digest"], "propertyType": "STRING"}
+        self.call(
+            "PATCH",
+            f"/v1/project/{uuid}",
+            {"active": True, "tags": [{"name": t} for t in item["tags"]]},
+        )
+        prop = {
+            "groupName": DIGEST_GROUP,
+            "propertyName": DIGEST_NAME,
+            "propertyValue": item["digest"],
+            "propertyType": "STRING",
+        }
         try:
             self.call("PUT", f"/v1/project/{uuid}/property", prop)  # create
         except SyncError as exc:
             if "HTTP 409" not in str(exc):
                 raise
-            self.call("POST", f"/v1/project/{uuid}/property", prop)  # already there: update
+            self.call(
+                "POST", f"/v1/project/{uuid}/property", prop
+            )  # already there: update
         return uuid
 
     def retire(self, uuid: str) -> None:
@@ -189,16 +259,34 @@ Runner = Callable[[list[str]], subprocess.CompletedProcess]
 
 
 def _run(argv: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(argv, capture_output=True, text=True, timeout=300)
+    return subprocess.run(
+        argv, check=False, capture_output=True, text=True, timeout=300
+    )
 
 
-def verified_bom(ref: str, key: str, registry_flags: list[str], run: Runner = _run) -> dict:
+def verified_bom(
+    ref: str, key: str, registry_flags: list[str], run: Runner = _run
+) -> dict:
     """The CycloneDX predicate knock signed for `ref` (pinned by digest). The plan only sends
     images whose audit lists a CycloneDX SBOM, so any failure here is a signal, never skipped."""
     # A key signature carries no Rekor entry: skip the tlog check, as knock's own verify does.
-    verify = run(["cosign", "verify-attestation", "--key", key, "--insecure-ignore-tlog=true",
-                  "--type", "cyclonedx", "--new-bundle-format", *registry_flags, ref])
+    verify = run(
+        [
+            "cosign",
+            "verify-attestation",
+            "--key",
+            key,
+            "--insecure-ignore-tlog=true",
+            "--type",
+            "cyclonedx",
+            "--new-bundle-format",
+            *registry_flags,
+            ref,
+        ]
+    )
     if verify.returncode != 0:
-        raise SyncError(f"{ref}: CycloneDX attestation not verified with {key}: {verify.stderr.strip()[-300:]}")
+        raise SyncError(
+            f"{ref}: CycloneDX attestation not verified with {key}: {verify.stderr.strip()[-300:]}"
+        )
     line = verify.stdout.strip().splitlines()[0]
     return json.loads(base64.b64decode(json.loads(line)["payload"]))["predicate"]

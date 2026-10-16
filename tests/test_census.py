@@ -8,8 +8,9 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 from uske import census, cli
@@ -17,12 +18,19 @@ from uske import census, cli
 D1 = "sha256:" + "1" * 64
 D2 = "sha256:" + "2" * 64
 D3 = "sha256:" + "3" * 64
-NOW = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
 
 
-def artifact(digest: str, repository: str, *, stamped: bool = False, tags=("v1",)) -> dict:
-    return {"project": repository.split("/")[0], "repository": repository, "digest": digest,
-            "tags": list(tags), "annotations": {census.STAMP_KEY: "pilot"} if stamped else {}}
+def artifact(
+    digest: str, repository: str, *, stamped: bool = False, tags=("v1",)
+) -> dict:
+    return {
+        "project": repository.split("/")[0],
+        "repository": repository,
+        "digest": digest,
+        "tags": list(tags),
+        "annotations": {census.STAMP_KEY: "pilot"} if stamped else {},
+    }
 
 
 class FakeHarbor:
@@ -42,13 +50,18 @@ class FakeHarbor:
 
 
 def raw(digest, *, stamped=False, tags=("v1",)):
-    return {"digest": digest, "tags": [{"name": t} for t in tags],
-            "annotations": {census.STAMP_KEY: "pilot"} if stamped else {}}
+    return {
+        "digest": digest,
+        "tags": [{"name": t} for t in tags],
+        "annotations": {census.STAMP_KEY: "pilot"} if stamped else {},
+    }
 
 
 class Walk(unittest.TestCase):
     def test_flattens_projects_repositories_artifacts(self):
-        harbor = FakeHarbor({"hub": {"redis": [raw(D1, stamped=True)], "nginx": [raw(D2)]}})
+        harbor = FakeHarbor(
+            {"hub": {"redis": [raw(D1, stamped=True)], "nginx": [raw(D2)]}}
+        )
         fleet = census.walk(harbor)
         self.assertEqual([a["repository"] for a in fleet], ["hub/redis", "hub/nginx"])
         self.assertEqual(fleet[0]["annotations"], {census.STAMP_KEY: "pilot"})
@@ -76,11 +89,15 @@ class Suspects(unittest.TestCase):
 
 class InService(unittest.TestCase):
     def test_splits_seen_from_unseen(self):
-        answers = {D1: {"last_seen": "2026-09-19T08:00:00Z", "detail": "cluster prod-eu"},
-                   D2: {"last_seen": None}}
+        answers = {
+            D1: {"last_seen": "2026-09-19T08:00:00Z", "detail": "cluster prod-eu"},
+            D2: {"last_seen": None},
+        }
         seen, unseen, unknown = census.in_service(
             [artifact(D1, "helios/app"), artifact(D2, "boree/old")],
-            lambda q: answers[q["digest"]], now=NOW)
+            lambda q: answers[q["digest"]],
+            now=NOW,
+        )
         self.assertEqual([a["digest"] for a in seen], [D1])
         self.assertEqual(seen[0]["detail"], "cluster prod-eu")
         self.assertEqual([a["digest"] for a in unseen], [D2])
@@ -110,17 +127,21 @@ class InService(unittest.TestCase):
 
     def test_a_failing_oracle_is_unknown_never_unseen(self):
         """The inverse of knock purge's fail-closed: silence must not shrink the count."""
+
         def ask(query):
             raise census.CensusError("boom")
 
-        seen, unseen, unknown = census.in_service([artifact(D1, "helios/app")], ask, now=NOW)
+        seen, unseen, unknown = census.in_service(
+            [artifact(D1, "helios/app")], ask, now=NOW
+        )
         self.assertEqual((seen, unseen), ([], []))
         self.assertEqual(unknown[0]["digest"], D1)
         self.assertIn("boom", unknown[0]["reason"])
 
     def test_a_malformed_timestamp_is_unknown_not_unseen(self):
         seen, unseen, unknown = census.in_service(
-            [artifact(D1, "helios/app")], lambda q: {"last_seen": "yesterday"}, now=NOW)
+            [artifact(D1, "helios/app")], lambda q: {"last_seen": "yesterday"}, now=NOW
+        )
         self.assertEqual((seen, unseen), ([], []))
         self.assertEqual(len(unknown), 1)
 
@@ -128,13 +149,18 @@ class InService(unittest.TestCase):
 class Report(unittest.TestCase):
     def test_without_an_oracle_the_in_service_question_stays_open(self):
         fleet = [artifact(D1, "hub/redis", stamped=True), artifact(D2, "helios/app")]
-        out = census.report(fleet, census.suspects(fleet), None, known_repositories={"x/y"})
+        out = census.report(
+            fleet, census.suspects(fleet), None, known_repositories={"x/y"}
+        )
         self.assertEqual(out["bypass_stored"], 1)
         self.assertIsNone(out["bypass_in_service"])
 
     def test_counts_and_bounds(self):
-        fleet = [artifact(D1, "hub/redis", stamped=True), artifact(D2, "helios/app"),
-                 artifact(D3, "boree/app")]
+        fleet = [
+            artifact(D1, "hub/redis", stamped=True),
+            artifact(D2, "helios/app"),
+            artifact(D3, "boree/app"),
+        ]
         suspect = census.suspects(fleet)
         split = ([artifact(D2, "helios/app")], [], [artifact(D3, "boree/app")])
         out = census.report(fleet, suspect, split)
@@ -153,7 +179,9 @@ class Report(unittest.TestCase):
     def test_a_fleet_with_no_stamp_at_all_is_called_out(self):
         """Harbor not returning annotations would read as a 100 % bypass: say so, loudly."""
         fleet = [artifact(D1, "hub/redis"), artifact(D2, "hub/nginx")]
-        out = census.report(fleet, census.suspects(fleet), None, known_repositories={"x/y"})
+        out = census.report(
+            fleet, census.suspects(fleet), None, known_repositories={"x/y"}
+        )
         self.assertTrue(any("not one artifact" in c for c in out["caveats"]))
 
 
@@ -162,12 +190,13 @@ class CommandOracle(unittest.TestCase):
 
     def test_reads_stdin_and_returns_the_answer(self):
         ask = census.command_oracle(
-            "python3 -c \"import sys,json;"
-            "json.load(sys.stdin);print(json.dumps({'last_seen':'2026-09-19T08:00:00Z'}))\"")
+            'python3 -c "import sys,json;'
+            "json.load(sys.stdin);print(json.dumps({'last_seen':'2026-09-19T08:00:00Z'}))\""
+        )
         self.assertEqual(ask({"digest": D1})["last_seen"], "2026-09-19T08:00:00Z")
 
     def test_a_non_zero_exit_raises(self):
-        ask = census.command_oracle("python3 -c \"import sys;sys.exit(3)\"")
+        ask = census.command_oracle('python3 -c "import sys;sys.exit(3)"')
         with self.assertRaises(census.CensusError):
             ask({"digest": D1})
 
@@ -184,17 +213,24 @@ class CommandOracle(unittest.TestCase):
 class Cli(unittest.TestCase):
     """The wiring: environment, the existing-chain file, and what lands on stdout."""
 
-    ENV = {"HARBOR_URL": "https://harbor.example", "HARBOR_USER": "u",
-           "HARBOR_PASSWORD": "p"}
+    ENV: ClassVar[dict[str, str]] = {
+        "HARBOR_URL": "https://harbor.example",
+        "HARBOR_USER": "u",
+        "HARBOR_PASSWORD": "p",
+    }
 
     def run_census(self, *argv, tree=None):
-        tree = tree or {"hub": {"redis": [raw(D1, stamped=True)]},
-                        "helios": {"app": [raw(D2)]}}
+        tree = tree or {
+            "hub": {"redis": [raw(D1, stamped=True)]},
+            "helios": {"app": [raw(D2)]},
+        }
         out = io.StringIO()
-        with mock.patch.dict(os.environ, self.ENV, clear=False), \
-                mock.patch.object(census, "Harbor", lambda *a: FakeHarbor(tree)), \
-                contextlib.redirect_stdout(out), \
-                contextlib.redirect_stderr(io.StringIO()):
+        with (
+            mock.patch.dict(os.environ, self.ENV, clear=False),
+            mock.patch.object(census, "Harbor", lambda *a: FakeHarbor(tree)),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
             code = cli.main(["census", *argv])
         return code, json.loads(out.getvalue())
 
@@ -214,8 +250,10 @@ class Cli(unittest.TestCase):
         self.assertFalse(any("upper bound" in c for c in result["caveats"]))
 
     def test_missing_credentials_fail_before_touching_the_registry(self):
-        with mock.patch.dict(os.environ, {}, clear=True), \
-                contextlib.redirect_stderr(io.StringIO()):
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
             self.assertEqual(cli.main(["census"]), 1)
 
     def test_the_suspects_are_written_out_to_name_the_teams(self):

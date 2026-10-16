@@ -18,7 +18,9 @@ class ResultLine:
     ruleset: str
     reason: str | None = None
     report: str | None = None
-    source: str | None = None  # on a held image's line: the source digest it was built from
+    source: str | None = (
+        None  # on a held image's line: the source digest it was built from
+    )
     rebuilt: str | None = None  # on a closing line: the held image that was refused
 
     def to_dict(self) -> dict:
@@ -43,7 +45,11 @@ def last_states(lines: list[dict]) -> dict[str, str]:
 def pending(candidates: list[dict], lines: list[dict]) -> list[dict]:
     """Candidates never decided, plus those whose last outcome was inconclusive (retried)."""
     states = last_states(lines)
-    return [c for c in candidates if states.get(c["digest"], Outcome.INCONCLUSIVE) == Outcome.INCONCLUSIVE]
+    return [
+        c
+        for c in candidates
+        if states.get(c["digest"], Outcome.INCONCLUSIVE) == Outcome.INCONCLUSIVE
+    ]
 
 
 def attempts(lines: list[dict], source: str) -> int:
@@ -61,7 +67,9 @@ def append(path: Path, new_lines: list[dict]) -> tuple[int, list[str]]:
     """Append in a single write; returns (written, stale). A line that repeats a digest's last state is
     dropped (D-27), and so is a line older than that digest's newest line: the journal only moves
     forward, so replaying a step never reopens a decision. `stale` describes the lines dropped for age."""
-    last: dict[str, tuple[str, str]] = {}  # digest -> (newest ts, state of the last line)
+    last: dict[
+        str, tuple[str, str]
+    ] = {}  # digest -> (newest ts, state of the last line)
     for line in read(path):
         ts = max(line.get("ts") or "", last.get(line["digest"], ("", ""))[0])
         last[line["digest"]] = (ts, line["state"])
@@ -77,5 +85,7 @@ def append(path: Path, new_lines: list[dict]) -> tuple[int, list[str]]:
     if kept:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as out:
-            out.write("".join(json.dumps(line, ensure_ascii=False) + "\n" for line in kept))
+            out.write(
+                "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in kept)
+            )
     return len(kept), stale
