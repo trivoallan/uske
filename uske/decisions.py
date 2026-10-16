@@ -214,6 +214,14 @@ def _cell(text: str) -> str:
     return text.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
 
 
+def _report(path: str | None) -> str:
+    """The report cell: a path on the volume is named as such, since the ticket's reader cannot
+    open it; a relative path is a file next to the journal (a repository of results)."""
+    if path is None:
+        return ""
+    return f"`{path}` (volume uske-results)" if path.startswith("/") else f"`{path}`"
+
+
 def render_md(lines: list[dict]) -> str:
     """Render the lines as Markdown: a Mermaid timeline and a table per (policy, digest)."""
     blocks = []
@@ -244,8 +252,7 @@ def render_md(lines: list[dict]) -> str:
                 line["state"],
                 line.get("reason") or "—",
                 line.get("ruleset", ""),
-                # the ticket's reader cannot open it: say where it is
-                f"`{line['report']}` (volume uske-results)" if "report" in line else "",
+                _report(line.get("report")),
                 "; ".join(extras(line) + marks(line)),
             ]
             out.append("| " + " | ".join(_cell(str(c)) for c in cells) + " |")

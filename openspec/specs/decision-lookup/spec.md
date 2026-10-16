@@ -175,9 +175,10 @@ bloc Mermaid, titre compris, `#` puis `%`, `:` et `;` MUST être remplacés par 
 (`#35;`, `#37;`, `#58;`, `#59;`) et tout `\r` ou `\n` par une espace. Dans le tableau, `|` MUST
 être échappé et tout `\r` ou `\n` remplacé par une espace ; dans le titre et dans le format
 `text`, tout `\r` ou `\n` d'une valeur MUST aussi devenir une espace, pour qu'une ligne écrite à
-la main ne puisse pas fabriquer une fausse ligne ni un faux titre. Le `report` y SHALL être rendu en code,
-suivi de `(volume uske-results)` : le lecteur du ticket ne peut pas l'ouvrir, il doit savoir où il
-se trouve.
+la main ne puisse pas fabriquer une fausse ligne ni un faux titre. Le `report` y SHALL être rendu en code ;
+un chemin absolu, sur le volume, SHALL être suivi de `(volume uske-results)` : le lecteur du ticket
+ne peut pas l'ouvrir, il doit savoir où il se trouve. Un chemin relatif désigne un fichier rangé à
+côté du journal, dans un dépôt de résultats, et se rend sans suffixe.
 
 #### Scenario: Markdown sur la fixture
 
