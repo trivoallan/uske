@@ -178,8 +178,11 @@ marquée « arbitrage absent ».
 ### Requirement: Le Markdown porte une chronologie Mermaid et le tableau complet
 
 `--format md` SHALL rendre, pour chaque groupe, un titre qui nomme la politique et la référence,
-l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` dont chaque période est une date UTC `AAAA-MM-JJ` et
-porte les décisions de ce jour, puis un tableau Markdown des colonnes du format `text`. Dans le
+l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` dont chaque période est un
+criblage, `run <id>` (SDR-0018), et porte les décisions qu'il a écrites ; une ligne sans `run`
+(écrite avant SDR-0018, ou à la main) a pour période sa minute UTC `AAAA-MM-JJ HH:MM`. Suit
+un tableau Markdown des colonnes du format `text`, dont `run`, rendu en lien quand c'est une URL.
+Dans le
 bloc Mermaid, titre compris, `#` puis `%`, `:` et `;` MUST être remplacés par leurs entités
 (`#35;`, `#37;`, `#58;`, `#59;`) et tout `\r` ou `\n` par une espace. Dans le tableau, `|` MUST
 être échappé et tout `\r` ou `\n` remplacé par une espace ; dans le titre et dans le format
@@ -194,6 +197,15 @@ côté du journal, dans un dépôt de résultats, et se rend sans suffixe.
 - **GIVEN** la fixture `redis-7`
 - **WHEN** `uske decisions docker.io/library/redis:7.2.8 --format md` est lancée
 - **THEN** la sortie est identique au fichier attendu du golden test `md`
+
+#### Scenario: Une colonne par criblage
+
+- **GIVEN** deux lignes d'une même empreinte écrites par le run `https://ci.example/runs/41`, une
+  par le run `wf-abc`, et une sans `run`
+- **WHEN** elles sont rendues en `md`
+- **THEN** la chronologie a trois périodes : `run 41` avec les deux décisions, `run wf-abc`, puis
+  la minute UTC de la ligne sans `run`
+- **AND** la colonne `run` du tableau porte `[41](https://ci.example/runs/41)` et `wf-abc`
 
 #### Scenario: Des caractères qui cassent le rendu
 

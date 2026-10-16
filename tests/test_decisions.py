@@ -216,6 +216,30 @@ class Text(Journal):
 
 
 class Markdown(Journal):
+    def test_one_period_per_run_and_a_link_to_it(self):
+        def at(ts: str, **fields) -> dict:
+            return {
+                "policy": "p",
+                "ts": ts,
+                "digest": D1,
+                "state": "quarantine",
+                **fields,
+            }
+
+        md = decisions.render_md(
+            [
+                at("2026-10-16T12:01:00Z", run="https://ci.example/runs/41"),
+                at("2026-10-16T12:10:00Z", run="https://ci.example/runs/41"),
+                at("2026-10-16T12:21:00Z", run="wf-abc"),
+                at("2026-10-16T12:30:00Z"),
+            ]
+        )
+        self.assertIn("    run 41 : quarantine — — : quarantine — —\n", md)
+        self.assertIn("    run wf-abc : quarantine — —\n", md)
+        self.assertIn("    2026-10-16 12#58;30 : quarantine — —\n", md)
+        self.assertIn("| 2026-10-16T12:01:00Z | [41](https://ci.example/runs/41) |", md)
+        self.assertIn("| 2026-10-16T12:21:00Z | wf-abc |", md)
+
     def test_the_volume_is_named_only_for_a_path_on_it(self):
         on_volume = {
             "policy": "p",

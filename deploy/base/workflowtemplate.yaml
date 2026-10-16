@@ -113,7 +113,7 @@ spec:
             arguments:
               parameters:
                 - name: args
-                  value: classify --ref {{item.ref}} --digest {{item.digest}}
+                  value: classify --ref {{item.ref}} --digest {{item.digest}} --run "{{workflow.name}}"
                 - {name: out, value: "/work/lines/{{inputs.parameters.name}}/{{item.key}}.json"}
         - - name: record
             template: uske
@@ -196,6 +196,7 @@ spec:
                     --regis-exit {{steps.regis.exitCode}}
                     --source-ref "{{inputs.parameters.source-ref}}"
                     --source-digest "{{inputs.parameters.source-digest}}"
+                    --run "{{workflow.name}}"
                 - {name: out, value: "/work/{{inputs.parameters.lines}}/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
                 - {name: html, value: "/work/reports/{{inputs.parameters.key}}/report.html"}
                 - {name: link, value: "/results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}.html"}

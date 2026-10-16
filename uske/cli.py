@@ -126,6 +126,7 @@ def cmd_classify(args) -> None:
         reason=reason,
         # what a human opens, when the workflow kept it; else what was read, for a local run
         report=(args.report_link or str(report_path)) if report is not None else None,
+        run=args.run_id or None,  # Argo passes an empty string when it has none
     )
     if not args.source_digest:  # first gate; Argo passes an empty string
         _json(line.to_dict())
@@ -145,6 +146,7 @@ def cmd_classify(args) -> None:
                 ruleset=ruleset,
                 reason=gate.REBUILD_REFUSED,
                 report=line.report,
+                run=line.run,
                 rebuilt=args.digest,
             ).to_dict()
         )
@@ -382,6 +384,12 @@ def parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--source-digest", default="", help="for a held image: that source's digest"
+    )
+    s.add_argument(
+        "--run",
+        dest="run_id",  # `run` is the subcommand's handler
+        default="",
+        help="the screening that judged: an id, or its URL (SDR-0018)",
     )
     s.set_defaults(run=cmd_classify)
 

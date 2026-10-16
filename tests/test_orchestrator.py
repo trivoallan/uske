@@ -849,6 +849,32 @@ class Rebuild(Workdir):
         self.assertEqual(run(*base, "--source-digest", D1)[0], 1)
         self.assertEqual(run(*base, "--source-ref", self.SOURCE)[0], 1)
 
+    def test_both_lines_of_a_refused_rebuild_name_the_run(self):
+        path = self.write("held-run.json", self.REPAIR)
+        code, lines = run(
+            "classify",
+            "--playbook",
+            str(FULL),
+            "--ref",
+            self.HELD,
+            "--digest",
+            S1,
+            "--report",
+            path,
+            "--source-ref",
+            self.SOURCE,
+            "--source-digest",
+            D1,
+            "--run",
+            "https://ci.example/runs/42",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual([l["run"] for l in lines], ["https://ci.example/runs/42"] * 2)
+
+    def test_no_run_writes_no_key(self):
+        lines = self.judge_held(D1, S1, report("Placement direct"))
+        self.assertNotIn("run", lines[0])
+
     def test_a_repaired_image_is_promoted_and_closes_nothing(self):
         self.judge_source(D1, self.REPAIR)
         lines = self.judge_held(D1, S1, report("Placement direct"))
