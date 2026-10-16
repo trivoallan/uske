@@ -139,6 +139,20 @@ class Select(Journal):
         self.assertEqual([l["digest"] for l in found], [S, H, S])
         self.assertEqual(found[1]["report"], "r.html")
 
+    def test_a_rebuild_shows_its_source_and_its_siblings(self):
+        h2 = "sha256:" + "c" * 64
+        self.write(
+            "family.jsonl",
+            line(ref="hub/app:1", digest=S, state="transformation-required"),
+            line(ref="transit/app:1-r", digest=H, source=S, state="direct-placement"),
+            line(ref="transit/app:1-r", digest=h2, source=S, state="direct-placement"),
+            line(ref="hub/other:2", digest=D1, state="direct-placement"),
+        )
+        for image in (H, h2, S):
+            with self.subTest(image):
+                found = self.lines(image=image)
+                self.assertEqual([l["digest"] for l in found], [S, H, h2])
+
     def test_state_and_since_add_up(self):
         found = self.lines(
             states={"placed-by-exception", "abandoned"}, since=date(2026, 9, 21)

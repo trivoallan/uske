@@ -122,13 +122,30 @@ def digest_of(image: str) -> str | None:
     return image if image.startswith("sha256:") else None
 
 
+def _family(lines: list[dict], wanted: set[str]) -> set[str]:
+    """The digests linked to `wanted` by `source` or `rebuilt`, both ways, until nothing is added:
+    a rebuild brings its source (the first gate) and its siblings, a source its rebuilds."""
+    family = set(wanted)
+    while True:
+        grown = set(family)
+        for l in lines:
+            links = {l.get("source"), l.get("rebuilt")} - {None}
+            if l["digest"] in family:
+                grown |= links
+            elif links & family:
+                grown.add(l["digest"])
+        if grown == family:
+            return family
+        family = grown
+
+
 def select(
     lines: list[dict],
     image: str | None = None,
     states: set[str] | None = None,
     since: date | None = None,
 ) -> list[dict]:
-    """The lines on an image (and on what was rebuilt from it), in a state, from a UTC day on."""
+    """The lines on an image and its rebuild family, in a state, from a UTC day on."""
     if image is not None:
         digest = digest_of(image)
         # ponytail: exact match only; a short reference could name another repository
@@ -137,11 +154,8 @@ def select(
             if digest
             else {l["digest"] for l in lines if l.get("ref") == image}
         )
-        lines = [
-            l
-            for l in lines
-            if wanted & {l["digest"], l.get("source"), l.get("rebuilt")}
-        ]
+        family = _family(lines, wanted)
+        lines = [l for l in lines if l["digest"] in family]
     if states is not None:
         lines = [l for l in lines if l["state"] in states]
     if since is not None:
