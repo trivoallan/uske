@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/trivoallan/uske/compare/v0.5.0...v0.6.0) (2026-10-16)
+
+
+### Features
+
+* colorer la chronologie avec la palette SNCF Holding ([#34](https://github.com/trivoallan/uske/issues/34)) ([7a7ad15](https://github.com/trivoallan/uske/commit/7a7ad158839179e6e6d019fb19c81af5b880f62f))
+
 ## [0.5.0](https://github.com/trivoallan/uske/compare/v0.4.0...v0.5.0) (2026-10-16)
 
 
