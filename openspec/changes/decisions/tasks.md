@@ -75,7 +75,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 2. Lire le journal, ou échouer en le disant
 
-- [ ] 2.1 Créer `tests/test_decisions.py` avec ces tests, qui échouent tant que le module manque :
+- [x] 2.1 Créer `tests/test_decisions.py` avec ces tests, qui échouent tant que le module manque :
 
   ~~~python
   """`uske decisions`: the journal read for a person, read-only."""
@@ -175,9 +175,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
                       decisions.read_journal(path)
   ~~~
 
-- [ ] 2.2 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : échec à la
+- [x] 2.2 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : échec à la
   collecte, `ImportError: cannot import name 'decisions' from 'uske'`.
-- [ ] 2.3 Créer `uske/decisions.py` :
+- [x] 2.3 Créer `uske/decisions.py` :
 
   ~~~python
   """Read the decision journal for a person (story 2): which decisions, on which image, and why.
@@ -268,9 +268,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
       return out
   ~~~
 
-- [ ] 2.4 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
+- [x] 2.4 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `5 passed`.
-- [ ] 2.5 Commit :
+- [x] 2.5 Commit :
 
   ~~~bash
   git add uske/decisions.py tests/test_decisions.py
