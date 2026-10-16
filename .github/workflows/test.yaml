@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # Les données nanopm vivent dans le dépôt privé oci-pm : ni .nanopm ni CONTEXT.md ne doivent être suivis.
+      - run: "! git ls-files .nanopm CONTEXT.md | grep ."
       # ponytail: a venv rather than a setup-python action, one dependency
       - run: |
           python3 -m venv /tmp/venv
