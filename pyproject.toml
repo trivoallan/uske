@@ -14,3 +14,25 @@ uske = "uske.cli:main"
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.1",
+]
+
+[tool.ruff]
+# `.github` : le Python du socle (`pip-audit-gate.py`) est copié à l'identique depuis regis, qui le
+# lint avec ses propres règles ; socle-drift échoue si uske le reformate.
+# `*.md` : ruff >= 0.16 formate les blocs Python des fichiers Markdown. Ceux des changes OpenSpec
+# archivés sont des extraits figés, pas du code qui tourne.
+extend-exclude = [".github", "*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --cov --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+source = ["uske"]
+branch = true

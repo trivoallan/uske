@@ -104,9 +104,13 @@ La prose de ce dépôt s'écrit en français, le code en anglais : c'est l'une d
 ## Test
 
 ```bash
-uv run --with pyyaml python -m unittest discover tests -t .
-kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline /tmp/uske.yaml
+make test       # pytest, branch coverage, fails under 90 %
+make lint       # ruff, then the manifests rendered by kustomize and checked by argo lint
+make security   # pip-audit, fails from HIGH
+make image      # build the image and run it once
 ```
+
+The CI calls these targets and nothing else. `make lint` needs `kubectl` and `argo` on the `PATH`.
 
 [`tests/fixtures/repo`](tests/fixtures/repo) is a frozen copy of a policy repository — playbooks, one
 policy and its refusal journal — so the tests do not depend on a checkout next door.

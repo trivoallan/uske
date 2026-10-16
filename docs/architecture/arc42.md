@@ -286,9 +286,9 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Douze questions posées à ce jour, douze statuées. Onze sont héritées de la méthode — voir
+Treize questions posées à ce jour, treize statuées. Onze sont héritées de la méthode — voir
 *Architecture Constraints* : dix questions qu'elle pose à tout dépôt qui l'adopte, et la règle
-qui dit comment on y répond. Une seule est propre à `uske`, `SDR-0016`. Une nouvelle décision s'écrit
+qui dit comment on y répond. Deux sont propres à `uske`, `SDR-0016` et `SDR-0017`. Une nouvelle décision s'écrit
 quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
 ou contraint les changes suivants.
 
@@ -309,7 +309,8 @@ figure quand même au journal — savoir ce qui reste à décider vaut autant qu
 **Un ADR `accepted` ne se corrige pas** : son corps est gelé
 ([`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md)). Pour revenir sur une décision,
 un nouvel ADR la nomme dans son `supersedes:` ; l'ancien reste au répertoire, qui est un journal
-et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un autre.
+et non la liste de ce qui est en vigueur. À ce jour, un seul en dépasse d'autres : `SDR-0017`
+dépasse `SDR-0006` et `SDR-0010`.
 
 ## Decision Log
 
@@ -320,13 +321,14 @@ et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un
 | [SDR-0003](../adr/SDR-0003-architecture.md) | Pattern d'architecture, et où vit ce document | accepted | 2026-09-20 | Sûreté, Opérabilité | **non** — le code est à rapprocher |
 | [SDR-0004](../adr/SDR-0004-languages.md) | Langage principal | accepted | 2026-09-20 | Opérabilité | oui |
 | [SDR-0005](../adr/SDR-0005-validation.md) | Validation aux frontières et des fichiers de données | accepted | 2026-09-20 | Sûreté, contre Minceur | **non** — validation à la main aujourd'hui |
-| [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
-| [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | **non mesuré** — aucun instrument |
+| [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | superseded by SDR-0017 | 2026-09-20 | Contestabilité | sans objet — dépassé |
+| [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | oui — 91 % mesuré le 2026-10-16 |
 | [SDR-0008](../adr/SDR-0008-documentation.md) | Outil, racine et audience de la documentation | accepted | 2026-09-20 | Minceur | oui |
 | [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | oui |
-| [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted | 2026-09-20 | Opérabilité | oui |
-| [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
+| [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | superseded by SDR-0017 | 2026-09-20 | Opérabilité | sans objet — dépassé |
+| [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | oui — release-please branché le 2026-10-16 |
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
+| [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
 
 ## Écarts ouverts
 
@@ -341,9 +343,9 @@ disparaît pas de la table.
 |----|-------|----------------------|-------------------|
 | DEBT-01 | L'arborescence du code contredit le pattern décidé ; un agent lit une structure que l'ADR dément, et suit l'ADR pour le code nouveau | [`SDR-0003`](../adr/SDR-0003-architecture.md) | Le rapprochement du code existant, change après change |
 | DEBT-02 | La validation aux frontières se fait à la main ; un champ absent reste un défaut silencieux au lieu d'une erreur nommée | [`SDR-0005`](../adr/SDR-0005-validation.md) | Les frontières existantes portées sur l'outil décidé |
-| DEBT-03 | Le format des messages de commit n'est tenu par rien ; un message hors format passe | [`SDR-0006`](../adr/SDR-0006-commits.md) | `commitlint` installé et branché sur le titre de la demande de fusion |
-| DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | [`SDR-0007`](../adr/SDR-0007-tests.md) | Un instrument branché, et une première mesure prise |
-| DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | [`SDR-0011`](../adr/SDR-0011-delivery.md) | L'outil de release installé — il dépend de DEBT-03 |
+| DEBT-03 | Le format des messages de commit n'est tenu par rien ; un message hors format passe | [`SDR-0006`](../adr/SDR-0006-commits.md) | *Closed* 2026-10-16, par [`SDR-0017`](../adr/SDR-0017-socle-commun.md) : une expression régulière, pas `commitlint`. `commitlint` installé et branché sur le titre de la demande de fusion |
+| DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | [`SDR-0007`](../adr/SDR-0007-tests.md) | *Closed* 2026-10-16. Un instrument branché, et une première mesure prise |
+| DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. L'outil de release installé — il dépend de DEBT-03 |
 | DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | aucune — relevé en revue le 2026-09-20 | Le contrôle ajouté à `.github/workflows/test.yaml`, ou dit manuel dans un ADR qui dépasse [`SDR-0010`](../adr/SDR-0010-forge-and-ci.md) |
 
 **`DEBT-06` n'a pas la même provenance que les cinq autres, et c'est le plus intéressant.** Les

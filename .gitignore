@@ -1,7 +1,6 @@
 __pycache__/
 .venv/
 dist/
-uv.lock
 .claude/skills
 .claude/commands
 node_modules
@@ -11,3 +10,5 @@ node_modules
 # Sans barre finale : pour git, un lien est un fichier, et `.nanopm/` ne l'ignorerait pas.
 .nanopm
 /CONTEXT.md
+.bin/
+.coverage
