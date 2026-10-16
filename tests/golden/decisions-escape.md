@@ -3,7 +3,7 @@
 `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 
 ```mermaid
-%%{init: {"theme": "default", "themeVariables": {"cScale0": "#0969da", "cScaleLabel0": "#ffffff", "cScale1": "#cf222e", "cScaleLabel1": "#ffffff"}}}%%
+%%{init: {"theme": "default", "themeVariables": {"cScale0": "#002d51", "cScaleLabel0": "#ffffff", "cScale1": "#c80e0e", "cScaleLabel1": "#ffffff"}}}%%
 timeline
     title r.example/a#58;1
     section 2026-10-01 00#58;00

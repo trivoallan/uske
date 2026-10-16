@@ -249,7 +249,7 @@ class Markdown(Journal):
         init = json.loads(md.split("%%{init: ", 1)[1].split("}%%", 1)[0])
         colours = init["themeVariables"]
         self.assertEqual(
-            [colours[f"cScale{i}"] for i in range(3)],
+            [(colours[f"cScale{i}"], colours[f"cScaleLabel{i}"]) for i in range(3)],
             [
                 decisions.COLOURS["quarantine"],
                 decisions.COLOURS["direct-placement"],

@@ -265,16 +265,19 @@ def _run_cell(run: str | None) -> str:
     return f"[{label}]({run})" if label != run else run
 
 
-# a colour per state; the period box of a section takes it, the reasons sit under it
+# a colour per state, from the SNCF Holding design tokens (WCS, `.sncf-holding`): the semantic
+# success, warning, critical and information colours where they exist, neutral and parme
+# otherwise. Each is (fill, label): a light fill takes a dark label.
+DARK, WHITE = "#121212", "#ffffff"  # neutral-900, and white
 COLOURS = {
-    "direct-placement": "#1a7f37",
-    "transformation-required": "#9a6700",
-    "quarantine": "#cf222e",
-    "inconclusive": "#6e7781",
-    "placed-by-exception": "#0969da",
-    "abandoned": "#24292f",
+    "direct-placement": ("#00b388", DARK),  # success: vert-500
+    "transformation-required": ("#daaa00", DARK),  # warning: ambre-500
+    "quarantine": ("#c80e0e", WHITE),  # critical: critical-500
+    "inconclusive": ("#747678", WHITE),  # neutral-600
+    "placed-by-exception": ("#002d51", WHITE),  # information: bleu-800
+    "abandoned": ("#121212", WHITE),  # neutral-900
 }
-OTHER_COLOUR = "#8250df"
+OTHER_COLOUR = ("#6558b1", WHITE)  # parme-500
 
 
 def _sections(group: list[dict]) -> list[tuple[str, str, list[str]]]:
@@ -297,8 +300,9 @@ def _colours(states: list[str]) -> str:
     # ponytail: Mermaid has 12 section colours (cScale0-11); a 13th section reuses the first
     variables = {}
     for i, state in enumerate(states[:12]):
-        variables[f"cScale{i}"] = COLOURS.get(state, OTHER_COLOUR)
-        variables[f"cScaleLabel{i}"] = "#ffffff"
+        fill, label = COLOURS.get(state, OTHER_COLOUR)
+        variables[f"cScale{i}"] = fill
+        variables[f"cScaleLabel{i}"] = label
     init = {"theme": "default", "themeVariables": variables}
     return f"%%{{init: {json.dumps(init)}}}%%"
 

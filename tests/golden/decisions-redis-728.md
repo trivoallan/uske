@@ -3,7 +3,7 @@
 `sha256:5b3e8f1c07a4d296e8b1f5c3a907d24e6b8f1a03c5d79e2b4f6a8c1d3e5079b2`
 
 ```mermaid
-%%{init: {"theme": "default", "themeVariables": {"cScale0": "#cf222e", "cScaleLabel0": "#ffffff", "cScale1": "#0969da", "cScaleLabel1": "#ffffff"}}}%%
+%%{init: {"theme": "default", "themeVariables": {"cScale0": "#c80e0e", "cScaleLabel0": "#ffffff", "cScale1": "#002d51", "cScaleLabel1": "#ffffff"}}}%%
 timeline
     title docker.io/library/redis#58;7.2.8
     section 2026-10-06 04#58;10

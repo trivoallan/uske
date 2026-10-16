@@ -184,8 +184,11 @@ l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` fait d'une 
 criblage et par état, dans l'ordre du fichier : la section porte le criblage, `run <id>`
 (SDR-0018), ou, pour une ligne sans `run` (écrite avant SDR-0018, ou à la main), sa minute UTC
 `AAAA-MM-JJ HH:MM` ; sa période porte l'état, ses événements les raisons. Chaque section SHALL
-prendre la couleur de son état (placement direct vert, transformation requise ambre, quarantaine
-rouge, non concluant gris, placement par exception bleu, abandon noir, tout autre état violet),
+prendre la couleur de son état dans la palette SNCF Holding (design tokens WCS) : placement direct
+`vert-500` (succès), transformation requise `ambre-500` (avertissement), quarantaine
+`critical-500` (critique), non concluant `neutral-600`, placement par exception `bleu-800`
+(information), abandon `neutral-900`, tout autre état `parme-500` ; le libellé est sombre sur un
+fond clair, blanc sinon,
 fixée par une directive `%%{init}%%` ; au-delà de douze sections, Mermaid réemploie ses couleurs. Suit
 un tableau Markdown des colonnes du format `text`, dont `run`, rendu en lien quand c'est une URL.
 Dans le
