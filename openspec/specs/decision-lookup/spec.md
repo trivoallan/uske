@@ -52,8 +52,10 @@ politique inconnu MUST la faire échouer en listant les noms présents. « Aucun
 
 `IMAGE` SHALL accepter une référence complète, une empreinte `sha256:…` ou une forme
 `<dépôt>@sha256:…`, et la résoudre en l'ensemble des empreintes dont une ligne porte cette `ref` ou
-ce `digest`. La sortie MUST contenir les lignes de ces empreintes, et celles dont le `source` ou le
-`rebuilt` vaut l'une d'elles. Aucune correspondance approchée n'est tentée : une référence courte
+ce `digest`. La sortie MUST contenir les lignes de toute la famille de ces
+empreintes : les empreintes reliées par `source` ou `rebuilt`, dans les deux sens, de proche en
+proche. Une reconstruction amène ainsi sa source (la première porte) et ses sœurs, une source ses
+reconstructions et leurs clôtures. Aucune correspondance approchée n'est tentée : une référence courte
 ne correspond à rien. Quand rien ne correspond, la sortie d'erreur SHALL proposer les références
 complètes du journal qui finissent par `/<IMAGE>`, ou, à défaut, rappeler que le journal porte des
 références complètes ; la sortie standard n'en est pas changée.
@@ -78,6 +80,13 @@ références complètes ; la sortie standard n'en est pas changée.
 - **AND** une ligne de clôture sur S porte `rebuilt` égal à l'empreinte de l'image retenue
 - **WHEN** `uske decisions R` est lancée
 - **THEN** la sortie contient les lignes de S et celles de l'image retenue, avec son rapport
+
+#### Scenario: Une reconstruction montre sa source et ses sœurs
+
+- **GIVEN** un journal où la source S est en `transformation-required`
+- **AND** deux images retenues H1 et H2 portent `source` égal à S
+- **WHEN** `uske decisions` est lancée avec l'empreinte de H1
+- **THEN** la sortie contient les lignes de S, de H1 et de H2, et aucune autre
 
 #### Scenario: Une référence courte
 
