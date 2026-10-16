@@ -139,7 +139,7 @@ class Select(Journal):
         self.assertEqual([l["digest"] for l in found], [S, H, S])
         self.assertEqual(found[1]["report"], "r.html")
 
-    def test_a_rebuild_shows_its_source_and_its_siblings(self):
+    def test_a_rebuild_shows_its_source_but_not_its_siblings(self):
         h2 = "sha256:" + "c" * 64
         self.write(
             "family.jsonl",
@@ -148,10 +148,10 @@ class Select(Journal):
             line(ref="transit/app:1-r", digest=h2, source=S, state="direct-placement"),
             line(ref="hub/other:2", digest=D1, state="direct-placement"),
         )
-        for image in (H, h2, S):
+        for image, expected in ((H, [S, H]), (h2, [S, h2]), (S, [S, H, h2])):
             with self.subTest(image):
                 found = self.lines(image=image)
-                self.assertEqual([l["digest"] for l in found], [S, H, h2])
+                self.assertEqual([l["digest"] for l in found], expected)
 
     def test_state_and_since_add_up(self):
         found = self.lines(
