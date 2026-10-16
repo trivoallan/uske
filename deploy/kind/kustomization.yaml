@@ -9,7 +9,7 @@ resources:
   - registry.yaml
 images:
   - {name: uske, newName: uske, newTag: dev}
-  - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:cdecd15fc81c3322bc2119dd2a3ed3964ab88dd67e07fb6e9c1fa0a5cdde0207"}  # 0.39.1-full
+  - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:7c09aeae02b4bb039847690983f2ccf10a3307c38987eaffdce79b2720138315"}  # 0.41.0-full
   - {name: knock, newName: ghcr.io/trivoallan/knock, digest: "sha256:57e6dca82e3a05756a688d7b5396a24999b762b8d75414a350c641d6f610020c"}  # 0.16.0
 patches:
   # Rounds are started by hand here.
