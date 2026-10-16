@@ -88,7 +88,7 @@ Les scénarios détaillés iront dans *Quality Requirements*, quand cette sectio
 | **Responsable plateforme** — tient le registre ; persona principale | persona ; à défaut de personne réelle, répond : le mainteneur | Qu'un screening tourne sur planification sans elle, que rien de douteux n'entre, et qu'elle comprenne assez l'enchaînement des étapes pour rejouer seule un screening échoué. |
 | **Équipe applicative** — attend une image pour livrer | persona ; répond : le mainteneur | Savoir pourquoi son image n'est pas arrivée : la raison du refus et la règle appliquée, sans archéologie. |
 | **Auditeur sécurité / conformité** | persona ; répond : le mainteneur | Un journal qui fait foi : pour une image et une date, la décision, le jeu de règles et la raison ; et la preuve qu'aucune ligne n'a été réécrite. |
-| **Auteur et mainteneur** — Tristan Rivoallan | dépôt `trivoallan/uske` | Savoir où poser du code et ce qui a le droit de dépendre de quoi ; retrouver pourquoi une décision a été prise. Premier utilisateur réel, sur un seul registre. |
+| **Auteur et mainteneur** | dépôt `trivoallan/uske` | Savoir où poser du code et ce qui a le droit de dépendre de quoi ; retrouver pourquoi une décision a été prise. Premier utilisateur réel, sur un seul registre. |
 | **Agents qui écrivent les changes** | contexte d'agent du dépôt | Lire les objectifs et les décisions en un lieu, sans les déduire du code. |
 
 **Ces cinq rôles sont les parties prenantes du système, pas le lectorat de ce document.** Trois
@@ -100,7 +100,7 @@ terme du métier ne soit défini en *Glossary* : `screening`, `régime`, `contou
 `SDR-0008` prévient lui-même que **toutes** les pages écrites sous `mono-utilisateur` se
 relisent avant — cette section et le glossaire les premiers.
 
-**Validation des objectifs qualité** : Tristan Rivoallan, qui en a fixé l'ordre le 2026-09-20.
+**Validation des objectifs qualité** : le mainteneur, qui en a fixé l'ordre le 2026-09-20.
 
 # Architecture Constraints
 
