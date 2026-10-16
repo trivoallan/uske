@@ -168,7 +168,7 @@ Chaque story est une tranche verticale fine — de bout en bout et démontrable.
     modifier le journal.
   - **Relevant code** : `uske/results.py` (`read`, `last_states`, `ResultLine`), `uske/cli.py`
   - **Added** : 2026-09-20
-  - **Change** : _not yet proposed_
+  - **Change** : `decisions` (sous-commande `uske decisions`)
 
 - [ ] 3. `issue-quarantaine` — une image refusée est mise à l'écart, et c'est consigné
   - **Persona served** : responsable plateforme, auditeur

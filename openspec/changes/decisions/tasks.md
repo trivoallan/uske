@@ -795,7 +795,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 7. La documentation
 
-- [ ] 7.1 Dans `README.md`, section *Use*, remplacer le paragraphe qui commence par « One subcommand
+- [x] 7.1 Dans `README.md`, section *Use*, remplacer le paragraphe qui commence par « One subcommand
   per workflow step » par :
 
   ~~~markdown
@@ -835,9 +835,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   Remplacer `ghcr.io/trivoallan/uske:<version>` et `NS=uske` par ce que la tâche 8 a réellement
   utilisé sur le banc, si cela diffère, avec `<version>` laissé en clair.
 
-- [ ] 7.2 Dans `openspec/discovery.md`, story 2, remplacer la ligne `  - **Change** : _not yet proposed_`
+- [x] 7.2 Dans `openspec/discovery.md`, story 2, remplacer la ligne `  - **Change** : _not yet proposed_`
   par `  - **Change** : \`decisions\` (sous-commande \`uske decisions\`)`.
-- [ ] 7.3 Commit :
+- [x] 7.3 Commit :
 
   ~~~bash
   git add README.md openspec/discovery.md
