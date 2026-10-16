@@ -54,7 +54,9 @@ La revue est close quand :
   passent ;
 - le finding 15 a sa tâche (docstring, `README.md`, aide de `--state`) cochée ;
 - le finding 14 reste écarté sauf décision contraire de la personne ;
-- la tâche 8 de `tasks.md` porte le temps mesuré de la recette sur le banc (revue DX, D11).
+- ~~la tâche 8 de `tasks.md` porte le temps mesuré de la recette sur le banc (revue DX, D11)~~ :
+  abandonné par décision de la personne le 2026-10-16 (voir la tâche 8) ; la mesure revient à
+  `/devex-review` après livraison.
 
 ## Revue DX (`/plan-devex-review`, 2026-10-16)
 

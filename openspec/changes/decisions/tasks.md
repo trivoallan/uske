@@ -848,6 +848,13 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 8. Essayer la recette sur le banc, chronomètre en main
 
+> **Non fait, par décision de la personne (2026-10-16).** Le banc a d'abord échoué sur `main` (image
+> `candidate-go` construite en Go 1.22 alors que `go.mod` exige 1.25, corrigé en `fb2228d`), puis sur
+> une erreur passagère du registre pendant la copie des images ; la personne a jugé l'attente trop
+> longue et arrêté la tâche. Elle remplace D11 de la revue DX. Conséquence : la recette du `README.md`
+> part sans avoir tourné contre un vrai volume, et l'objectif de 2 à 5 minutes reste une estimation,
+> à mesurer par `/devex-review` après livraison. Les cases 8.1 à 8.5 restent ouvertes.
+
 - [ ] 8.1 Lancer `deploy/kind/up.sh` depuis la branche du change. Attendu : il construit
   `uske:dev` depuis l'arbre courant (`up.sh`, `docker build … -t uske:dev`), un screening joué à
   la main va au bout, et le volume `uske-results` du namespace `uske` porte au moins un journal.

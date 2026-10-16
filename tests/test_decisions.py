@@ -324,7 +324,7 @@ class Command(Journal):
 
     def test_the_exceptions_of_a_period(self):
         _code, out, _ = self.call(
-            "--state", "placed-by-exception,abandoned", "--since", "2026-09-21"
+            "--state", "placed-by-exception, abandoned", "--since", "2026-09-21"
         )
         self.assertEqual(
             [l["state"] for l in json.loads(out)], ["abandoned", "placed-by-exception"]

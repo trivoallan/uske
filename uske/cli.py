@@ -318,7 +318,8 @@ def cmd_decisions(args) -> None:
         raise Failure(str(exc)) from exc
     for entry in read:
         print(entry, file=sys.stderr)
-    states = set(args.state.split(",")) if args.state else None
+    # "a, b" means a and b; an empty --state filters nothing
+    states = {s.strip() for s in (args.state or "").split(",") if s.strip()} or None
     found = decisions.select(lines, args.image, states, args.since)
     if args.image and not found:
         close = decisions.suggest(lines, args.image)
