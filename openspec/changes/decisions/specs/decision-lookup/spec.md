@@ -185,7 +185,7 @@ se trouve.
 
 #### Scenario: Des caractères qui cassent le rendu
 
-- **GIVEN** une décision dont la référence contient `:` et dont l'arbitrage contient `:`, `#`,
+- **GIVEN** une décision dont la référence contient `:` et dont la raison contient `:`, `#`,
   `;`, `%%`, `|` et un saut de ligne
 - **WHEN** elle est rendue en `md`
 - **THEN** la sortie est identique au fichier attendu du golden test d'échappement

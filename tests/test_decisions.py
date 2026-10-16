@@ -360,7 +360,9 @@ class Command(Journal):
         empty = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, empty)
         self.dir = empty
-        self.assertEqual(self.call()[0], 1)
+        code, out, err = self.call()
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("error:", err)
 
     def test_the_journal_is_left_untouched(self):
         path = self.dir / "a-4711-redis-7.jsonl"

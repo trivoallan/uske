@@ -81,8 +81,8 @@ kubectl -n "$NS" run uske-decisions --rm -i -q --restart=Never --image="$IMAGE" 
 Paste the output into the ticket: a Mermaid timeline per image, then the full table, with the
 rule that refused it and who decided an exception. References are matched in full; a short one
 (`redis:7.2.8`) gets the full ones suggested. The lines the command writes on stderr (the
-journals it read, a suggestion) may show up before the Markdown: leave them out of the ticket. The volume is `ReadWriteOnce`: if a screening is
-running on another node, wait for it to finish.
+journals it read, a suggestion) may show up before the Markdown: leave them out of the ticket.
+The volume is `ReadWriteOnce`: if a screening is running on another node, wait for it to finish.
 
 For the auditor, the same pod with other arguments:
 `decisions --state placed-by-exception,abandoned --since 2026-09-01 --results /results --format md`.

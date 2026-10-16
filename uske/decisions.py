@@ -73,7 +73,7 @@ def read_journal(path: Path) -> list[dict]:
             # the round trip rejects what strptime forgives, such as "2026-1-1T0:0:0Z"
             if datetime.strptime(line["ts"], TS).strftime(TS) != line["ts"]:
                 raise ValueError(line["ts"])
-        except (TypeError, ValueError) as exc:
+        except ValueError as exc:
             raise JournalError(f"{where}: ts must be {TS}, got {line['ts']!r}") from exc
         if "policy" in line:
             raise JournalError(f"{where}: the key 'policy' is reserved")

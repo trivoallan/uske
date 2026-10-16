@@ -810,8 +810,8 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   volume read-only, in the namespace where the `CronWorkflow` runs, with the image it runs:
 
   ```bash
-  NS=uske IMAGE=ghcr.io/trivoallan/uske:<version> REF=docker.io/library/redis:7.2.8
-  kubectl -n "$NS" run uske-decisions --rm -i --restart=Never --image="$IMAGE" --overrides='{
+  NS=uske IMAGE=ghcr.io/trivoallan/uske:VERSION REF=docker.io/library/redis:7.2.8
+  kubectl -n "$NS" run uske-decisions --rm -i -q --restart=Never --image="$IMAGE" --overrides='{
     "spec": {
       "volumes": [{"name": "results", "persistentVolumeClaim": {"claimName": "uske-results", "readOnly": true}}],
       "containers": [{
@@ -881,18 +881,18 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 9. Vérifier l'ensemble
 
-- [ ] 9.1 Lancer `make test`. Attendu : aucun `failed`, et la ligne `Required test coverage of 90%
+- [x] 9.1 Lancer `make test`. Attendu : aucun `failed`, et la ligne `Required test coverage of 90%
   reached`. Si `uske/decisions.py` n'est pas couvert en entier, lire les lignes manquantes dans
   `term-missing` et ajouter le test du scénario de spec correspondant.
-- [ ] 9.2 Lancer `make lint`. Attendu : ruff sans erreur, puis `argo lint` sans erreur (les
+- [x] 9.2 Lancer `make lint`. Attendu : ruff sans erreur, puis `argo lint` sans erreur (les
   manifestes ne changent pas). Sans `kubectl` ni `argo` sur le poste, lancer `uv run ruff check .`
   et `uv run ruff format --check .`, attendu `All checks passed!` puis aucun fichier à reformater,
   et le noter dans la demande de fusion.
-- [ ] 9.3 Lancer `openspec validate decisions --type change --strict`. Attendu :
+- [x] 9.3 Lancer `openspec validate decisions --type change --strict`. Attendu :
   `Change 'decisions' is valid`.
-- [ ] 9.4 Relire `review.md`, *Critère d'achèvement*, et cocher ce qui est tenu ; un point non tenu
+- [x] 9.4 Relire `review.md`, *Critère d'achèvement*, et cocher ce qui est tenu ; un point non tenu
   s'écrit dans la demande de fusion.
-- [ ] 9.5 Commit, s'il reste un changement (formatage, coche de `review.md`) :
+- [x] 9.5 Commit, s'il reste un changement (formatage, coche de `review.md`) :
 
   ~~~bash
   git add -A uske tests openspec/changes/decisions

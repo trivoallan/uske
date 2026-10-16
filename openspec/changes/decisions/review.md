@@ -30,7 +30,7 @@ comportement exact du parseur Mermaid sur `title` et `;` (finding 11).
 | # | Grille · dimension | Finding | Sévérité | Traitement |
 | --- | --- | --- | --- | --- |
 | 1 | Contrôle · complétude | Un `--results` erroné, une politique mal nommée ou un répertoire vide rendaient `[]` et le code 0, comme « aucune décision » : `results.read` rend `[]` pour un fichier absent. | Majeure | Rien à lire est une erreur (code 1) ; les fichiers lus et leur nombre de lignes s'écrivent sur la sortie d'erreur. Scénario « Rien à lire ». |
-| 2 | DevEx · cohérence | `--policy NOM` contredisait `pending`, `record` et `approve`, qui prennent le chemin ; le journal porte le `metadata.name`, pas le nom du YAML. | Majeure | `--policy` prend le chemin. Alternative consignée. |
+| 2 | DevEx · cohérence | `--policy NOM` contredisait `pending`, `record` et `approve`, qui prennent le chemin ; le journal porte le `metadata.name`, pas le nom du YAML. | Majeure | `--policy` prend le chemin. Alternative consignée. **Remplacé par D9 (revue DX) : `--policy-name`.** |
 | 3 | Contrôle · regroupement | Grouper « par empreinte » enchaînait la quarantaine d'une politique et l'exception d'une autre comme une seule histoire. | Majeure | Groupes par politique puis par empreinte, titrés par la politique. Scénario dédié. |
 | 4 | Contrôle · ordre | Trier par `ts` rangeait « à sa place » une exception ajoutée après coup et antidatée. | Majeure | Ordre du fichier, qui fait foi ; ligne antidatée marquée, `backdated` en JSON. Alternative consignée. |
 | 5 | Ingénierie · lecture | `results.read` laisse passer une trace Python sans fichier ni ligne, accepte un non-objet, et casse sur une clé manquante ; un `ts` hors format fausse `--since` en silence. | Majeure | Un lecteur dédié, numéroté, qui échoue en `error:` sur JSON invalide, non-objet, clé manquante, `ts` mal formé, clé `policy` déjà présente. Deux scénarios. |
@@ -228,27 +228,27 @@ Aucune passe sous 5. La communauté reste à 5 par choix de stratégie, pas par 
 
 Toutes sont déjà reportées dans `tasks.md`.
 
-- [ ] **T1 (P1, human: ~1h / CC: ~10min)** — README — recette `kubectl run` en lecture seule, jusqu'au Markdown
+- [x] **T1 (P1, human: ~1h / CC: ~10min)** — README — recette `kubectl run` en lecture seule, jusqu'au Markdown
   - Surfaced by: Step 0, D5 et D6
   - Files: `README.md` (tâche 7.1)
   - Verify: tâche 8.3
-- [ ] **T2 (P1, human: ~1h / CC: ~10min)** — CLI — `--policy-name` à la place de `--policy`
+- [x] **T2 (P1, human: ~1h / CC: ~10min)** — CLI — `--policy-name` à la place de `--policy`
   - Surfaced by: parcours, Real Usage (D9)
   - Files: `uske/decisions.py`, `uske/cli.py`, `tests/test_decisions.py` (tâches 2, 6)
   - Verify: `test_one_policy_by_its_name`, `test_an_unknown_policy_name_lists_the_present_ones`
-- [ ] **T3 (P2, human: ~30min / CC: ~5min)** — CLI — suggérer les références complètes
+- [x] **T3 (P2, human: ~30min / CC: ~5min)** — CLI — suggérer les références complètes
   - Surfaced by: parcours, Hello World (D8)
   - Files: `uske/decisions.py`, `uske/cli.py` (tâches 3, 6)
   - Verify: `test_a_short_reference_gets_the_full_one_on_stderr`
-- [ ] **T4 (P2, human: ~20min / CC: ~3min)** — rendu md — rapport « (volume uske-results) »
+- [x] **T4 (P2, human: ~20min / CC: ~3min)** — rendu md — rapport « (volume uske-results) »
   - Surfaced by: parcours, Real Usage (D10)
   - Files: `uske/decisions.py`, `tests/golden/decisions-redis-728.md` (tâche 5)
   - Verify: golden test `md`
-- [ ] **T5 (P2, human: ~20min / CC: ~3min)** — erreurs — cause et remède dans les messages
+- [x] **T5 (P2, human: ~20min / CC: ~3min)** — erreurs — cause et remède dans les messages
   - Surfaced by: passe 3
   - Files: `uske/decisions.py`, `uske/cli.py` (tâches 2, 6)
   - Verify: `test_nothing_to_read_is_an_error`, `test_a_bad_date_is_a_usage_error_that_says_the_form`
-- [ ] **T6 (P1, human: ~30min / CC: ~15min)** — banc — un passage chronométré de la recette
+- [ ] **T6 (non fait : tâche 8, décision du 2026-10-16) (P1, human: ~30min / CC: ~15min)** — banc — un passage chronométré de la recette
   - Surfaced by: passe 8 (D11)
   - Files: `openspec/changes/decisions/tasks.md` (tâche 8)
   - Verify: temps consigné sous la tâche 8.4
@@ -470,11 +470,11 @@ Sequential implementation, no parallelization opportunity : un module principal
 
 ### Implementation Tasks (eng)
 
-- [ ] **E1 (P1, human: ~30min / CC: ~3min)** — lecture — valider le type des clés écrites
+- [x] **E1 (P1, human: ~30min / CC: ~3min)** — lecture — valider le type des clés écrites
   - Surfaced by: Section 2, R1 (D16)
   - Files: `uske/decisions.py`, `tests/test_decisions.py` (tâche 2)
   - Verify: `test_an_unreadable_line_names_its_file_and_line`, sous-tests `ref`/`state`
-- [ ] **E2 (P2, human: ~20min / CC: ~2min)** — rendu md — tester la marque dans la frise et le tableau
+- [x] **E2 (P2, human: ~20min / CC: ~2min)** — rendu md — tester la marque dans la frise et le tableau
   - Surfaced by: Section 3, preuve du contrat « antidatée en text et en md »
   - Files: `tests/test_decisions.py` (tâche 5.3)
   - Verify: `test_marks_appear_in_the_timeline_and_the_table`
