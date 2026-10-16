@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/trivoallan/uske/compare/v0.4.0...v0.5.0) (2026-10-16)
+
+
+### Features
+
+* colorer la chronologie selon l'état de chaque décision ([#33](https://github.com/trivoallan/uske/issues/33)) ([1b19f0f](https://github.com/trivoallan/uske/commit/1b19f0f90bb92c36dec81d6600247e535f51e7be))
+
+
+### Bug Fixes
+
+* le rapport d'une reconstruction ne montre plus ses sœurs ([#31](https://github.com/trivoallan/uske/issues/31)) ([7cb8af3](https://github.com/trivoallan/uske/commit/7cb8af3b78b212a8c4c87bd8c1e5a4456f892c94))
+
 ## [0.4.0](https://github.com/trivoallan/uske/compare/v0.3.0...v0.4.0) (2026-10-16)
 
 
