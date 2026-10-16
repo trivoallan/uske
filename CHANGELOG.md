@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/trivoallan/uske/compare/v0.2.0...v0.2.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* ne nommer le volume que pour un rapport qui y est rangé ([#25](https://github.com/trivoallan/uske/issues/25)) ([f211478](https://github.com/trivoallan/uske/commit/f211478f8d6174f58df167daea64885191e247a9))
+
 ## [0.2.0](https://github.com/trivoallan/uske/compare/v0.1.0...v0.2.0) (2026-10-16)
 
 
