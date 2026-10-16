@@ -126,13 +126,14 @@ class ListAndResolve(unittest.TestCase):
             self.assertEqual(Path(out["playbook"]), expected)
 
     def test_derogation_uses_the_light_tier(self):
-        _, out = run(
+        code, out = run(
             "resolve",
             "--policy",
             str(ROOT / "policies/projets/a-4711/redis-7.yaml"),
             "--playbooks",
             str(PLAYBOOKS),
         )
+        self.assertEqual(code, 0)
         self.assertEqual(Path(out["playbook"]), LIGHT)
 
     def test_unknown_regime_has_no_playbook(self):

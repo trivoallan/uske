@@ -26,14 +26,18 @@ traits:
 > [`SDR-0010`](SDR-0010-forge-and-ci.md), qui restent au répertoire : leur corps est gelé, et
 > c'est le `supersedes:` ci-dessus qui dit qu'ils ne sont plus en vigueur
 > ([`SDR-0001`](SDR-0001-record-architecture-decisions.md)).
+>
+> **`commits.tool: commitlint` ne veut pas dire que `commitlint` est installé.** C'est la valeur
+> la plus proche que le schéma de la méthode admette ; `commitlint` n'est pas installé, et c'est
+> l'expression régulière du workflow `pr-title` qui tient le format.
 
 ## Context and Problem Statement
 
 `regis`, `knock` et `uske` s'ouvrent sous l'organisation `sncfdevelopers`. Leur CI doit être
 identique : les fichiers de workflow sont les mêmes octet pour octet dans les trois dépôts, et ce
 qui est propre à un dépôt vit dans son `Makefile` ou dans un fichier de données
-(`.github/settings.json`, `.github/images.json`). C'est la décision D13 de la spec
-`2026-10-16-ouverture-sncfdevelopers-design.md`. Le socle est écrit dans `regis` puis copié ici ;
+(`.github/settings.json`, `.github/images.json`). Cela a été décidé lors de la préparation de
+l'ouverture des trois dépôts. Le socle est écrit dans `regis` puis copié ici ;
 le workflow `socle-drift` compare chaque semaine les trois copies.
 
 Ce socle contredit deux réponses que ce dépôt avait données :
@@ -62,13 +66,15 @@ Le titre de la PR est vérifié par le workflow `pr-title` du socle
 Conventional Commits, une portée facultative et la syntaxe de rupture. Sous `squash`
 ([`SDR-0009`](SDR-0009-branching.md)), ce titre devient le message du commit sur `main`, et c'est
 lui que lit release-please ([`SDR-0011`](SDR-0011-delivery.md)). `commits.scopes` reste `[]`,
-comme dans `SDR-0006`.
+comme dans `SDR-0006`. L'expression régulière accepte une portée facultative, quelle qu'elle
+soit : `commits.scopes: []` n'est donc tenu que par la relecture.
 
 La chaîne est `bloquante` : le ruleset versionné dans
-[`.github/settings.json`](../../.github/settings.json) exige les checks `lint`, `test`,
-`security`, `image` et `pr-title` avant toute fusion sur `main`. Les quatre premiers viennent de
-[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), qui n'appelle que les cibles du
-`Makefile`. `forge.host` et `ci.tool` ne changent pas.
+[`.github/settings.json`](../../.github/settings.json) exige cinq checks de statut, `lint`,
+`test`, `security`, `image` et `pr-title`, avant toute fusion sur `main`. Les quatre premiers
+viennent de [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), qui n'appelle que les
+cibles du `Makefile`. Le même ruleset porte une règle `code_scanning` : une alerte CodeQL bloque
+la fusion à partir de `critical`. `forge.host` et `ci.tool` ne changent pas.
 
 **Sur `commits.tool`, le schéma est plus étroit que la décision.** Le `.mdschema.yml` de ce
 répertoire n'admet que `commitlint`, `hook` ou `aucun`, et refuse `titre-de-pr` (vérifié le
