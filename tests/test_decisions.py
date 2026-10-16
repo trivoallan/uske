@@ -197,3 +197,44 @@ class Text(Journal):
         self.write("s.jsonl", line(source=S, rebuilt=H))
         text = decisions.render_text(decisions.load(self.dir, "s")[0])
         self.assertIn(f"    source: {S}\n    rebuilt: {H}", text)
+
+
+class Markdown(Journal):
+    def test_golden(self):
+        found = decisions.select(decisions.load(self.dir)[0], image=R728)
+        expected = (GOLDEN / "decisions-redis-728.md").read_text().rstrip("\n")
+        self.assertEqual(decisions.render_md(found), expected)
+
+    def test_escapes_what_breaks_mermaid_and_tables(self):
+        lines = [
+            {
+                "policy": "p",
+                "ts": "2026-10-01T00:00:00Z",
+                "ref": "r.example/a:1",
+                "digest": D1,
+                "state": "placed-by-exception",
+                "reason": "r:1 #2; 3%% 4|5\n6",
+                "ruleset": "none",
+                "arbitration": {"by": "b", "reason": "x|y\r\nz"},
+            },
+            {
+                "policy": "p",
+                "ts": "2026-10-01T00:00:00Z",
+                "digest": D1,
+                "state": "quarantine",
+            },
+        ]
+        expected = (GOLDEN / "decisions-escape.md").read_text().rstrip("\n")
+        self.assertEqual(decisions.render_md(lines), expected)
+
+    def test_marks_appear_in_the_timeline_and_the_table(self):
+        self.write(
+            "m.jsonl",
+            line(ts="2026-10-05T00:00:00Z", state="direct-placement"),
+            line(
+                ts="2026-10-02T00:00:00Z", state="inconclusive", reason="uske/reopened"
+            ),
+        )
+        md = decisions.render_md(decisions.load(self.dir, "m")[0])
+        self.assertIn("inconclusive — uske/reopened (antidatée) (arbitrage absent)", md)
+        self.assertIn("|  | antidatée; arbitrage absent |", md)

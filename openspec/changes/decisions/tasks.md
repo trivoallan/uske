@@ -492,7 +492,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
 
 ## 5. Le rendu Markdown, avec sa chronologie Mermaid
 
-- [ ] 5.1 Créer `tests/golden/decisions-redis-728.md`, sans saut de ligne final :
+- [x] 5.1 Créer `tests/golden/decisions-redis-728.md`, sans saut de ligne final :
 
   ~~~~markdown
   ## a-4711-redis-7 · docker.io/library/redis:7.2.8
@@ -512,7 +512,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   | 2026-10-09T09:00:00Z | placed-by-exception | sbom/license-blocklist | sha256:9e2b7c1a4d0f6835b2e9c7a1d4f60b83e5c2a9d7f1b46e0c3a8d5f2b9e6c1a40 |  | arbitration: {"by": "cao-data", "date": "2026-10-09", "reason": "Licence acceptée par le service juridique pour un usage interne."} |
   ~~~~
 
-- [ ] 5.2 Créer `tests/golden/decisions-escape.md`, sans saut de ligne final :
+- [x] 5.2 Créer `tests/golden/decisions-escape.md`, sans saut de ligne final :
 
   ~~~~markdown
   ## p · r.example/a:1
@@ -531,7 +531,7 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   | 2026-10-01T00:00:00Z | quarantine | — |  |  |  |
   ~~~~
 
-- [ ] 5.3 Ajouter à `tests/test_decisions.py` :
+- [x] 5.3 Ajouter à `tests/test_decisions.py` :
 
   ~~~python
   class Markdown(Journal):
@@ -571,9 +571,9 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
   Dans la cellule `details`, `\r\n` est écrit tel quel, en deux séquences d'échappement JSON :
   `json.dumps` n'y laisse aucun vrai saut de ligne, et seul `|` reste à échapper.
 
-- [ ] 5.4 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les trois
+- [x] 5.4 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu : les trois
   tests de `Markdown` échouent sur `AttributeError: … has no attribute 'render_md'`.
-- [ ] 5.5 Ajouter, sous `STATES` dans `uske/decisions.py` :
+- [x] 5.5 Ajouter, sous `STATES` dans `uske/decisions.py` :
 
   ~~~python
   # one pass, so an entity's own `#` and `;` are never escaped again
@@ -618,12 +618,12 @@ Hors du dépôt, et donc hors de cette demande de fusion : O2-KR2 du wiki nanopm
       return "\n\n".join(blocks)
   ~~~
 
-- [ ] 5.6 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
+- [x] 5.6 Lancer `uv run python -m pytest tests/test_decisions.py --no-cov -q`. Attendu :
   `20 passed`.
 - [ ] 5.7 Ouvrir `tests/golden/decisions-redis-728.md` dans l'aperçu Markdown de GitHub ou de
   l'éditeur (Mermaid activé). Attendu : une frise à deux dates, sans erreur de syntaxe Mermaid,
   puis le tableau à deux lignes.
-- [ ] 5.8 Commit :
+- [x] 5.8 Commit :
 
   ~~~bash
   git add uske/decisions.py tests/test_decisions.py tests/golden/decisions-redis-728.md tests/golden/decisions-escape.md

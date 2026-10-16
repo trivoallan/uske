@@ -28,6 +28,10 @@ WRITTEN = (
 )
 ADDED = ("policy", "backdated")  # what this module adds to a line
 STATES = {o.value for o in Outcome}
+# one pass, so an entity's own `#` and `;` are never escaped again
+MERMAID = str.maketrans(
+    {"#": "#35;", "%": "#37;", ":": "#58;", ";": "#59;", "\r": " ", "\n": " "}
+)
 
 
 class JournalError(Exception):
@@ -181,5 +185,38 @@ def render_text(lines: list[dict]) -> str:
                 f"    {k}: {line[k]}" for k in ("ruleset", "report") if k in line
             )
             out.extend(f"    {e}" for e in extras(line))
+        blocks.append("\n".join(out))
+    return "\n\n".join(blocks)
+
+
+def _cell(text: str) -> str:
+    return text.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+
+
+def render_md(lines: list[dict]) -> str:
+    blocks = []
+    for (policy, digest), group in groups(lines).items():
+        ref = group[0].get("ref", "—")
+        out = [f"## {policy} · {ref}", "", f"`{digest}`", "", "```mermaid", "timeline"]
+        out.append(f"    title {ref.translate(MERMAID)}")
+        days: dict[str, list[str]] = {}
+        for line in group:
+            event = f"{line['state']} — {line.get('reason') or '—'}"
+            event += "".join(f" ({m})" for m in marks(line))
+            days.setdefault(line["ts"][:10], []).append(event.translate(MERMAID))
+        out.extend(f"    {day} : " + " : ".join(events) for day, events in days.items())
+        out += ["```", "", "| ts | state | reason | ruleset | report | details |"]
+        out.append("| --- | --- | --- | --- | --- | --- |")
+        for line in group:
+            cells = [
+                line["ts"],
+                line["state"],
+                line.get("reason") or "—",
+                line.get("ruleset", ""),
+                # the ticket's reader cannot open it: say where it is
+                f"`{line['report']}` (volume uske-results)" if "report" in line else "",
+                "; ".join(extras(line) + marks(line)),
+            ]
+            out.append("| " + " | ".join(_cell(str(c)) for c in cells) + " |")
         blocks.append("\n".join(out))
     return "\n\n".join(blocks)
