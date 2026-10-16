@@ -31,7 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 # knock's definitive provenance signal, read exactly as knock's own coverage predicate reads it
 # (knock/domain/coverage.py, `is_stamped`): the namespaced lineage key under the default prefix.
@@ -55,14 +55,17 @@ class Harbor:
         self._auth = urllib.request.HTTPPasswordMgrWithDefaultRealm()
         self._auth.add_password(None, self.api, user, password)
         self._opener = urllib.request.build_opener(
-            urllib.request.HTTPBasicAuthHandler(self._auth))
+            urllib.request.HTTPBasicAuthHandler(self._auth)
+        )
 
     def _pages(self, path: str, query: dict | None = None) -> list:
         out, page = [], 1
         while True:
             params = {**(query or {}), "page": page, "page_size": PAGE_SIZE}
             url = f"{self.api}{path}?{urllib.parse.urlencode(params)}"
-            request = urllib.request.Request(url, headers={"Accept": "application/json"})
+            request = urllib.request.Request(
+                url, headers={"Accept": "application/json"}
+            )
             try:
                 with self._opener.open(request, timeout=60) as response:
                     raw = response.read()
@@ -81,13 +84,19 @@ class Harbor:
 
     def repositories(self, project: str) -> list[str]:
         # Harbor returns "project/repo"; the artifact path wants the repo part alone, escaped.
-        return [r["name"].split("/", 1)[1] for r in
-                self._pages(f"/projects/{urllib.parse.quote(project, safe='')}/repositories")
-                if "/" in r["name"]]
+        return [
+            r["name"].split("/", 1)[1]
+            for r in self._pages(
+                f"/projects/{urllib.parse.quote(project, safe='')}/repositories"
+            )
+            if "/" in r["name"]
+        ]
 
     def artifacts(self, project: str, repository: str) -> list[dict]:
-        path = (f"/projects/{urllib.parse.quote(project, safe='')}"
-                f"/repositories/{urllib.parse.quote(repository, safe='')}/artifacts")
+        path = (
+            f"/projects/{urllib.parse.quote(project, safe='')}"
+            f"/repositories/{urllib.parse.quote(repository, safe='')}/artifacts"
+        )
         return self._pages(path, {"q": "type=IMAGE", "with_tag": "true"})
 
 
@@ -104,20 +113,24 @@ def walk(harbor, projects: list[str] | None = None) -> list[dict]:
                 digest = artifact.get("digest")
                 if not digest:
                     continue
-                fleet.append({
-                    "project": project,
-                    "repository": f"{project}/{repository}",
-                    "digest": digest,
-                    "tags": [t.get("name") for t in artifact.get("tags") or []],
-                    "annotations": artifact.get("annotations") or {},
-                })
+                fleet.append(
+                    {
+                        "project": project,
+                        "repository": f"{project}/{repository}",
+                        "digest": digest,
+                        "tags": [t.get("name") for t in artifact.get("tags") or []],
+                        "annotations": artifact.get("annotations") or {},
+                    }
+                )
     return fleet
 
 
 # --- subtract -------------------------------------------------------------------------------
 
 
-def suspects(fleet: list[dict], known_repositories: set[str] | None = None) -> list[dict]:
+def suspects(
+    fleet: list[dict], known_repositories: set[str] | None = None
+) -> list[dict]:
     """The fleet minus what came through a door: stamped by knock, or owned by the existing
     chain (D-26 — an image the existing chain admitted has bypassed nothing).
 
@@ -126,8 +139,11 @@ def suspects(fleet: list[dict], known_repositories: set[str] | None = None) -> l
     exactly the size of the existing chain — stated in the report, never silently.
     """
     known = known_repositories or set()
-    return [a for a in fleet
-            if STAMP_KEY not in a["annotations"] and a["repository"] not in known]
+    return [
+        a
+        for a in fleet
+        if STAMP_KEY not in a["annotations"] and a["repository"] not in known
+    ]
 
 
 # --- ask ------------------------------------------------------------------------------------
@@ -144,8 +160,14 @@ def command_oracle(command: str, timeout: int = 30) -> Ask:
 
     def ask(query: dict) -> dict:
         try:
-            done = subprocess.run(argv, input=json.dumps(query), capture_output=True,
-                                  text=True, timeout=timeout, check=False)
+            done = subprocess.run(
+                argv,
+                input=json.dumps(query),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise CensusError(str(exc)) from exc
         if done.returncode != 0:
@@ -161,22 +183,29 @@ def command_oracle(command: str, timeout: int = 30) -> Ask:
     return ask
 
 
-def in_service(suspect: list[dict], ask: Ask, *, idle_days: int = HOUSE_IDLE_DAYS,
-               now: datetime | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+def in_service(
+    suspect: list[dict],
+    ask: Ask,
+    *,
+    idle_days: int = HOUSE_IDLE_DAYS,
+    now: datetime | None = None,
+) -> tuple[list[dict], list[dict], list[dict]]:
     """Split the suspects into (seen, unseen, unknown) by asking the oracle one digest at a time.
 
     An oracle that errors, times out or answers unreadably puts its digest in `unknown` — never
     in `unseen`. That is the inverse of `knock purge`'s fail-closed, and deliberate: there,
     silence must protect an image; here, silence must not shrink a count.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     since = now - timedelta(days=idle_days)
     seen, unseen, unknown = [], [], []
     for artifact in suspect:
-        query = {"digest": artifact["digest"],
-                 "image_ref": f"{artifact['repository']}:{(artifact['tags'] or ['<untagged>'])[0]}",
-                 "identity": {"policy": None, "import": None, "variant": None},
-                 "since": since.isoformat()}
+        query = {
+            "digest": artifact["digest"],
+            "image_ref": f"{artifact['repository']}:{(artifact['tags'] or ['<untagged>'])[0]}",
+            "identity": {"policy": None, "import": None, "variant": None},
+            "since": since.isoformat(),
+        }
         try:
             answer = ask(query)
             last_seen = _timestamp(answer.get("last_seen"))
@@ -186,8 +215,13 @@ def in_service(suspect: list[dict], ask: Ask, *, idle_days: int = HOUSE_IDLE_DAY
         if last_seen is None:
             unseen.append(artifact)
         else:
-            seen.append({**artifact, "last_seen": last_seen.isoformat(),
-                         "detail": str(answer.get("detail", ""))})
+            seen.append(
+                {
+                    **artifact,
+                    "last_seen": last_seen.isoformat(),
+                    "detail": str(answer.get("detail", "")),
+                }
+            )
     return seen, unseen, unknown
 
 
@@ -199,7 +233,7 @@ def _timestamp(value) -> datetime | None:
     if not isinstance(value, str) or not value:
         raise CensusError(f"oracle: invalid last_seen {value!r}")
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(value)
     except ValueError as exc:
         raise CensusError(f"oracle: invalid last_seen {value!r}: {exc}") from exc
 
@@ -207,24 +241,36 @@ def _timestamp(value) -> datetime | None:
 # --- the count ------------------------------------------------------------------------------
 
 
-def report(fleet: list[dict], suspect: list[dict], split=None, *,
-           idle_days: int = HOUSE_IDLE_DAYS, known_repositories: set[str] | None = None) -> dict:
+def report(
+    fleet: list[dict],
+    suspect: list[dict],
+    split=None,
+    *,
+    idle_days: int = HOUSE_IDLE_DAYS,
+    known_repositories: set[str] | None = None,
+) -> dict:
     """The census: a count, and everything that bounds it.
 
     `split` is `in_service`'s triple, or None when no oracle was given — then only the stored
     bypass is reported, and the in-service question stays open rather than being answered by
     default.
     """
-    stamped = len(fleet) - len(suspect) - _unstamped_but_known(fleet, known_repositories)
+    stamped = (
+        len(fleet) - len(suspect) - _unstamped_but_known(fleet, known_repositories)
+    )
     caveats = []
     if not known_repositories:
-        caveats.append("no existing-chain repository list (IF-08, gap 14): the suspect set "
-                       "still holds everything that chain admitted, so the bypass is an "
-                       "upper bound, not the number")
+        caveats.append(
+            "no existing-chain repository list (IF-08, gap 14): the suspect set "
+            "still holds everything that chain admitted, so the bypass is an "
+            "upper bound, not the number"
+        )
     if fleet and stamped == 0:
-        caveats.append("not one artifact in the fleet carries the knock stamp: either nothing "
-                       "has been placed yet, or Harbor is not returning manifest annotations — "
-                       "check before reading the rate")
+        caveats.append(
+            "not one artifact in the fleet carries the knock stamp: either nothing "
+            "has been placed yet, or Harbor is not returning manifest annotations — "
+            "check before reading the rate"
+        )
     out = {
         "fleet": len(fleet),
         "suspect": len(suspect),
@@ -244,15 +290,22 @@ def report(fleet: list[dict], suspect: list[dict], split=None, *,
     out["rate_in_service"] = round(len(seen) / len(fleet), 4) if fleet else None
     out["bound"] = {"low": len(seen), "high": len(seen) + len(unknown)}
     if unknown:
-        caveats.append(f"{len(unknown)} of {len(suspect)} suspects went unanswered by the "
-                       f"oracle: the count is between {len(seen)} and {len(seen) + len(unknown)}")
+        caveats.append(
+            f"{len(unknown)} of {len(suspect)} suspects went unanswered by the "
+            f"oracle: the count is between {len(seen)} and {len(seen) + len(unknown)}"
+        )
     if suspect and answered == 0:
-        caveats.append("the oracle answered nothing at all: the census has no in-service "
-                       "figure, only the stored bypass")
+        caveats.append(
+            "the oracle answered nothing at all: the census has no in-service "
+            "figure, only the stored bypass"
+        )
     return out
 
 
 def _unstamped_but_known(fleet: list[dict], known_repositories: set[str] | None) -> int:
     known = known_repositories or set()
-    return sum(1 for a in fleet
-               if STAMP_KEY not in a["annotations"] and a["repository"] in known)
+    return sum(
+        1
+        for a in fleet
+        if STAMP_KEY not in a["annotations"] and a["repository"] in known
+    )

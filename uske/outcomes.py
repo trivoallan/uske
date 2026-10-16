@@ -23,10 +23,16 @@ TIERS = {
 def criteria(playbook: dict) -> dict[str, str]:
     """slug -> `provider/criterion`: the report carries the slug, not the provider."""
     rules = (playbook.get("spec") or {}).get("rules") or []
-    return {r["slug"]: f"{r.get('provider')}/{r.get('criterion')}" for r in rules if "slug" in r}
+    return {
+        r["slug"]: f"{r.get('provider')}/{r.get('criterion')}"
+        for r in rules
+        if "slug" in r
+    }
 
 
-def classify(report: dict | None, playbook: dict, regis_exit: int = 0) -> tuple[Outcome, str | None]:
+def classify(
+    report: dict | None, playbook: dict, regis_exit: int = 0
+) -> tuple[Outcome, str | None]:
     """(outcome, reason). Anything short of a known tier on a complete evaluation is inconclusive."""
     if regis_exit != 0:
         return Outcome.INCONCLUSIVE, f"regis/exit-{regis_exit}"

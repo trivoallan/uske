@@ -286,9 +286,10 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Douze questions posées à ce jour, douze statuées. Onze sont héritées de la méthode — voir
-*Architecture Constraints* : dix questions qu'elle pose à tout dépôt qui l'adopte, et la règle
-qui dit comment on y répond. Une seule est propre à `uske`, `SDR-0016`. Une nouvelle décision s'écrit
+Treize ADR à ce jour, tous statués, dont deux dépassés par `SDR-0017` ; onze sont donc en
+vigueur. Onze sont hérités de la méthode — voir *Architecture Constraints* : dix questions
+qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment on y répond. Deux sont
+propres à `uske`, `SDR-0016` et `SDR-0017`. Une nouvelle décision s'écrit
 quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
 ou contraint les changes suivants.
 
@@ -309,7 +310,8 @@ figure quand même au journal — savoir ce qui reste à décider vaut autant qu
 **Un ADR `accepted` ne se corrige pas** : son corps est gelé
 ([`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md)). Pour revenir sur une décision,
 un nouvel ADR la nomme dans son `supersedes:` ; l'ancien reste au répertoire, qui est un journal
-et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un autre.
+et non la liste de ce qui est en vigueur. À ce jour, un seul en dépasse d'autres : `SDR-0017`
+dépasse `SDR-0006` et `SDR-0010`.
 
 ## Decision Log
 
@@ -320,19 +322,22 @@ et non la liste de ce qui est en vigueur. À ce jour, aucun ADR n'en dépasse un
 | [SDR-0003](../adr/SDR-0003-architecture.md) | Pattern d'architecture, et où vit ce document | accepted | 2026-09-20 | Sûreté, Opérabilité | **non** — le code est à rapprocher |
 | [SDR-0004](../adr/SDR-0004-languages.md) | Langage principal | accepted | 2026-09-20 | Opérabilité | oui |
 | [SDR-0005](../adr/SDR-0005-validation.md) | Validation aux frontières et des fichiers de données | accepted | 2026-09-20 | Sûreté, contre Minceur | **non** — validation à la main aujourd'hui |
-| [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
-| [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | **non mesuré** — aucun instrument |
+| [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | accepted — dépassé par SDR-0017 | 2026-09-20 | Contestabilité | sans objet — dépassé |
+| [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | oui — 91 % mesuré le 2026-10-16 |
 | [SDR-0008](../adr/SDR-0008-documentation.md) | Outil, racine et audience de la documentation | accepted | 2026-09-20 | Minceur | oui |
 | [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | oui |
-| [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted | 2026-09-20 | Opérabilité | oui |
-| [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | **non** — l'outil reste à installer |
+| [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted — dépassé par SDR-0017 | 2026-09-20 | Opérabilité | sans objet — dépassé |
+| [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | oui — release-please branché le 2026-10-16 |
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
+| [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
 
 ## Écarts ouverts
 
-Cinq décisions disent où le dépôt va, pas où il est ; chacune écrit son écart sous son titre
-*Consequences*, et aucun n'est réglé par le change qui a statué. Un sixième ne vient d'aucune
-décision — il a été relevé en revue. **Tous portent un identifiant dès maintenant, avant que
+Cinq décisions disaient où le dépôt allait, pas où il était ; chacune écrit son écart sous son
+titre *Consequences*, et aucun n'a été réglé par le change qui a statué. `SDR-0017` en a refermé
+trois le 2026-10-16 (`DEBT-03`, `DEBT-04` et `DEBT-05`) ; `DEBT-01` et `DEBT-02` restent ouverts.
+Un sixième ne vient d'aucune décision — il a été relevé en revue, et reste ouvert. Trois écarts
+sont donc ouverts à ce jour. **Tous portent un identifiant dès maintenant, avant que
 *Risks and Technical Debts* existe** : un écart sans nom ne se referme pas, il s'oublie. Ces
 identifiants sont stables — un écart réglé se marque *Closed* et garde son numéro, il ne
 disparaît pas de la table.
@@ -341,10 +346,10 @@ disparaît pas de la table.
 |----|-------|----------------------|-------------------|
 | DEBT-01 | L'arborescence du code contredit le pattern décidé ; un agent lit une structure que l'ADR dément, et suit l'ADR pour le code nouveau | [`SDR-0003`](../adr/SDR-0003-architecture.md) | Le rapprochement du code existant, change après change |
 | DEBT-02 | La validation aux frontières se fait à la main ; un champ absent reste un défaut silencieux au lieu d'une erreur nommée | [`SDR-0005`](../adr/SDR-0005-validation.md) | Les frontières existantes portées sur l'outil décidé |
-| DEBT-03 | Le format des messages de commit n'est tenu par rien ; un message hors format passe | [`SDR-0006`](../adr/SDR-0006-commits.md) | `commitlint` installé et branché sur le titre de la demande de fusion |
-| DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | [`SDR-0007`](../adr/SDR-0007-tests.md) | Un instrument branché, et une première mesure prise |
-| DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | [`SDR-0011`](../adr/SDR-0011-delivery.md) | L'outil de release installé — il dépend de DEBT-03 |
-| DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | aucune — relevé en revue le 2026-09-20 | Le contrôle ajouté à `.github/workflows/test.yaml`, ou dit manuel dans un ADR qui dépasse [`SDR-0010`](../adr/SDR-0010-forge-and-ci.md) |
+| DEBT-03 | Le format des messages de commit n'est tenu par rien ; un message hors format passe | [`SDR-0006`](../adr/SDR-0006-commits.md) | *Closed* 2026-10-16 par [`SDR-0017`](../adr/SDR-0017-socle-commun.md) : le workflow `pr-title` vérifie le titre par une expression régulière ; `commitlint` n'a pas été installé. (Critère d'origine : `commitlint` installé et branché sur le titre de la demande de fusion.) |
+| DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | [`SDR-0007`](../adr/SDR-0007-tests.md) | *Closed* 2026-10-16. Un instrument branché, et une première mesure prise |
+| DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. L'outil de release installé — il dépend de DEBT-03 |
+| DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | aucune — relevé en revue le 2026-09-20 | Le contrôle ajouté à la cible `lint` du `Makefile`, ou dit manuel dans un ADR qui dépasse [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
 
 **`DEBT-06` n'a pas la même provenance que les cinq autres, et c'est le plus intéressant.** Les
 cinq premiers sont déclarés par la décision qui les crée : quelqu'un a statué, et a écrit ce que
@@ -353,9 +358,9 @@ Vérifié le 2026-09-20 : `mdschema` n'est nommé que dans son propre fichier de
 la chaîne, ni un script, ni un crochet ne le lance. La méthode livre l'instrument, le dépôt ne le
 branche pas.
 
-**Il partage ce motif avec `DEBT-03`** : deux vérifications décidées, aucune des deux
-automatisée. C'est le seul motif qui se répète dans cette table, et c'est donc lui qu'il faut
-surveiller — un dépôt qui décide des contrôles sans les brancher finit par croire ses décisions
+**Il partageait ce motif avec `DEBT-03`**, refermé depuis : deux vérifications décidées, aucune
+des deux automatisée. C'est le seul motif qui s'est répété dans cette table, et c'est donc lui
+qu'il faut surveiller — un dépôt qui décide des contrôles sans les brancher finit par croire ses décisions
 tenues.
 
 **Ces six lignes sont la matière de *Risks and Technical Debts***, qui les reprendra telles

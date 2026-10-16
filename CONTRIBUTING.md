@@ -8,7 +8,7 @@ la licence Apache 2.0, comme le dit la section 5 de [LICENSE](LICENSE). Aucun CL
 
 - Lancez `make lint test security` sur votre poste. La CI lance les mêmes cibles.
 - Titrez la demande au format [Conventional Commits](https://www.conventionalcommits.org/fr/)
-  (`feat: …`, `fix(journal): …`). Le titre devient le commit fusionné, et c'est de lui que se
+  (`feat: …`, `fix: …`). Le titre devient le commit fusionné, et c'est de lui que se
   déduisent la version et le changelog.
 - Signalez une vulnérabilité en privé : voir [SECURITY.md](SECURITY.md).
 
