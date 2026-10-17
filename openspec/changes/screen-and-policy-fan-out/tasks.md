@@ -81,7 +81,7 @@
 
 ## 4. Le workflow réparti
 
-- [ ] 4.1 `uske merge` (D12) : dans `uske/cli.py`, le verbe `merge --results <dir> --from <dir>`.
+- [x] 4.1 `uske merge` (D12) : dans `uske/cli.py`, le verbe `merge --results <dir> --from <dir>`.
   Pour chaque `<politique>.tgz` de `--from` (trié par nom) : nom vérifié DNS-1123, membres de
   l'archive refusés s'ils sortent de leur répertoire, lignes de `lines.jsonl` ajoutées par
   `results.append` au journal de la politique, rapports de `reports/` copiés sous
@@ -91,7 +91,7 @@
   qu'elles citent sous `<dir>/reports/`). Tests dans `tests/test_merge.py`, scénarios *Deux
   politiques, une fusion*, *Rejouer la fusion*, *Une ligne écrite à la main pendant le screening*,
   plus un nom `../x` et un membre d'archive `../../x` refusés.
-- [ ] 4.2 Commit : `feat(cli): verser au journal les lignes d'un screening réparti`.
+- [x] 4.2 Commit : `feat(cli): verser au journal les lignes d'un screening réparti`.
 - [ ] 4.3 `deploy/base/workflowtemplate.yaml` : un second `WorkflowTemplate` `uske-policy`, avec
   les paramètres `repository`, `commit`, `name`, `path`, `playbooks`, `transit`, `epoch`, `run`,
   `snapshot-lines` et `merge` (défaut `true`), son propre `checkout` au commit (D7), `{{workflow.name}}`

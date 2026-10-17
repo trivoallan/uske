@@ -19,7 +19,17 @@ from pathlib import Path
 
 import yaml
 
-from uske import census, decisions, dtsync, gate, outcomes, playbooks, policies, results
+from uske import (
+    census,
+    decisions,
+    dtsync,
+    gate,
+    merge,
+    outcomes,
+    playbooks,
+    policies,
+    results,
+)
 
 
 class Failure(Exception):
@@ -366,6 +376,40 @@ def cmd_screen(args) -> None:
         raise Failure(f"screening failed for: {', '.join(failed)}")
 
 
+def cmd_export(args) -> None:
+    policy = _policy(args.policy)
+    try:
+        count, warnings = merge.export(
+            policy.name, Path(args.results), args.snapshot_lines, Path(args.out)
+        )
+    except (merge.ArchiveError, OSError, ValueError) as exc:
+        raise Failure(str(exc)) from exc
+    for warning in warnings:
+        print(warning, file=sys.stderr)
+    _json({"exported": count, "out": args.out})
+
+
+def cmd_merge(args) -> None:
+    try:
+        found = merge.archives(Path(args.source))
+    except merge.ArchiveError as exc:
+        raise Failure(str(exc)) from exc
+    merged, failed = {}, []
+    for archive in found:  # one bad archive never keeps the others out of the journal
+        try:
+            policy, written, stale = merge.merge_one(archive, Path(args.results))
+        except merge.ArchiveError as exc:
+            print(f"error: {archive.name}: {exc}", file=sys.stderr)
+            failed.append(archive.name)
+            continue
+        for message in stale:
+            print(f"{policy}: {message}", file=sys.stderr)
+        merged[policy] = written
+    _json(merged)
+    if failed:
+        raise Failure(f"not merged: {', '.join(failed)}")
+
+
 SCREEN_EPILOG = """\
 environment:
   USKE_REGIS_CMD     the judge's command, split like a POSIX shell and run without one;
@@ -686,6 +730,34 @@ def parser() -> argparse.ArgumentParser:
         help="plan and judge only: print the verdict lines, record and place nothing",
     )
     s.set_defaults(run=cmd_screen)
+
+    s = sub.add_parser(
+        "export",
+        help="a child's lines past the snapshot, with the reports they cite, as one archive",
+    )
+    s.add_argument("--policy", required=True)
+    s.add_argument("--results", required=True, help="the child's copy of the journals")
+    s.add_argument(
+        "--snapshot-lines",
+        type=int,
+        required=True,
+        help="how many lines the journal had in the parent's snapshot",
+    )
+    s.add_argument("--out", required=True, help="the archive to write, <policy>.tgz")
+    s.set_defaults(run=cmd_export)
+
+    s = sub.add_parser(
+        "merge",
+        help="append the children's archives to the journals; replaying it appends nothing",
+    )
+    s.add_argument("--results", required=True, help="where the journals are")
+    s.add_argument(
+        "--from",
+        dest="source",
+        required=True,
+        help="a directory of <policy>.tgz, written by `uske export`",
+    )
+    s.set_defaults(run=cmd_merge)
 
     s = sub.add_parser(
         "dt-plan",
