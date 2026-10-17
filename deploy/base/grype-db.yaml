@@ -30,6 +30,7 @@ spec:
           - name: pointer  # absent on the very first run
             path: /tmp/in/current.json
             optional: true
+            mode: 292  # 0444: Argo writes inputs 0600 root, and the regis image runs as non-root
             s3: {key: "grype-db/current.json"}
       container:
         image: regis

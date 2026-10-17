@@ -55,6 +55,8 @@ class GrypeDb(unittest.TestCase):
         (pointer,) = self.template["inputs"]["artifacts"]
         self.assertEqual(pointer["path"], "/tmp/in/current.json")
         self.assertTrue(pointer["optional"])
+        # Argo writes inputs 0600 root; the regis image runs as non-root (found on the kind bench).
+        self.assertEqual(pointer["mode"], 0o444)
         self.assertEqual(pointer["s3"], {"key": POINTER})
         outputs = {a["s3"]["key"]: a for a in self.template["outputs"]["artifacts"]}
         self.assertEqual(set(outputs), {ARCHIVE, POINTER})
@@ -267,6 +269,7 @@ class RegisAnalyze(unittest.TestCase):
         ]
         self.assertEqual(db["path"], "/grype/current.tar.zst")
         self.assertTrue(db["optional"])
+        self.assertEqual(db["mode"], 0o444)  # readable by regis's non-root user
         self.assertEqual(db["archive"], {"none": {}})
         self.assertEqual(db["s3"], {"key": ARCHIVE})
 

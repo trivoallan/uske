@@ -861,6 +861,7 @@ spec:
           - name: grype-db  # the vulnerability database the refresh distributes (grype-db.yaml)
             path: /grype/current.tar.zst  # on the volume below: Argo writes it there, no subPath mount
             optional: true  # absent before the first refresh: regis then records the cve check in error
+            mode: 292  # 0444: Argo writes inputs 0600 root, and the regis image runs as non-root
             archive: {none: {}}
             s3: {key: grype-db/current.tar.zst}
       # This pod's only volume, an emptyDir (SDR-0021 forbids a persistent one). An input artifact

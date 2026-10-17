@@ -255,15 +255,25 @@ docker.io/library/hello-world@sha256:5e23090353324d887c48ad5e5c56d294eab81588df9
 
 # 8. The grype database, once, before any screening: a bench without it makes every full-regime
 #    evaluation inconclusive. The CronWorkflow is suspended here; this Workflow, named, is the one waited for.
+#    Argo creates the bucket only on a first write, and an optional input in a missing bucket is
+#    an error, not "absent": create it first, from inside the store (200 when it already exists).
+kubectl -n "$NS" exec deploy/artifacts -- sh -c 'curl -fsS -o /dev/null -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" \
+  --user "$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY" http://localhost:9000/uske'
 wf="$(kubectl -n "$NS" create -f "$HERE/grype-db.yaml" -o name)"
-if ! kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded "$wf" --timeout=15m; then
-  echo "The grype database fill ($wf) did not succeed. See: kubectl -n $NS get wf, argo -n $NS logs $wf" >&2
+# `kubectl wait` takes one condition: poll the phase, so a failed fill stops here at once.
+phase=""
+for _ in $(seq 90); do  # 90 x 10 s: 15 minutes
+  phase="$(kubectl -n "$NS" get "$wf" -o jsonpath='{.status.phase}')"
+  case "$phase" in Succeeded|Failed|Error) break ;; esac
+  sleep 10
+done
+if [[ "$phase" != Succeeded ]]; then
+  echo "The grype database fill ($wf) did not succeed (${phase:-timed out}). See: kubectl -n $NS get wf, argo -n $NS logs $wf" >&2
   exit 1
 fi
 
 echo "Ready. Start a screening:"
 echo "  kubectl -n $NS create -f $HERE/screening.yaml && kubectl -n $NS get wf -w"
-echo "Refill the grype database by hand after a long pause: kubectl -n $NS create -f $HERE/grype-db.yaml"
 echo "Refill the grype database by hand after a long pause: kubectl -n $NS create -f $HERE/grype-db.yaml"
 echo "Argo UI:     kubectl -n $NS port-forward svc/argo-workflows-server 2746:2746  → https://localhost:2746"
 echo "Registry UI: kubectl -n $NS port-forward svc/registry 8082:5000               → https://localhost:8082"
