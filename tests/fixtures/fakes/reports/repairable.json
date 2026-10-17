@@ -1,0 +1,15 @@
+{
+  "playbooks": [
+    {
+      "tier": "Transformation requise puis placement",
+      "rules": [
+        {
+          "slug": "cve-critical",
+          "level": "critical",
+          "passed": false,
+          "status": "failed"
+        }
+      ]
+    }
+  ]
+}

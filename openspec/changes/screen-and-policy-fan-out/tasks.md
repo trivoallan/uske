@@ -41,33 +41,33 @@
 
 ## 2. Le verbe `uske screen`
 
-- [ ] 2.1 Créer `tests/fakes/regis` et `tests/fakes/knock`, deux scripts Python exécutables qui
+- [x] 2.1 Créer `tests/fakes/regis` et `tests/fakes/knock`, deux scripts Python exécutables qui
   écrivent des fichiers figés tirés de `tests/fixtures/` selon leurs arguments (`analyze`,
   `reconcile --plan-out`, `reconcile --apply-plan … --staged-out --applied-out`, `promote`), et
   qui consignent chaque appel dans `$FAKE_CALLS`. Un `FAKE_FAIL=apply` fait sortir l'application en 1.
-- [ ] 2.2 Test de parité dans `tests/test_screen.py` (scénario *Les mêmes lignes que les étapes*),
+- [x] 2.2 Test de parité dans `tests/test_screen.py` (scénario *Les mêmes lignes que les étapes*),
   puis `uske/screen.py` : une fonction `screen_policy(policy, work, results, playbooks, transit,
   epoch, run, tools, after_record, judge_only) -> dict` qui suit l'ordre de `uske-policy`. Chaque
   bloc porte en commentaire le nom de l'étape du template qu'il suit (`# prepare`, `# plan`, …).
   Attendu : `uv run python -m pytest --no-cov tests/test_screen.py -k parity` rend `1 passed`.
-- [ ] 2.3 `Tools` dans `uske/screen.py` : un préfixe par outil (`shlex.split` de `USKE_REGIS_CMD`
+- [x] 2.3 `Tools` dans `uske/screen.py` : un préfixe par outil (`shlex.split` de `USKE_REGIS_CMD`
   et `USKE_KNOCK_CMD`, ou le nom seul), vérifié par `shutil.which` avant toute étape. Un outil qui
   sort en erreur écrit sur la sortie d'erreur la commande complète et son code. Tests : *Un préfixe
   docker*, *Le placeur manque*.
-- [ ] 2.4 Le crochet `USKE_AFTER_RECORD` (`sh -c`, avec `USKE_POLICY` et `USKE_RESULTS` dans
+- [x] 2.4 Le crochet `USKE_AFTER_RECORD` (`sh -c`, avec `USKE_POLICY` et `USKE_RESULTS` dans
   l'environnement), lancé après toute écriture d'au moins une ligne. Tests : *Commiter le journal
   avant de placer*, *Le crochet échoue*, et une politique nommée `a;touch pwned` dont le crochet
   `true` ne crée aucun fichier `pwned`.
-- [ ] 2.5 Copie des rapports et chemin relatif (scénario *Un rapport cité par un chemin relatif*),
+- [x] 2.5 Copie des rapports et chemin relatif (scénario *Un rapport cité par un chemin relatif*),
   `--judge-only` (*Une demande de fusion*), régime inconnu (*Un régime inconnu*), source à réparer
   (*Une source à réparer*), journal en lecture seule (*Le journal ne peut pas être écrit*).
-- [ ] 2.6 Le verbe dans `parser()` de `uske/cli.py` : `screen` avec `--policies` ou `--policy`
+- [x] 2.6 Le verbe dans `parser()` de `uske/cli.py` : `screen` avec `--policies` ou `--policy`
   (exclusifs, l'un requis), `--playbooks`, `--results`, `--work`, `--transit`, `--epoch`, `--run`
   et `--judge-only`. Une ligne JSON par politique, et le code de retour de D6. L'épilogue de
   `--help` nomme les trois variables, avec un exemple chacune. Tests : *Une quarantaine*, *Une
   politique casse, la suivante passe*, *Une copie saine*.
-- [ ] 2.7 `make test` : la couverture de branches reste ≥ 90 %, `uske/screen.py` compris.
-- [ ] 2.8 Commit : `feat(cli): conduire un screening entier en une commande locale`.
+- [x] 2.7 `make test` : la couverture de branches reste ≥ 90 %, `uske/screen.py` compris.
+- [x] 2.8 Commit : `feat(cli): conduire un screening entier en une commande locale`.
 
 ## 3. Renouveler l'ordre sur un tag réparé
 

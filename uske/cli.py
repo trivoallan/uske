@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -325,6 +326,63 @@ def cmd_approve(args) -> None:
     _json(count)
 
 
+def cmd_screen(args) -> None:
+    # screen runs this module's decisions: imported here, once both modules exist
+    from uske import screen
+
+    tools = screen.Tools.from_env(os.environ)
+    tools.check()  # before any step: a missing tool writes nothing
+    if args.policy:
+        found = [_policy(args.policy)]
+    else:
+        found, errors = policies.load_dir(args.policies)
+        for error in errors:
+            print(f"skipped: {error}", file=sys.stderr)
+    work = Path(args.work) if args.work else Path(tempfile.mkdtemp(prefix="uske-"))
+    print(f"work: {work}", file=sys.stderr)  # kept: a failed screening is read there
+    epoch = args.epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    failed = []
+    for policy in found:
+        summary = screen.screen_policy(
+            policy,
+            work,
+            Path(args.results),
+            Path(args.playbooks),
+            args.transit,
+            epoch,
+            args.run_id,
+            tools,
+            os.environ.get("USKE_AFTER_RECORD") or None,
+            args.judge_only,
+        )
+        if args.judge_only:
+            for line in summary["lines"]:
+                _json(line)
+        else:
+            _json(summary)
+        if summary["outcome"] != "ok":
+            failed.append(policy.name)
+    if failed:
+        raise Failure(f"screening failed for: {', '.join(failed)}")
+
+
+SCREEN_EPILOG = """\
+environment:
+  USKE_REGIS_CMD     the judge's command, split like a POSIX shell and run without one;
+                     the arguments are appended. Default: regis, from PATH.
+                       USKE_REGIS_CMD="docker run --rm -v $PWD:$PWD regis:1"
+  USKE_KNOCK_CMD     the placer's command, likewise. Default: knock, from PATH.
+                       USKE_KNOCK_CMD="docker run --rm -v $PWD:$PWD --env-file knock.env knock:1"
+  USKE_AFTER_RECORD  run by `sh -c` after each step that wrote the journal, before the next one,
+                     with USKE_POLICY and USKE_RESULTS set; a failure stops the policy.
+                       USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A &&
+                         git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY)"'
+
+Paths are handed to the tools as uske sees them: a container mounts them at the same path.
+Exit 0 when every policy went through, whatever its verdicts; 1 when one failed.
+"""
+
+
 def _dependency_track() -> dtsync.DependencyTrack:
     url, key = os.environ.get("DT_URL"), os.environ.get("DT_API_KEY")
     if not url or not key:
@@ -588,6 +646,45 @@ def parser() -> argparse.ArgumentParser:
         "--run", dest="run_id", default="", help="the screening that decides"
     )
     s.set_defaults(run=cmd_approve)
+
+    s = sub.add_parser(
+        "screen",
+        help="a whole screening in one command: plan, judge, record, place, per policy",
+        epilog=SCREEN_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    which = s.add_mutually_exclusive_group(required=True)
+    which.add_argument(
+        "--policies", help="a directory: every policy, in `uske list` order"
+    )
+    which.add_argument("--policy", help="one policy file")
+    s.add_argument("--playbooks", default="playbooks")
+    s.add_argument("--results", required=True, help="where the journals are")
+    s.add_argument(
+        "--work",
+        default="",
+        help="where plans, reports and lines are written (default: a new temporary "
+        "directory, named on stderr and kept)",
+    )
+    s.add_argument(
+        "--transit",
+        help="name of the registry remediated images are held in; without it, no source to "
+        "repair is ordered (uske/no-transit)",
+    )
+    s.add_argument(
+        "--epoch",
+        default="",
+        help="the remediation orders' epoch, UTC, YYYYMMDDTHHMMSSZ (default: now)",
+    )
+    s.add_argument(
+        "--run", dest="run_id", default="", help="the screening that writes (SDR-0018)"
+    )
+    s.add_argument(
+        "--judge-only",
+        action="store_true",
+        help="plan and judge only: print the verdict lines, record and place nothing",
+    )
+    s.set_defaults(run=cmd_screen)
 
     s = sub.add_parser(
         "dt-plan",

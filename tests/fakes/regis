@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""A fake `regis analyze`: writes a frozen report from tests/fixtures/fakes/reports.
+
+    regis analyze <repository@digest> --playbook P -D DIR -o "report.{format}" [--html] [--markdown]
+
+FAKE_VERDICTS, a JSON object, maps a digest (or "*") to a report name: `direct`, `quarantine`,
+`repairable`, or `fail` (no report, exit 3). Default: `direct`. Each call is logged to FAKE_CALLS.
+"""
+
+import json
+import os
+import shlex
+import shutil
+import sys
+from pathlib import Path
+
+REPORTS = Path(__file__).resolve().parent.parent / "fixtures" / "fakes" / "reports"
+
+
+def main(argv: list[str]) -> int:
+    if os.environ.get("FAKE_CALLS"):
+        with open(os.environ["FAKE_CALLS"], "a") as log:
+            log.write(shlex.join(["regis", *argv]) + "\n")
+    if not argv or argv[0] != "analyze":
+        return 2
+    target = argv[1]
+    out = Path(argv[argv.index("-D") + 1])
+    verdicts = json.loads(os.environ.get("FAKE_VERDICTS") or "{}")
+    digest = target.rsplit("@", 1)[-1]
+    name = verdicts.get(digest, verdicts.get("*", "direct"))
+    if name == "fail":
+        return 3
+    out.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(REPORTS / f"{name}.json", out / "report.json")
+    if "--html" in argv:
+        (out / "report.html").write_text(f"<p>{digest}: {name}</p>\n")
+    if "--markdown" in argv:
+        (out / "report.md").write_text(f"# {digest}\n\n{name}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
