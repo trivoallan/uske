@@ -93,11 +93,9 @@ Les scénarios mesurables sont en *Quality Requirements* (`QS-01` à `QS-07`).
 **Ces cinq rôles sont les parties prenantes du système, pas le lectorat de ce document.** Trois
 d'entre eux sont des personas : aucune personne réelle ne les tient aujourd'hui, et c'est le
 mainteneur qui répond à leur place. Le lectorat de la documentation, lui, est fixé par
-[`SDR-0008`](../adr/SDR-0008-documentation.md) à `mono-utilisateur` — ce qui explique qu'aucun
-terme du métier ne soit défini en *Glossary* : `screening`, `régime`, `contournement`, `juge`,
-`placeur` s'emploient ici sans glose. Le jour où l'audience s'élargit, un nouvel ADR le dit, et
-`SDR-0008` prévient lui-même que **toutes** les pages écrites sous `mono-utilisateur` se
-relisent avant — cette section et le glossaire les premiers.
+[`SDR-0019`](../adr/SDR-0019-documentation-publique.md) à `public` : le document se lit hors de
+l'organisation, et les termes du métier — `screening`, `régime`, `contournement`, `juge`,
+`placeur` — sont définis en *Glossary*.
 
 **Validation des objectifs qualité** : le mainteneur, qui en a fixé l'ordre le 2026-09-20.
 
@@ -129,7 +127,7 @@ qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc.
 > Niveau LEAN : un diagramme et une table par contexte. La frontière tient en une phrase —
 > `uske` et son journal sont dedans, tout ce qu'il appelle est dehors. Les diagrammes de ce
 > document sont en Mermaid, que GitHub affiche sans outil : c'est ce que
-> [`SDR-0008`](../adr/SDR-0008-documentation.md) (`tool: aucun`) permet.
+> [`SDR-0019`](../adr/SDR-0019-documentation-publique.md) (`tool: aucun`) permet.
 > Les `IF-nn` sont ceux de ce document : un `IF-nn` cité dans le code vient du dossier de
 > référence, et ne désigne pas la même interface.
 
@@ -576,10 +574,10 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Quatorze ADR à ce jour, tous statués, dont deux dépassés par `SDR-0017` ; douze sont donc en
-vigueur. Onze sont hérités de la méthode — voir *Architecture Constraints* : dix questions
-qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment on y répond. Trois sont
-propres à `uske` : `SDR-0016`, `SDR-0017` et `SDR-0018`. Une nouvelle décision s'écrit
+Quinze ADR à ce jour, tous statués, dont trois dépassés — deux par `SDR-0017`, un par
+`SDR-0019` ; douze sont donc en vigueur. Onze sont hérités de la méthode — voir *Architecture
+Constraints* : dix questions qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment
+on y répond. Quatre sont propres à `uske` : `SDR-0016` à `SDR-0019`. Une nouvelle décision s'écrit
 quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
 ou contraint les changes suivants.
 
@@ -600,8 +598,8 @@ figure quand même au journal — savoir ce qui reste à décider vaut autant qu
 **Un ADR `accepted` ne se corrige pas** : son corps est gelé
 ([`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md)). Pour revenir sur une décision,
 un nouvel ADR la nomme dans son `supersedes:` ; l'ancien reste au répertoire, qui est un journal
-et non la liste de ce qui est en vigueur. À ce jour, un seul en dépasse d'autres : `SDR-0017`
-dépasse `SDR-0006` et `SDR-0010`.
+et non la liste de ce qui est en vigueur. À ce jour, deux en dépassent d'autres : `SDR-0017`
+dépasse `SDR-0006` et `SDR-0010`, et `SDR-0019` dépasse `SDR-0008`.
 
 ## Decision Log
 
@@ -614,13 +612,14 @@ dépasse `SDR-0006` et `SDR-0010`.
 | [SDR-0005](../adr/SDR-0005-validation.md) | Validation aux frontières et des fichiers de données | accepted | 2026-09-20 | Sûreté, contre Minceur | **non** — `DEBT-02` |
 | [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | accepted — dépassé par SDR-0017 | 2026-09-20 | Contestabilité | sans objet — dépassé |
 | [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | oui — 91 % mesuré le 2026-10-16 |
-| [SDR-0008](../adr/SDR-0008-documentation.md) | Outil, racine et audience de la documentation | accepted | 2026-09-20 | Minceur | oui |
+| [SDR-0008](../adr/SDR-0008-documentation.md) | Outil, racine et audience de la documentation | accepted — dépassé par SDR-0019 | 2026-09-20 | Minceur | sans objet — dépassé |
 | [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | oui |
 | [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted — dépassé par SDR-0017 | 2026-09-20 | Opérabilité | sans objet — dépassé |
 | [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | oui — release-please branché le 2026-10-16 |
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
 | [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
 | [SDR-0018](../adr/SDR-0018-journal-run.md) | Une ligne du journal nomme le criblage qui l'a écrite (clé `run`) | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui — `classify --run` reçoit `{{workflow.name}}` du `WorkflowTemplate` |
+| [SDR-0019](../adr/SDR-0019-documentation-publique.md) | Audience de la documentation : `public` | accepted | 2026-10-17 | Contestabilité | oui — pages relues le 2026-10-17 |
 
 ## Écarts ouverts
 
@@ -701,13 +700,27 @@ la même façon : le journal des décisions ne dit pas ce que le dépôt fait.
 
 # Glossary
 
-> **Aucun terme du métier n'est défini ici**, et c'est voulu : `SDR-0008` fixe l'audience à
-> `mono-utilisateur` (voir *Stakeholders*). Ce glossaire ne tient que les synonymes, les
-> identifiants et les sigles qu'un lecteur rencontre dans ce document. Les noms de blocs sont
-> définis dans la table de *Building Block View*.
+> L'audience est `public` ([`SDR-0019`](../adr/SDR-0019-documentation-publique.md)) : ce
+> glossaire définit les termes du métier, puis les identifiants et les sigles qu'un lecteur
+> rencontre dans ce document. Les noms de blocs sont définis dans la table de *Building Block
+> View*.
 
 | Terme | Définition |
 |-------|------------|
+| Juge | L'outil qui dit si une image peut entrer : `regis`. Il rend un verdict, il ne place rien. |
+| Placeur | L'outil qui fait entrer les images dans le registre, par copie ou par reconstruction, et qui atteste ce qu'il a fait : `knock`. Il ne juge rien. |
+| Politique | Un fichier du dépôt des politiques : une source à faire entrer au registre, sa destination et son régime (le label `admission-track`). Le placeur la lit pour écrire son plan. |
+| Régime | Le niveau d'exigence d'une politique. Il désigne le jeu de règles avec lequel le juge l'évalue (`playbooks.py`). |
+| Jeu de règles, *playbook* | Les règles qu'applique le juge, et les tiers auxquels elles mènent. |
+| Empreinte, *digest* | L'identifiant d'une image par son contenu. Un verdict porte sur une empreinte, pas sur une étiquette. |
+| Issue | Ce qu'un verdict décide pour une image : placement direct, transformation requise, quarantaine ou non concluant. |
+| Tier | Le nom que le jeu de règles donne à son verdict ; `uske` le ramène à une issue. |
+| Quarantaine | L'issue d'une image refusée : rien n'est placé. |
+| Non concluant, `inconclusive` | L'issue d'une évaluation qui n'a pas abouti : rien n'est décidé, rien n'est placé, et le screening suivant rejuge. |
+| Réparation, *remediation* | Une reconstruction ordonnée par `uske` pour une source refusée sur des règles que son régime déclare réparables. L'image réparée est jugée avant d'être placée. |
+| Transit | Le lieu où le placeur retient une image reconstruite tant qu'elle n'a pas son propre verdict. Les consommateurs ne doivent pas pouvoir y tirer. |
+| Seconde porte | Le jugement d'une image retenue dans le transit, par sa propre empreinte. |
+| Contournement | Ce qui est au registre sans être passé par `uske` : le recensement le compte. |
 | *screening*, *criblage* | Le même mot. Ce document et le README disent *screening* ; `SDR-0018` et les raisons écrites au journal (`outcomes.py`, [`raisons.md`](../reference/raisons.md)) disent *criblage*. |
 | `D-nn` | Une décision du dossier de référence de l'espace de travail, pas de ce dépôt. Citée dans le code (`D-23`, `D-30`). |
 | `IF-nn` | Une interface de *Context and Scope*. Un `IF-nn` cité dans le code vient du dossier de référence, et n'est pas le même. |
