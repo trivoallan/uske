@@ -909,13 +909,13 @@ Renovate le suivra.
 
 ## 7. ADR
 
-- [ ] 7.1 Écrire `docs/adr/SDR-0023-workflow-github.md` en `status: proposed`, au format de
+- [x] 7.1 Écrire `docs/adr/SDR-0023-workflow-github.md` en `status: proposed`, au format de
   SDR-0021 : contexte, options (action composite, workflow réutilisable, GitHub Actions comme
   planificateur), décision, conséquences. Il renvoie à `design.md` pour le détail. Proposer la
   skill `architectural-decision-records`, et attendre l'aval.
-- [ ] 7.2 Demander le verdict à Tristan. Une fois reçu, passer le statut à `accepted` et citer le
+- [x] 7.2 Demander le verdict à Tristan. Une fois reçu, passer le statut à `accepted` et citer le
   verdict en tête, comme SDR-0021.
-- [ ] 7.3 Commit : `docs: consigner le workflow GitHub de screening (SDR-0023)`.
+- [x] 7.3 Commit : `docs: consigner le workflow GitHub de screening (SDR-0023)`.
 
 ## 8. Clôture
 

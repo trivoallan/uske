@@ -670,10 +670,10 @@ MADR format. This section is their **log**: it points to them, and copies neithe
 nor their options, nor their values — each ADR says that its values are written in it "and nowhere
 else", and that is what keeps them from being contradicted here.
 
-Eighteen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
-one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; thirteen are therefore in force. Eleven are inherited from the method — see *Architecture
+Nineteen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
+one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; fourteen are therefore in force. Eleven are inherited from the method — see *Architecture
 Constraints*: ten questions that it asks every repository adopting it, and the rule that says how
-to answer them. Seven are specific to `uske`: `SDR-0016` to `SDR-0022`. A new decision is written
+to answer them. Eight are specific to `uske`: `SDR-0016` to `SDR-0023`. A new decision is written
 when a choice is expensive to undo, touches several blocks, arbitrates between two quality goals,
 or constrains the following changes.
 
@@ -720,6 +720,7 @@ supersedes `SDR-0020`.
 | [SDR-0020](../adr/SDR-0020-readme-en-anglais.md) | The README in English, like those of `regis` and `knock` | accepted — superseded by SDR-0022 | 2026-10-17 | Contestability | not applicable — superseded |
 | [SDR-0021](../adr/SDR-0021-screen-et-repartition.md) | A verb that runs both tools, and one Workflow per policy | accepted | 2026-10-17 | Operability, against Thinness | yes — `uske screen`, and the parent and child templates proven on the `kind` bench on 2026-10-17 |
 | [SDR-0022](../adr/SDR-0022-documentation-en-anglais.md) | Documentation in English; ADRs, discovery and commits in French | accepted | 2026-10-17 | Contestability | yes |
+| [SDR-0023](../adr/SDR-0023-workflow-github.md) | Off the cluster, a reusable GitHub workflow, and the journal on a branch of the calling repository | accepted | 2026-10-17 | Operability and Contestability, against Thinness | yes — the bench `extra-screen-example.yml` proven on GitHub on 2026-10-17, repair promoted included |
 
 ## Open gaps
 
@@ -794,7 +795,7 @@ The others come from a review.
 | DEBT-05 | Nothing produces a release: deliveries cannot be deduced from any commit | — the pipeline | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. The release tool installed — it depends on DEBT-03 |
 | DEBT-06 | Nobody runs the ADR schema: a decision left empty or undecided gets through without anything saying so | — the pipeline | review of 2026-09-20 | The check added to the `lint` target of the `Makefile`, or declared manual in an ADR that supersedes [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
 | DEBT-07 | Argo Workflows chains the steps, and nothing says why: it is what makes a replay possible, and leaving it would rewrite all of `deploy/` | *Parent Workflow*, *Child Workflow* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the scheduler, rejected options included |
-| DEBT-08 | The journal is one JSON Lines file per policy on a volume, and nothing says why: `SDR-0016` sets its vocabulary, not its storage; the Contestability goal rests on this storage (RISK-01) | *Journal* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the journal storage, rejected options included. On the GitHub Actions runner, a branch of the policy repository holds it, proven by the bench (change `github-action`); `SDR-0023` (*proposed*) decides it for that environment only |
+| DEBT-08 | The journal is one JSON Lines file per policy on a volume, and nothing says why: `SDR-0016` sets its vocabulary, not its storage; the Contestability goal rests on this storage (RISK-01) | *Journal* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the journal storage, rejected options included. On the GitHub Actions runner, a branch of the policy repository holds it, proven by the bench (change `github-action`); [`SDR-0023`](../adr/SDR-0023-workflow-github.md) decides it for that environment only |
 | DEBT-09 | `README.md` is English-first, against the French-by-default rule | — the documentation | [`SDR-0002`](../adr/SDR-0002-localization.md) | *Closed* 2026-10-17 by [`SDR-0020`](../adr/SDR-0020-readme-en-anglais.md) for the README, then [`SDR-0022`](../adr/SDR-0022-documentation-en-anglais.md) for all documentation: it is in English; ADRs, discovery, OpenSpec artefacts and commit messages stay in French. (Original criterion: the README rewritten in French, or the gap accepted in an ADR.) |
 
 **Two patterns recur, and they are the ones to watch.** The first: a check decided without being
