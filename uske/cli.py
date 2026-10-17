@@ -95,52 +95,64 @@ def cmd_resolve(args) -> None:
     _json({"track": policy.track, "playbook": str(playbook) if playbook else None})
 
 
-def cmd_classify(args) -> None:
-    """The report is read where the screening wrote it, and recorded where it will still be."""
-    if bool(args.source_ref) != bool(args.source_digest):
+def classify_lines(
+    playbook: Path | None,
+    ref: str,
+    digest: str,
+    report: Path | None,
+    report_link: str | None,
+    regis_exit: int,
+    source_ref: str,
+    source_digest: str,
+    track: str,
+    epoch: str,
+    run: str,
+) -> list[dict]:
+    """The result lines of one judged digest: one, or two when a repaired image closes its source.
+
+    The report is read where the screening wrote it, and recorded where it will still be.
+    """
+    if bool(source_ref) != bool(source_digest):
         # half a pair would write an anonymous closing line, or silently skip the second gate
         raise Failure("--source-ref and --source-digest go together")
-    if args.playbook is None:
+    report_path = report
+    if playbook is None:
         # unknown regime: never evaluated, recorded as such (D-21, D-23)
-        ruleset, report_path, report = "none", None, None
+        ruleset, report_path, document = "none", None, None
         outcome, reason = outcomes.Outcome.INCONCLUSIVE, "uske/unknown-track"
     else:
         try:
-            raw = Path(args.playbook).read_bytes()
-            playbook = yaml.safe_load(raw) or {}
+            raw = Path(playbook).read_bytes()
+            rules = yaml.safe_load(raw) or {}
         except (OSError, yaml.YAMLError) as exc:
-            raise Failure(f"{args.playbook}: {exc}") from exc
+            raise Failure(f"{playbook}: {exc}") from exc
         ruleset = "sha256:" + hashlib.sha256(raw).hexdigest()
-        report_path = Path(args.report) if args.report else None
         try:
-            report = json.loads(report_path.read_text()) if report_path else None
+            document = json.loads(report_path.read_text()) if report_path else None
         except (OSError, json.JSONDecodeError):
-            report = None  # unreadable is inconclusive, not a failure
-        outcome, reason = outcomes.classify(report, playbook, args.regis_exit)
+            document = None  # unreadable is inconclusive, not a failure
+        outcome, reason = outcomes.classify(document, rules, regis_exit)
     repairable = (
         outcome is outcomes.Outcome.TRANSFORMATION_REQUIRED
-        and not args.source_digest  # a repaired image is judged, never repaired again
-        and outcomes.repairable(report, playbooks.repairable(args.track or None))
+        and not source_digest  # a repaired image is judged, never repaired again
+        and outcomes.repairable(document, playbooks.repairable(track or None))
     )
     line = results.ResultLine(
         ts=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        ref=args.ref,
-        digest=args.digest,
+        ref=ref,
+        digest=digest,
         state=outcome.value,
         ruleset=ruleset,
         reason=reason,
         # what a human opens, when the workflow kept it; else what was read, for a local run
-        report=(args.report_link or str(report_path)) if report is not None else None,
-        run=args.run_id or None,  # Argo passes an empty string when it has none
+        report=(report_link or str(report_path)) if document is not None else None,
+        run=run or None,  # Argo passes an empty string when it has none
         repairable=True if repairable else None,
     )
-    if not args.source_digest:  # first gate; Argo passes an empty string
-        _json(line.to_dict())
-        return
+    if not source_digest:  # first gate; Argo passes an empty string
+        return [line.to_dict()]
     lines = [
-        dataclasses.replace(
-            line, source=args.source_digest, epoch=args.epoch or None
-        ).to_dict()
+        dataclasses.replace(line, source=source_digest, epoch=epoch or None).to_dict()
     ]
     if outcome in (
         outcomes.Outcome.TRANSFORMATION_REQUIRED,
@@ -150,98 +162,163 @@ def cmd_classify(args) -> None:
         lines.append(
             results.ResultLine(
                 ts=line.ts,
-                ref=args.source_ref,
-                digest=args.source_digest,
+                ref=source_ref,
+                digest=source_digest,
                 state=outcomes.Outcome.QUARANTINE.value,
                 ruleset=ruleset,
                 reason=gate.REMEDIATION_REFUSED,
                 report=line.report,
                 run=line.run,
-                rebuilt=args.digest,
+                rebuilt=digest,
             ).to_dict()
         )
-    _json(lines)
+    return lines
+
+
+def cmd_classify(args) -> None:
+    lines = classify_lines(
+        Path(args.playbook) if args.playbook is not None else None,
+        args.ref,
+        args.digest,
+        Path(args.report) if args.report else None,
+        args.report_link,
+        args.regis_exit,
+        args.source_ref,
+        args.source_digest,
+        args.track,
+        args.epoch,
+        args.run_id,
+    )
+    # the first gate prints one line, a held image the list of its lines
+    _json(lines if args.source_digest else lines[0])
 
 
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def cmd_record(args) -> None:
-    policy = _policy(args.policy)
-    if not (args.lines or args.applied or args.promoted):
+def record_lines(
+    policy: policies.Policy,
+    results_dir: str | Path,
+    lines: str | Path | None,
+    applied: str | Path | None,
+    promoted: str | Path | None,
+    run: str,
+) -> tuple[int, list[str]]:
+    """Append this screening's lines to the journal: how many were written, and the stale ones."""
+    if not (lines or applied or promoted):
         raise Failure("record needs --lines, --applied or --promoted")
     files: list[Path] = []
-    if args.lines:
-        source = Path(args.lines)
+    if lines:
+        source = Path(lines)
         # a directory holds one line per digest, written by each `classify` of the fan-out
         if source.is_dir():
             files = sorted(source.glob("*.json"))
         else:  # no directory: no candidate this screening
             files = [source] if source.exists() or source.suffix else []
-    lines = []
+    found: list[dict] = []
     for f in files:
         value = _read_json(str(f))
-        lines.extend(value if isinstance(value, list) else [value])
-    if args.applied and Path(args.applied).exists():
-        journal = results.read(results.path_for(args.results, policy.name))
-        lines.extend(
+        found.extend(value if isinstance(value, list) else [value])
+    journal_path = results.path_for(str(results_dir), policy.name)
+    if applied and Path(applied).exists():
+        found.extend(
             gate.from_applied(
-                _read_json(args.applied),
+                _read_json(str(applied)),
                 policy,
-                journal,
+                results.read(journal_path),
                 ts=_now(),
-                run=args.run_id or None,
+                run=run or None,
             )
         )
-    if args.promoted:
-        journal = results.read(results.path_for(args.results, policy.name))
-        lines.extend(
+    if promoted:
+        found.extend(
             gate.from_promoted(
-                _read_staged(args.promoted),
+                _read_staged(str(promoted)),
                 policy,
-                journal,
+                results.read(journal_path),
                 ts=_now(),
-                run=args.run_id or None,
+                run=run or None,
             )
         )
-    for line in lines:
+    for line in found:
         try:
             datetime.strptime(line["ts"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, TypeError, ValueError) as exc:
             raise Failure(
                 f"{line.get('digest')}: ts must be %Y-%m-%dT%H:%M:%SZ, got {line.get('ts')!r}"
             ) from exc
-    written, stale = results.append(results.path_for(args.results, policy.name), lines)
+    return results.append(journal_path, found)
+
+
+def cmd_record(args) -> None:
+    written, stale = record_lines(
+        _policy(args.policy),
+        args.results,
+        args.lines,
+        args.applied,
+        args.promoted,
+        args.run_id,
+    )
     for message in stale:
         print(message, file=sys.stderr)
     _json({"written": written, **({"stale": len(stale)} if stale else {})})
 
 
+def approve_staged(
+    policy: policies.Policy, results_dir: str | Path, staged: str | Path
+) -> tuple[dict, dict]:
+    """The held rebuilds this screening approves, and their count."""
+    lines = results.read(results.path_for(str(results_dir), policy.name))
+    approved = gate.approve_staged(_read_staged(str(staged)), policy, lines)
+    return approved, {"approved": len(approved["entries"])}
+
+
+def approve_plan(
+    policy: policies.Policy,
+    results_dir: str | Path,
+    plan: str | Path,
+    transit: str,
+    epoch: str,
+    run: str,
+    lines_out: str | Path | None = None,
+) -> tuple[dict, dict]:
+    """The plan minus its refused operations, and its count; the transit lines go to `lines_out`."""
+    lines = results.read(results.path_for(str(results_dir), policy.name))
+    approved, discarded, written = gate.approve(
+        _read_json(str(plan)),
+        policy,
+        lines,
+        transit,
+        epoch=epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
+        ts=_now(),
+        run=run or None,
+    )
+    count = {
+        "approved": len(approved["operations"]),
+        "ordered": gate.ordered(approved),
+        "discarded": discarded,
+    }
+    if lines_out:
+        Path(lines_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(lines_out).write_text(json.dumps(written, ensure_ascii=False))
+    return approved, count
+
+
 def cmd_approve(args) -> None:
     policy = _policy(args.policy)
-    lines = results.read(results.path_for(args.results, policy.name))
     if args.staged:
-        approved = gate.approve_staged(_read_staged(args.staged), policy, lines)
-        count = {"approved": len(approved["entries"])}
+        approved, count = approve_staged(policy, args.results, args.staged)
     else:
-        approved, discarded, written = gate.approve(
-            _read_json(args.plan),
+        approved, count = approve_plan(
             policy,
-            lines,
+            args.results,
+            args.plan,
             args.transit,
-            epoch=args.epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
-            ts=_now(),
-            run=args.run_id or None,
+            args.epoch,
+            args.run_id,
+            args.lines_out,
         )
-        count = {
-            "approved": len(approved["operations"]),
-            "ordered": gate.ordered(approved),
-            "discarded": discarded,
-        }
-        if args.lines_out:
-            Path(args.lines_out).parent.mkdir(parents=True, exist_ok=True)
-            Path(args.lines_out).write_text(json.dumps(written, ensure_ascii=False))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(approved, indent=2))
