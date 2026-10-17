@@ -113,9 +113,9 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
 
 - [x] 3.1 Test d'abord, dans `tests/test_grype_db.py` : le template `regis-analyze` de
   `deploy/base/workflowtemplate.yaml` reçoit un artefact d'entrée `grype-db` facultatif à la clé
-  `grype-db/current.tar.zst`, en `/grype/current.tar.zst (un `emptyDir` monté en /grype)`, sans archivage Argo ; son script
-  déballe l'archive (`r:zst`, `filter="data"`) et la supprime avant `regis analyze` ; il ne monte
-  aucun volume de plus (SDR-0021) ; son environnement contient `GRYPE_DB_CACHE_DIR=/grype/db`,
+  `grype-db/current.tar.zst`, en `/grype/current.tar.zst` (sur un `emptyDir` monté en `/grype`), sans archivage Argo ; son script
+  déballe l'archive (`r:zst`, `filter="data"`) et la supprime avant `regis analyze` ; il n'ajoute
+  aucun volume persistant (SDR-0021), seulement un `emptyDir` ; son environnement contient `GRYPE_DB_CACHE_DIR=/grype/db`,
   `GRYPE_DB_AUTO_UPDATE=false`, `GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h` et
   `GRYPE_CHECK_FOR_APP_UPDATE=false` (D8). Scénarios : *Une évaluation ne télécharge pas de base*,
   *Deux évaluations entre deux rafraîchissements jugent avec la même base*, *Aucune base

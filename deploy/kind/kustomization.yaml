@@ -76,9 +76,8 @@ patches:
             - {name: work, mountPath: /work}
             - {name: repository, mountPath: /repository, readOnly: true}
       - op: add
-        path: /spec/templates/9/container/volumeMounts  # regis-analyze
-        value:
-          - {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+        path: /spec/templates/9/container/volumeMounts/-  # regis-analyze: append, /grype is there
+        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
       - op: add
         path: /spec/templates/10/container/volumeMounts  # knock
         value:

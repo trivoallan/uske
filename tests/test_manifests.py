@@ -123,6 +123,13 @@ class Manifests(unittest.TestCase):
             checkout.index("trap 'rm -rf /work/repo/.git' EXIT"), checkout.index("git ")
         )
         self.assertIn("http.extraHeader", checkout)
+        analyze = templates["regis-analyze"]
+        mounts = {
+            m["name"]: m["mountPath"] for m in analyze["container"]["volumeMounts"]
+        }
+        self.assertEqual(mounts["grype"], "/grype")
+        (db,) = [a for a in analyze["inputs"]["artifacts"] if a["name"] == "grype-db"]
+        self.assertTrue(db["path"].startswith("/grype/"))
         parent = {
             t["name"]: t for t in self.base["uske-screening"]["spec"]["templates"]
         }
@@ -133,9 +140,13 @@ class Manifests(unittest.TestCase):
         name = "{{workflow.parameters.name}}"
         found = keys(self.base["uske-policy"]) + keys(self.base["uske-screening"])
         # the one key outside `runs/`: the database the refresh distributes, read by regis-analyze
-        refresh = yaml.safe_load(
-            (ROOT / "deploy" / "base" / "grype-db.yaml").read_text().split("\n---\n")[0]
-        )
+        (refresh,) = [
+            d
+            for d in yaml.safe_load_all(
+                (ROOT / "deploy" / "base" / "grype-db.yaml").read_text()
+            )
+            if d and d["kind"] == "WorkflowTemplate"
+        ]
         (shared,) = [k for k in keys(refresh) if k.endswith(".tar.zst")]
         readers = [
             t["name"]
@@ -251,7 +262,7 @@ class Manifests(unittest.TestCase):
             t["name"]: t for t in self.kind["uske-policy"]["spec"]["templates"]
         }
         for name, wanted in (
-            ("regis-analyze", {"registry-ca"}),
+            ("regis-analyze", {"grype", "registry-ca"}),
             ("knock", {"registry-ca", "knock-key"}),
             ("knock-once", {"registry-ca", "knock-key"}),
             ("checkout", {"work", "repository"}),

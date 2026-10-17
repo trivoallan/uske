@@ -847,7 +847,7 @@ spec:
 
     - name: regis-analyze
       # Always: the 500 MB artifact is fetched by the init container, and OnFailure does not
-      # retry a failed fetch (only the main container's failure).
+      # retry a failed fetch (only the main container's failure). Same values as *child-retry, only retryPolicy differs.
       retryStrategy:
         limit: "2"
         retryPolicy: Always
