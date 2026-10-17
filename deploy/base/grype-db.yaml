@@ -1,0 +1,111 @@
+# The vulnerability database grype reads, refreshed on a schedule and distributed through the
+# namespace's artifact repository under two fixed keys, `grype-db/current.tar.zst` (the imported
+# database) and `grype-db/current.json` (its `built` date and `checksum`, the pointer). Readers
+# unpack the imported database (13 s) instead of importing Anchore's archive in every pod (65 s).
+# It runs the regis image so the database is built by the same grype version as its readers.
+# The keys sit outside `runs/` and opt out of artifact GC: they outlive this Workflow.
+# Change `base-grype-partagee`.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: grype-db
+spec:
+  serviceAccountName: uske
+  entrypoint: refresh
+  podGC:
+    strategy: OnPodSuccess
+  artifactRepositoryRef: {configMap: artifact-repositories, key: default-v1}
+  templates:
+    - name: refresh
+      # A hung download fails visibly instead of blocking later runs under `Forbid`.
+      activeDeadlineSeconds: 1800
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff:
+          duration: 10s
+          factor: "2"
+      inputs:
+        artifacts:
+          - name: pointer  # absent on the very first run
+            path: /tmp/in/current.json
+            optional: true
+            mode: 292  # 0444: Argo writes inputs 0600 root, and the regis image runs as non-root
+            s3: {key: "grype-db/current.json"}
+      container:
+        image: regis
+        command: [sh, -c]
+        # The bulk is the imported database, 3.25 GB; the ~530 MB archive in staging and Argo's
+        # upload copy of it come on top, ~4.5 GB at the peak: leave room.
+        resources:
+          requests: {ephemeral-storage: 5Gi}
+          limits: {ephemeral-storage: 6Gi}
+        # Argo saves optional outputs even when the container fails, so nothing reaches /tmp/out
+        # until everything succeeded: the archive is packed in a staging directory, then renamed
+        # into place (same filesystem), the pointer last. Exit code 10 inside means "nothing
+        # newer": leave in success with no output, so the keys in place do not change.
+        # WORK is /tmp in the pod; the tests point it elsewhere.
+        args:
+          - |
+            set -eu
+            W="${WORK:-/tmp}"
+            export GRYPE_CHECK_FOR_APP_UPDATE=false GRYPE_DB_CACHE_DIR="$W/db" WORK="$W"
+            mkdir -p "$W/out" "$W/stage"
+            grype db list -o json > "$W/list.json"
+            rc=0
+            python3 - <<'PY' || rc=$?
+            import json, os, pathlib, sys
+            w = pathlib.Path(os.environ["WORK"])
+            latest = next((d for d in json.load(open(w / "list.json")) if d["status"] == "active"), None)
+            if latest is None:
+                sys.exit("no active database in grype db list")
+            try:
+                known = json.loads((w / "in" / "current.json").read_text())["checksum"]
+            except (OSError, ValueError, KeyError, TypeError):
+                known = None
+                print("no usable current pointer: refreshing")
+            if known == latest["checksum"]:
+                print("no newer database"); sys.exit(10)
+            # The listing, not what update imports: a database published in between costs, at
+            # worst, one redundant download on the next run.
+            (w / "latest.json").write_text(json.dumps({k: latest[k] for k in ("built", "checksum")}))
+            PY
+            [ "$rc" -ne 10 ] || exit 0
+            [ "$rc" -eq 0 ] || exit "$rc"
+            grype db update
+            grype db status  # exits 1 on a missing or invalid database (checked on grype 0.112.0): nothing is packed then
+            cd "$W/db"
+            # 6 is the schema directory of grype's v6 database; a v7 makes this fail, not pack wrong.
+            python3 -c "import tarfile
+            with tarfile.open('$W/stage/current.tar.zst', 'w:zst', level=1) as t:
+                t.add('6')"
+            mv "$W/stage/current.tar.zst" "$W/out/current.tar.zst"
+            mv "$W/latest.json" "$W/out/current.json"
+      outputs:
+        artifacts:
+          # The archive first, the pointer last: a reader never sees a pointer ahead of its archive.
+          - name: archive
+            path: /tmp/out/current.tar.zst
+            optional: true
+            archive: {none: {}}  # already compressed
+            artifactGC: {strategy: Never}
+            s3: {key: "grype-db/current.tar.zst"}
+          - name: pointer
+            path: /tmp/out/current.json
+            optional: true
+            archive: {none: {}}
+            artifactGC: {strategy: Never}
+            s3: {key: "grype-db/current.json"}
+---
+# Every 6 hours at minute 17 (D6), one refresh at a time: Anchore publishes about daily, and the
+# pointer makes a run without news cost a listing.
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: grype-db
+spec:
+  schedules: ["17 */6 * * *"]
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    workflowTemplateRef:
+      name: grype-db

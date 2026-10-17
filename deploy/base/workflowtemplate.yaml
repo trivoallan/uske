@@ -846,24 +846,68 @@ spec:
             s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html"}
 
     - name: regis-analyze
-      retryStrategy: *child-retry
+      # Always: the ~530 MB artifact is fetched by the init container, and OnFailure does not
+      # retry a failed fetch (only the main container's failure). Same values as *child-retry, only retryPolicy differs.
+      retryStrategy:
+        limit: "2"
+        retryPolicy: Always
+        backoff:
+          duration: 10s
+          factor: "2"
       inputs:
         parameters: [{name: target}, {name: playbook}]
         artifacts:
           - *work-in  # the playbook, in the checkout
+          - name: grype-db  # the vulnerability database the refresh distributes (grype-db.yaml)
+            path: /grype/current.tar.zst  # on the volume below: Argo writes it there, no subPath mount
+            optional: true  # absent before the first refresh: regis then records the cve check in error
+            mode: 292  # 0444: Argo writes inputs 0600 root, and the regis image runs as non-root
+            archive: {none: {}}
+            s3: {key: grype-db/current.tar.zst}
+      # This pod's only volume, an emptyDir (SDR-0021 forbids a persistent one). An input artifact
+      # outside a volume is a subPath mount of the init container's disk: it cannot be deleted
+      # (EBUSY). Here the archive (~530 MB) is deleted once unpacked; the database takes 3.25 GB.
+      volumes:
+        - {name: grype, emptyDir: {sizeLimit: 6Gi}}
       container:
         image: regis
         command: [sh, -c]
-        # The directory exists even when regis fails: classify then records it inconclusive.
+        volumeMounts:
+          - {name: grype, mountPath: /grype}
+        # The report directory exists even when regis fails: classify then records it inconclusive.
+        # An archive that does not unpack leaves no partial database: regis runs all the same,
+        # and its cve check fails with "database does not exist" instead of the step stopping.
+        # `-f`, not `-e`: an absent optional artifact may materialize as an empty directory.
         args:
-          - >-
-            mkdir -p /tmp/report &&
-            regis analyze "{{inputs.parameters.target}}"
-            --playbook "{{inputs.parameters.playbook}}"
-            ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"}
-            -D /tmp/report -o "report.{format}" --html
+          - |
+            mkdir -p /tmp/report
+            if [ -f /grype/current.tar.zst ]; then
+              python3 - <<'PY' || rm -rf /grype/db
+            import sys, tarfile
+            try:
+                tarfile.open('/grype/current.tar.zst', 'r:zst').extractall('/grype/db', filter='data')
+            except Exception as e:
+                print(f"grype-db: the database could not be unpacked: {type(e).__name__}: {e}", file=sys.stderr)
+                sys.exit(1)
+            PY
+              rm -f /grype/current.tar.zst
+            fi
+            regis analyze "{{inputs.parameters.target}}" \
+              --playbook "{{inputs.parameters.playbook}}" \
+              ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"} \
+              -D /tmp/report -o "report.{format}" --html
+        env:  # judge with the distributed database only: no call to Anchore (D8)
+          - {name: GRYPE_DB_CACHE_DIR, value: /grype/db}
+          - {name: GRYPE_DB_AUTO_UPDATE, value: "false"}
+          - {name: GRYPE_DB_MAX_ALLOWED_BUILT_AGE, value: 48h}
+          - {name: GRYPE_CHECK_FOR_APP_UPDATE, value: "false"}
         envFrom:
           - secretRef: {name: uske-harbor}
+        # The request covers the database for scheduling; the volume's sizeLimit bounds it. No
+        # limit: it would also cap the scratch space regis, syft, grype and the others need for
+        # the image they judge, and a multi-GB image would be evicted (a technical failure).
+        resources:
+          requests: {ephemeral-storage: 5Gi}
       outputs:
         artifacts:
           - {name: report, path: /tmp/report, optional: true, mode: 511, recurseMode: true}

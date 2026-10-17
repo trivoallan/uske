@@ -7,5 +7,6 @@ resources:
   - workflowtemplate.yaml
   - cronworkflow.yaml
   - dt-sync.yaml
+  - grype-db.yaml
 configurations:
   - kustomizeconfig.yaml

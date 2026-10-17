@@ -20,6 +20,12 @@ patches:
       - op: add
         path: /spec/suspend
         value: true
+  # The grype database is refilled by hand too (up.sh does it once, grype-db.yaml again after a pause).
+  - target: {kind: CronWorkflow, name: grype-db}
+    patch: |-
+      - op: add
+        path: /spec/suspend
+        value: true
   # JSON 6902 patches reach templates by index only; each one names its template.
   - target: {kind: WorkflowTemplate, name: uske-screening}
     patch: |-
@@ -76,9 +82,8 @@ patches:
             - {name: work, mountPath: /work}
             - {name: repository, mountPath: /repository, readOnly: true}
       - op: add
-        path: /spec/templates/9/container/volumeMounts  # regis-analyze
-        value:
-          - {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+        path: /spec/templates/9/container/volumeMounts/-  # regis-analyze: append, /grype is there
+        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
       - op: add
         path: /spec/templates/10/container/volumeMounts  # knock
         value:

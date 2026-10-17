@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""A fake `grype db`: lists a frozen set of databases, and "imports" one into the cache.
+
+    grype db list -o json   prints FAKE_LIST (a JSON array)
+    grype db update         writes $GRYPE_DB_CACHE_DIR/6/vulnerability.db; exits 1 if FAKE_UPDATE_FAIL
+    grype db status         exits 1 if FAKE_STATUS_FAIL
+
+Each call is logged to FAKE_CALLS.
+"""
+
+import os
+import shlex
+import sys
+from pathlib import Path
+
+
+def main(argv: list[str]) -> int:
+    if os.environ.get("FAKE_CALLS"):
+        with open(os.environ["FAKE_CALLS"], "a") as log:
+            log.write(shlex.join(["grype", *argv]) + "\n")
+    if argv[:2] == ["db", "list"]:
+        print(os.environ["FAKE_LIST"])
+        return 0
+    if argv[:2] == ["db", "update"]:
+        if os.environ.get("FAKE_UPDATE_FAIL"):
+            return 1
+        db = Path(os.environ["GRYPE_DB_CACHE_DIR"]) / "6"
+        db.mkdir(parents=True, exist_ok=True)
+        (db / "vulnerability.db").write_bytes(b"db")
+        if os.environ.get("FAKE_PACK_FAULT"):
+            (db / "locked").write_bytes(b"x")
+            (db / "locked").chmod(0o000)
+        return 0
+    if argv[:2] == ["db", "status"]:
+        return 1 if os.environ.get("FAKE_STATUS_FAIL") else 0
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

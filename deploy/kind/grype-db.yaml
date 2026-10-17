@@ -1,0 +1,9 @@
+# The grype database fill, started by hand (the CronWorkflow is suspended in kind). up.sh runs it
+# once; run it again after a long pause.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: grype-db-
+spec:
+  workflowTemplateRef:
+    name: grype-db

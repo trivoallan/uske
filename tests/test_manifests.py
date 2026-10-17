@@ -123,6 +123,13 @@ class Manifests(unittest.TestCase):
             checkout.index("trap 'rm -rf /work/repo/.git' EXIT"), checkout.index("git ")
         )
         self.assertIn("http.extraHeader", checkout)
+        analyze = templates["regis-analyze"]
+        mounts = {
+            m["name"]: m["mountPath"] for m in analyze["container"]["volumeMounts"]
+        }
+        self.assertEqual(mounts["grype"], "/grype")
+        (db,) = [a for a in analyze["inputs"]["artifacts"] if a["name"] == "grype-db"]
+        self.assertTrue(db["path"].startswith("/grype/"))
         parent = {
             t["name"]: t for t in self.base["uske-screening"]["spec"]["templates"]
         }
@@ -132,7 +139,26 @@ class Manifests(unittest.TestCase):
         """review I3, M5: per-child archives; no policy named `out` or `done` meets another key."""
         name = "{{workflow.parameters.name}}"
         found = keys(self.base["uske-policy"]) + keys(self.base["uske-screening"])
-        for key in found:
+        # the one key outside `runs/`: the database the refresh distributes, read by regis-analyze
+        (refresh,) = [
+            d
+            for d in yaml.safe_load_all(
+                (ROOT / "deploy" / "base" / "grype-db.yaml").read_text()
+            )
+            if d and d["kind"] == "WorkflowTemplate"
+        ]
+        (shared,) = [k for k in keys(refresh) if k.endswith(".tar.zst")]
+        readers = [
+            t["name"]
+            for doc in ("uske-policy", "uske-screening")
+            for t in self.base[doc]["spec"]["templates"]
+            if shared in keys(t.get("inputs"))
+        ]
+        self.assertEqual(readers, ["regis-analyze"])
+        for doc in ("uske-policy", "uske-screening"):
+            for t in self.base[doc]["spec"]["templates"]:
+                self.assertNotIn(shared, keys(t.get("outputs")))
+        for key in (k for k in found if k != shared):
             with self.subTest(key=key):
                 self.assertTrue(key.startswith("runs/{{workflow."), key)
                 if name in key:
@@ -236,7 +262,7 @@ class Manifests(unittest.TestCase):
             t["name"]: t for t in self.kind["uske-policy"]["spec"]["templates"]
         }
         for name, wanted in (
-            ("regis-analyze", {"registry-ca"}),
+            ("regis-analyze", {"grype", "registry-ca"}),
             ("knock", {"registry-ca", "knock-key"}),
             ("knock-once", {"registry-ca", "knock-key"}),
             ("checkout", {"work", "repository"}),
@@ -251,6 +277,15 @@ class Manifests(unittest.TestCase):
         }
         found = {m["name"] for m in parent["checkout"]["container"]["volumeMounts"]}
         self.assertEqual(found, {"work", "repository"})
+
+    def test_the_bench_suspends_the_grype_db_refresh_and_fills_it_by_hand(self) -> None:
+        crons = render("kind", "CronWorkflow")
+        self.assertTrue(crons["grype-db"]["spec"]["suspend"])
+        hand = yaml.safe_load((ROOT / "deploy" / "kind" / "grype-db.yaml").read_text())
+        self.assertEqual(hand["kind"], "Workflow")
+        self.assertEqual(hand["metadata"]["generateName"], "grype-db-")
+        self.assertEqual(hand["spec"]["workflowTemplateRef"]["name"], "grype-db")
+        self.assertIn("grype-db", self.kind)
 
 
 if __name__ == "__main__":
