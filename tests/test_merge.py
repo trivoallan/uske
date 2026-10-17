@@ -485,7 +485,7 @@ class Conflicts(Dirs):
         self.assertNotIn(D3, err)
 
     def test_the_screenings_own_lines_are_no_conflict(self) -> None:
-        """A re-created child's archive follows the first one's, merged moments before."""
+        """Scenario: Les lignes du même screening ne sont pas un conflit."""
         first = [line(D1, "2026-10-17T04:00:00Z", "quarantine", run=RUN)]
         second = [line(D1, "2026-10-17T04:10:00Z", "admitted", run=RUN)]
         archive(
@@ -551,6 +551,7 @@ class Conflicts(Dirs):
         self.assertEqual(merge.pending(self.results), [RUN])
 
     def test_an_archive_without_meta_is_refused(self) -> None:
+        """Scenario: Une archive sans instantané est refusée."""
         child = jsonl([line(D3, "2026-10-17T04:00:00Z", run=RUN)])
         archive(self.out / "alpha" / "1-x.tgz", {"lines.jsonl": child}, meta=NO_META)
         archive(self.out / "beta" / "1-x.tgz", {"lines.jsonl": child})
