@@ -1,0 +1,18 @@
+# TEMPORAIRE (change screen-workflow-followups, RISK-11) : une destination neuve, pour que le
+# banc en `signer: key` place, signe avec la clé et vérifie à la promotion. À retirer.
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: example-repair-key
+  labels:
+    admission-track: standard
+spec:
+  artifactType: image
+  source: {registry: docker.io, repository: library/alpine}
+  imports:
+    - name: v3-22-2
+      tags: {includeRegex: "^3\\.22\\.2$"}
+      remediate:
+        - rewritePackageSources: {mirror: public}
+        - upgradePackages: {}
+      destinations: [{registry: ghcr, project: trivoallan, repository: uske-example/alpine-repaired-key}]
