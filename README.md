@@ -30,7 +30,8 @@ policy, it runs one **screening**.
 
 ## What it knows
 
-`uske` is not generic glue. It knows `regis` and `knock` by their command lines, **Harbor** by its
+`uske` is not generic glue. It never runs `regis` or `knock` itself: the workflow runs each in its
+own image, by its command line, and `uske` reads the files they write. It knows **Harbor** by its
 API (`census`: enumerate the registry, subtract what was admitted, count the bypass) and
 **Dependency-Track** (`dt-*`: send the SBOMs `knock` signed, retire what left the registry). The
 regime-to-playbook table lives in [`uske/playbooks.py`](uske/playbooks.py), and nowhere else.
@@ -51,7 +52,7 @@ One more reads the journal for a person, and is not a workflow step: `decisions`
 
 ```bash
 docker build -t uske .        # the image the workflow runs
-deploy/kind/up.sh             # kind + Argo Workflows + Zot for Harbor, then one screening by hand
+deploy/kind/up.sh             # kind + Argo Workflows + Zot for Harbor; prints how to start a screening
 deploy/kind/up.sh repair      # on that cluster: buildkitd and two sources to repair (tens of GB)
 deploy/kind/up.sh down
 ```
@@ -97,11 +98,12 @@ applied to every rebuild, which is placed directly: it is not judged again. `rem
 image is judged before it is placed. That needs a `knock` with remediation orders (`remediate:`
 and `--applied-out`); an older one refuses the plan.
 
-`uske` orders a remediation when the source's verdict is the tier *Transformation requise* and its
-failed rules are all in its regime's repairable list (`REPAIRABLE` in
-[`uske/playbooks.py`](uske/playbooks.py): `standard` repairs `cve-critical`), with at least one of
-them failed. The order carries the screening's epoch (its start, UTC). A refusal outside that list
-is not ordered.
+`uske` orders a remediation when the source's verdict is the tier *Transformation requise*, at
+least one of its failed rules is in its regime's repairable list (`REPAIRABLE` in
+[`uske/playbooks.py`](uske/playbooks.py): `standard` repairs `cve-critical`), and every failed
+**critical** rule is. A failed rule that is not critical does not stop the order. The order carries
+the screening's epoch (its start, UTC). A refusal on a critical rule outside that list is not
+ordered.
 
 An overlay must provide:
 
@@ -119,7 +121,9 @@ An overlay must provide:
   The bench's `buildkitd` listens in clear on the cluster network, which is fine for a throwaway
   cluster only: elsewhere, restrict who can reach it (mTLS, a NetworkPolicy).
 
-A source is repaired once. A repaired image that is judged and refused closes its source: the
+A source is repaired once per plan: if `knock` replans a repaired tag because its transform
+changed, the order is renewed and the new image is judged; the source is not judged again. A
+repaired image that is judged and refused closes its source: the
 journal gets a `quarantine` line on the source digest, reason `uske/remediation-refused` (older
 lines say `uske/rebuild-refused`), and that source is not ordered again. An order on an import
 that declares no `remediate:` closes the source too (`uske/remediation-undeclared`). A held image
@@ -160,7 +164,10 @@ make security   # pip-audit, fails from HIGH
 make image      # build the image and run it once
 ```
 
-The CI calls these targets and nothing else. `make lint` needs `kubectl` and `argo` on the `PATH`.
+The CI's build steps call these targets and nothing else; it also installs the tools
+(`make ci-tools`) and runs three repository checks of its own: no tracked nanopm data, actions
+pinned by SHA, and a self-test of the settings script. `make lint` needs `kubectl` and `argo`
+on the `PATH`.
 
 [`tests/fixtures/repo`](tests/fixtures/repo) is a frozen copy of a policy repository — playbooks, one
 policy and its refusal journal — so the tests do not depend on a checkout next door.

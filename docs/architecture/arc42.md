@@ -35,7 +35,7 @@ consigne chaque décision. Il ne juge rien et ne place rien : il appelle, il att
 - Classer chaque verdict en l'une de quatre issues : placement direct, transformation requise,
   quarantaine, non concluant.
 - Rendre au placeur le plan, moins les opérations refusées ; il n'applique que cela. Une source
-  à réparer n'y reste que si le placeur dit qu'il la reconstruira.
+  refusée sur des règles que son régime déclare réparables y reste, avec un ordre de réparation.
 - Faire retenir dans un transit ce que le placeur construit, le faire juger par sa propre
   empreinte, et ne lui rendre pour promotion que ce qui ressort en placement direct.
 - Ajouter une ligne par décision à un fichier de résultats. Les lignes s'ajoutent, ne se
@@ -232,7 +232,7 @@ se lit comme un refus.
 
 | Objectif | Mécanisme principal | Où |
 |----------|---------------------|----|
-| 1. **Sûreté** `#safe` | **Échec fermé** : un rapport absent ou illisible devient `inconclusive` (`outcomes.py`, D-23 du dossier de référence). N'est rendu au placeur que le placement direct, et la transformation requise quand le placeur dit qu'il reconstruira. Le placeur n'applique une opération que si son empreinte source n'a pas changé depuis le plan (`gate.py`, D-30). Ce qu'il reconstruit passe une **seconde porte**, depuis un transit obligatoire. | `SDR-0016` ; *Runtime View* R-2, R-3 ; QS-01, QS-02 |
+| 1. **Sûreté** `#safe` | **Échec fermé** : un rapport absent ou illisible devient `inconclusive` (`outcomes.py`, D-23 du dossier de référence). N'est rendu au placeur que le placement direct, et la transformation requise quand `uske` ordonne une réparation (règles réparables du régime, `playbooks.REPAIRABLE`). Le placeur n'applique une opération que si son empreinte source n'a pas changé depuis le plan (`gate.py`, D-30). Ce qu'il reconstruit passe une **seconde porte**, depuis un transit obligatoire. | `SDR-0016` ; *Runtime View* R-2, R-3 ; QS-01, QS-02 |
 | 2. **Contestabilité** `#secure` | **Journal en ajout seul, qui n'avance que vers l'avant** : une ligne plus ancienne que la dernière du même digest n'est pas écrite. Chaque ligne porte son état, son jeu de règles, sa raison et son screening (`run`) ; `uske decisions` les rend lisibles. | `SDR-0016`, `SDR-0018` |
 | 3. **Opérabilité** `#operable` | **Des étapes séparées et rejouables** : JSON sur la sortie, code de sortie 0 pour toute issue métier et 1 pour un échec technique, qu'Argo rejoue. Le journal à sens unique rend un rejeu sans effet sur ce qui est déjà écrit ; une image retenue sans verdict est retentée trois fois au plus. | *Runtime View* R-4 ; *Deployment View* ; QS-05, QS-06 |
 | 4. **Minceur** `#flexible` | **Rien à juger, rien à placer** : la seule table métier est celle qui associe un régime à un jeu de règles (`playbooks.py`). Les autres outils ne sont connus que par leur ligne de commande ou leur API. | *Architecture Constraints* |
@@ -386,19 +386,24 @@ sequenceDiagram
     W->>K: promote
     W->>S: record-promoted
   else refusée
-    S->>J: quarantine, uske/rebuild-refused : la source est close
+    S->>J: quarantine, uske/remediation-refused : la source est close
   end
 ```
 
 
-1. Comme R-1 jusqu'à l'étape 4 ; le verdict est *transformation requise*.
+1. Comme R-1 jusqu'à l'étape 4 ; le verdict est *transformation requise*, et chaque règle
+   critique en échec figure parmi les règles réparables du régime (`playbooks.REPAIRABLE`).
 2. La *Porte* rend l'opération avec un ordre de réparation, seulement si le workflow nomme un
-   transit ; sans transit, la source est consignée `inconclusive` et rejugée au screening suivant.
-3. Le placeur reconstruit et retient l'image dans le transit (`place-staged`), sans la placer.
+   transit ; sans transit, la source est consignée `inconclusive` (`uske/no-transit`) et rejugée
+   au screening suivant. Les copies et les reconstructions par simple transformation, elles, sont
+   placées directement, sans seconde porte.
+3. Le placeur répare et retient l'image dans le transit (`place-staged`), sans la placer.
 4. `second-gate` : le juge analyse l'image retenue **par sa propre empreinte**. Seule une issue
    *placement direct* est rendue au placeur pour promotion.
-5. Une reconstruction refusée clôt sa source : une ligne `quarantine`, raison
-   `uske/rebuild-refused`, et la source n'est plus reconstruite. Une image retenue sans verdict
+5. Une réparation refusée clôt sa source : une ligne `quarantine`, raison
+   `uske/remediation-refused` (les lignes plus anciennes disent `uske/rebuild-refused`), et la
+   source n'est plus réparée. Un ordre sur un import qui ne déclare aucun `remediate:` la clôt
+   aussi (`uske/remediation-undeclared`). Une image retenue sans verdict
    est retentée, trois fois au plus.
 
 ## R-3 — Le juge ne répond pas
@@ -647,7 +652,7 @@ Minceur, au nom de la Sûreté. Le rang des objectifs tranche — c'est à cela 
 | ID | Stimulus | Environnement | Réponse attendue | Mesure | Tenu ? |
 |----|----------|---------------|------------------|--------|--------|
 | QS-01 | Le juge échoue, ou rend un rapport vide, illisible ou sans tier connu | dégradé | La décision est `inconclusive` ; aucune opération n'est rendue au placeur pour cette empreinte | **0** opération rendue, sur les six cas du test | oui — `test_fail_closed` |
-| QS-02 | Une image reconstruite est refusée à la seconde porte | normal | La source est close et n'est plus reconstruite | **0** reconstruction de cette source aux screenings suivants | oui — `test_a_refused_rebuild_closes_its_source` |
+| QS-02 | Une image réparée est refusée à la seconde porte | normal | La source est close et n'est plus réparée | **0** ordre de réparation pour cette source aux screenings suivants | oui — `test_a_refused_rebuild_closes_its_source` |
 | QS-03 | Une équipe conteste un refus vieux de trois semaines | normal | Date, état, jeu de règles et raison retrouvés par `uske decisions` | **1 minute** au plus, de la question à la réponse | **non mesuré** — aucun journal réel n'a trois semaines (RISK-02) |
 | QS-04 | On compare deux copies successives d'un fichier de résultats | normal | La plus ancienne est un préfixe de la plus récente | **0** ligne modifiée ou supprimée | en partie — `test_append_only_and_repeat_suppressed` couvre `uske` ; rien ne protège le volume lui-même (RISK-01) |
 | QS-05 | Une première porte est rejouée après la clôture d'une source | dégradé | La source reste close | **0** ligne qui la rouvre | oui — `test_replaying_the_first_gate_does_not_reopen_a_closed_source` |
@@ -664,7 +669,7 @@ Minceur, au nom de la Sûreté. Le rang des objectifs tranche — c'est à cela 
 | ID | Priorité | Risque | Probabilité × impact | Ce qui le réduit |
 |----|----------|--------|----------------------|------------------|
 | RISK-01 | **haute** | Le journal vit sur un volume, sans historique : une écriture directe sur le volume réécrit une ligne, et rien ne le voit. L'objectif de Contestabilité promet « aucune ligne modifiée » sans moyen de le prouver hors de `uske`. | possible × fort | Rien encore. Une copie datée du journal hors du volume rendrait QS-04 vérifiable ; le support est à décider (`DEBT-08`) |
-| RISK-04 | **haute** | Un transit que les consommateurs peuvent tirer expose une image reconstruite **avant** son jugement. `knock` refuse seulement un transit qui est aussi une destination. | possible × fort | Le registre ferme le transit aux consommateurs (README, *Rebuilds*) ; `uske` ne le vérifie pas |
+| RISK-04 | **haute** | Un transit que les consommateurs peuvent tirer expose une image reconstruite **avant** son jugement. `knock` refuse seulement un transit qui est aussi une destination. | possible × fort | Le registre ferme le transit aux consommateurs (README, *Rebuilds and repairs*) ; `uske` ne le vérifie pas |
 | RISK-02 | moyenne | `uske` n'est déployé nulle part : QS-03 n'a jamais été mesuré, et le rythme de 5 minutes n'a pas été confronté à un vrai registre. | certain × moyen | Le premier overlay de production, puis une mesure de QS-03 sur un refus réel |
 | RISK-03 | moyenne | Avec un `knock` antérieur à 0.13.0, rien n'est réparé, et rien ne dit pourquoi. | faible × moyen | L'overlay épingle `knock` par empreinte ; le banc tient 0.16.0 |
 | RISK-05 | basse | Le volume du journal est `ReadWriteOnce` : un pod de lecture attend la fin d'un screening qui tourne sur un autre nœud. | probable × faible | Attendre ; un stockage `ReadWriteMany` lèverait l'attente et le `parallelism: 1` |
