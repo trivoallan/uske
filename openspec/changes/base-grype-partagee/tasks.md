@@ -58,7 +58,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
 
 ## 2. Le rafraîchissement : WorkflowTemplate et CronWorkflow
 
-- [ ] 2.1 Test d'abord, dans `tests/test_grype_db.py` (`unittest`, même style que
+- [x] 2.1 Test d'abord, dans `tests/test_grype_db.py` (`unittest`, même style que
   `tests/test_orchestrator.py`). Il charge `deploy/base/grype-db.yaml` avec `yaml.safe_load_all`
   et vérifie :
   - un `CronWorkflow` `grype-db` avec `concurrencyPolicy: Forbid`, `schedules: ["17 */6 * * *"]`
@@ -73,7 +73,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   Scénarios : *Le rafraîchissement planifié distribue une nouvelle base*, *Aucune base nouvelle
   n'est publiée*, *Un téléchargement interrompu*. `make test` attendu : échec,
   `FileNotFoundError` sur `deploy/base/grype-db.yaml`.
-- [ ] 2.2 Créer `deploy/base/grype-db.yaml` avec le `WorkflowTemplate` `grype-db`
+- [x] 2.2 Créer `deploy/base/grype-db.yaml` avec le `WorkflowTemplate` `grype-db`
   (`serviceAccountName: uske`, la `retryStrategy` des étapes du screening) et le `CronWorkflow`
   `grype-db` (`schedules: ["17 */6 * * *"]`, `concurrencyPolicy: Forbid`,
   `workflowTemplateRef: grype-db`). Le conteneur, image `regis`, `command: [sh, -c]`, reçoit le
@@ -105,9 +105,9 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   `grype db status` arrête le script avant toute sortie : Argo ne téverse rien, et les clés en
   place ne changent pas. Scénarios : *Le rafraîchissement planifié distribue une nouvelle base*,
   *Aucune base nouvelle n'est publiée*, *Un téléchargement interrompu*.
-- [ ] 2.3 Ajouter `- grype-db.yaml` aux `resources` de `deploy/base/kustomization.yaml`.
+- [x] 2.3 Ajouter `- grype-db.yaml` aux `resources` de `deploy/base/kustomization.yaml`.
   `make test` attendu : `tests/test_grype_db.py` vert. `make lint` attendu : sortie 0.
-- [ ] 2.4 Commit : `feat: rafraîchir toutes les 6 h une base grype distribuée par les artefacts`.
+- [x] 2.4 Commit : `feat: rafraîchir toutes les 6 h une base grype distribuée par les artefacts`.
 
 ## 3. Les évaluations jugent avec la base distribuée
 
