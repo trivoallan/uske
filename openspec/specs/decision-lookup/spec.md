@@ -181,7 +181,7 @@ marquée « arbitrage absent ».
 
 `--format md` SHALL rendre, pour chaque groupe, un titre qui nomme la politique et la référence,
 l'empreinte en code, un bloc ```` ```mermaid ```` de type `timeline` fait d'une section par
-criblage et par état, dans l'ordre du fichier : la section porte le criblage, `run <id>`
+screening et par état, dans l'ordre du fichier : la section porte le screening, `run <id>`
 (SDR-0018), ou, pour une ligne sans `run` (écrite avant SDR-0018, ou à la main), sa minute UTC
 `AAAA-MM-JJ HH:MM` ; sa période porte l'état, ses événements les raisons. Chaque section SHALL
 prendre la couleur de son état dans la palette SNCF Holding (design tokens WCS) : placement direct
@@ -207,7 +207,7 @@ côté du journal, dans un dépôt de résultats, et se rend sans suffixe.
 - **WHEN** `uske decisions docker.io/library/redis:7.2.8 --format md` est lancée
 - **THEN** la sortie est identique au fichier attendu du golden test `md`
 
-#### Scenario: Une colonne par criblage
+#### Scenario: Une colonne par screening
 
 - **GIVEN** deux lignes d'une même empreinte écrites par le run `https://ci.example/runs/41`, une
   par le run `wf-abc`, et une sans `run`

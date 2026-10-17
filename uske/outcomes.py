@@ -124,7 +124,7 @@ REASONS = (
         (Outcome.INCONCLUSIVE,),
         "Une règle critique n'a pas abouti : un outil a échoué, ou une donnée manquait. "
         "Rien n'est décidé sur l'image (D-23).",
-        "Lire dans le report pourquoi la règle est `incomplete`. Le prochain criblage la rejuge.",
+        "Lire dans le report pourquoi la règle est `incomplete`. Le prochain screening la rejuge.",
     ),
     Reason(
         BETTER_TIER_MISSED + "<provider>/<criterion>",
@@ -133,7 +133,7 @@ REASONS = (
         "l'image a peut-être manqué un meilleur tier. Une évaluation qui ne conclut pas ne "
         "décide rien (D-23).",
         "Lire dans le report pourquoi la règle est `incomplete`. L'image est peut-être saine ; "
-        "le prochain criblage la rejuge.",
+        "le prochain screening la rejuge.",
     ),
     Reason(
         "regis/exit-1",
@@ -210,15 +210,15 @@ REASONS = (
         "uske/no-transit",
         (Outcome.INCONCLUSIVE,),
         "La source était à réparer, mais aucun transit n'était configuré pour tenir l'image "
-        "réparée avant son verdict : l'opération a été retirée. Les copies du criblage ont été "
+        "réparée avant son verdict : l'opération a été retirée. Les copies du screening ont été "
         "placées.",
-        "Nommer le transit du workflow. Le prochain criblage rejuge la source.",
+        "Nommer le transit du workflow. Le prochain screening rejuge la source.",
     ),
     Reason(
         "uske/reopened",
         (Outcome.INCONCLUSIVE,),
         "Ligne écrite à la main : une personne a rouvert la source (SDR-0016).",
-        "Rien : le prochain criblage la rejuge.",
+        "Rien : le prochain screening la rejuge.",
     ),
     Reason(
         "",
