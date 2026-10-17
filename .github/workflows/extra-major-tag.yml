@@ -1,0 +1,36 @@
+# Déplace l'étiquette mobile vers chaque version publiée (change github-action, D6) :
+# v<majeure>.<mineure> en 0.x, v<majeure> à partir de 1.0. Hors du socle : release.yml ne change pas.
+name: extra-major-tag
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: name
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          case "$VERSION" in
+            0.*) echo "tag=v$(echo "$VERSION" | cut -d. -f1,2)" >> "$GITHUB_OUTPUT" ;;
+            *) echo "tag=v${VERSION%%.*}" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - env:
+          TAG: ${{ steps.name.outputs.tag }}
+          SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+          git tag -f "$TAG" "$SHA"
+          git -c "http.extraheader=$auth" push -f origin "refs/tags/$TAG"

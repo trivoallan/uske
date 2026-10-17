@@ -1,0 +1,130 @@
+# yaml-language-server: $schema=https://trivoallan.github.io/regis/schemas/playbook/v1alpha1/playbook.schema.json
+apiVersion: regis.io/v1alpha1
+kind: Playbook
+metadata:
+  name: evaluation-version
+  title: Évaluation d'une version
+  labels:
+    app.kubernetes.io/version: "1.0.0"
+
+spec:
+  # Trois issues. Premier tier vrai l'emporte. La distinction
+  # réparable / rédhibitoire sur les failles repose entièrement sur `cve-fixable`,
+  # qui se lit à l'envers de son nom : la règle `fix-available` de `regis` PASSE
+  # quand aucune faille n'a de correctif, et ÉCHOUE quand il en existe.
+  tiers:
+    - id: direct-placement
+      name: Placement direct
+      condition:
+        and:
+          - { var: rules.cve-critical.passed }
+          - { var: rules.no-secret.passed }
+          - { var: rules.no-licence-toxique.passed }
+          - { var: rules.no-root.passed }
+          - { var: rules.freshness.passed }
+
+    - id: transformation-required
+      name: Transformation requise puis placement
+      condition:
+        and:
+          - { var: rules.no-secret.passed }
+          - { var: rules.no-licence-toxique.passed }
+          # Une faille critique est acceptable ICI si et seulement si
+          # un correctif existe : la transformation l'appliquera. « Un correctif
+          # existe », c'est `cve-fixable` en ÉCHEC.
+          - or:
+              - { var: rules.cve-critical.passed }
+              - { "!": [{ var: rules.cve-fixable.passed }] }
+
+    - id: quarantine
+      name: Quarantaine
+      condition:
+        or:
+          - { "!": [{ var: rules.no-secret.passed }] }
+          - { "!": [{ var: rules.no-licence-toxique.passed }] }
+          # Une faille critique, et aucun correctif nulle part dans l'image.
+          - and:
+              - { "!": [{ var: rules.cve-critical.passed }] }
+              - { var: rules.cve-fixable.passed }
+
+  rules:
+    # ===== RÉDHIBITOIRE : rien ne les répare =====
+    # Un secret présent dans une couche d'origine survit à la
+    # reconstruction : la couche est conservée telle quelle.
+    - provider: secrets
+      criterion: verified-secrets
+      slug: no-secret
+      level: critical
+      tags: [version, redhibitoire]
+
+    - provider: sbom
+      criterion: license-blocklist
+      slug: no-licence-toxique
+      level: critical
+      tags: [version, redhibitoire]
+      options:
+        # Identifiants SPDX actuels. La famille GPL n'y est plus : elle mettait en
+        # quarantaine toute base dont Syft lit les paquets — Alpine (busybox),
+        # Debian, Ubuntu, distroless (`base-files`, `netbase`). Restent les
+        # licences qui visent le service rendu, pas la distribution. Ce que la
+        # redistribution interne engage reste à arbitrer : DEBT-13.
+        blocklist:
+          - AGPL-3.0-only
+          - AGPL-3.0-or-later
+          - SSPL-1.0
+
+    # ===== LE COUPLE QUI DÉCIDE =====
+    # cve-critical dit qu'il y a un problème.
+    # cve-fixable dit si on peut le corriger à la mise à disposition : en échec,
+    # des correctifs existent. Limite : `regis` compte les correctifs de toutes
+    # sévérités, pas ceux des seules failles critiques. Une image peut donc partir
+    # en réparation sans que sa faille critique soit corrigeable ; c'est le
+    # jugement de l'image reconstruite qui le dira.
+    - provider: cve
+      criterion: cve-count
+      slug: cve-critical
+      level: critical
+      tags: [version, discriminant, curable]  # ce que la réparation corrige (uske)
+      options: { level: critical, max_count: 0 }
+
+    - provider: cve
+      criterion: fix-available
+      slug: cve-fixable
+      level: warning
+      tags: [version, discriminant]
+
+    # ===== RÉPARABLE : les transformations déclarées les corrigent =====
+    - provider: oci
+      criterion: user-blacklist
+      slug: no-root
+      level: critical
+      tags: [version, reparable]
+      # La brique qui fixe l'utilisateur est À LIVRER.
+      # Tant qu'elle n'existe pas, ce critère est de fait informatif.
+
+    - provider: freshness
+      criterion: age
+      slug: freshness
+      level: warning
+      tags: [version, reparable]
+      options: { max_days: 90 }
+
+    # ===== INFORMATIF =====
+    - provider: cve
+      criterion: cve-count
+      slug: cve-high
+      level: warning
+      tags: [version, informatif]
+      options: { level: high, max_count: 10 }
+
+    - provider: secrets
+      criterion: secret-scan
+      slug: secrets-non-verifies
+      level: warning
+      tags: [version, informatif]
+
+    - provider: dockle
+      criterion: severity-count
+      slug: bonnes-pratiques
+      level: warning
+      tags: [version, informatif]

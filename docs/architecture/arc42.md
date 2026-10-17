@@ -467,12 +467,14 @@ The scenario that demonstrates the **Contestability** goal.
 
 # Deployment View
 
-> LEAN level. **`uske` is not deployed anywhere today** (README, *Status*): the only
-> infrastructure that runs is the local test bench. This section therefore describes what every
-> environment receives — [`deploy/base`](../../deploy/base) — and then what the bench adds to it.
-> Production will be written with its first overlay.
+> LEAN level. **`uske` is not deployed anywhere today** (README, *Status*): what runs is the local
+> test bench and the GitHub bench of this repository. This section describes the two environments a
+> screening can run in — a Kubernetes cluster with Argo Workflows, from
+> [`deploy/base`](../../deploy/base), and a GitHub Actions runner, from the reusable workflow
+> [`extra-screen.yml`](../../.github/workflows/extra-screen.yml) — and then what the bench adds to
+> the first. Production will be written with its first overlay.
 
-## Infrastructure Level 1
+## Infrastructure Level 1 — Kubernetes cluster
 
 A Kubernetes namespace, with Argo Workflows. Nothing else runs permanently: each screening is a
 series of pods that die with it.
@@ -537,6 +539,61 @@ for each child — a replay never finds the state of another one —, and a merg
 doubling anything: `argo retry` on the parent, which also re-creates its failed children, or a
 child resubmitted alone with `merge=true`. While a merge is pending, the next screening fails and
 names the run to replay.
+
+## Infrastructure Level 1 — GitHub Actions runner
+
+A policy repository on GitHub calls the reusable workflow
+[`extra-screen.yml`](../../.github/workflows/extra-screen.yml) once per policy. Each call is two
+jobs on a GitHub-hosted runner (`ubuntu-latest`) that die with it: nothing runs permanently, no
+cluster, no volume. The same verb, `uske screen`, decides as on a workstation.
+
+```mermaid
+flowchart LR
+  caller["Caller workflow<br>policy repository<br><code>schedule</code>, <code>workflow_dispatch</code>…"]
+  subgraph runner["GitHub-hosted runner, one per call"]
+    nj["Job <code>name</code><br>reads <code>metadata.name</code>"]
+    sj["Job <code>screen</code><br><code>uske screen --policy</code>"]
+    bk["<code>buildkitd</code><br>privileged, 127.0.0.1:1234"]
+    rg["<code>regis</code> container<br>runner uid"]
+    kn["<code>knock</code> container<br>runner uid"]
+    res[("<code>results/</code><br>clone of the journal branch")]
+    sj -->|"<code>docker run</code>"| rg & kn
+    kn -->|"BUILDKIT_HOST"| bk
+    sj --- res
+  end
+  caller -->|"<code>uses:</code> … <code>@v0.N</code>"| nj --> sj
+  res -->|"push after each write, and at the end"| jb[("Branch <code>uske-journal</code><br>of the policy repository")]
+  sj -->|"<code>reports.tar</code>"| art[("Run artifact<br><code>uske-reports-&lt;name&gt;</code>")]
+  sj <-->|"<code>grype-db-&lt;day&gt;</code>"| cache[("Actions cache")]
+  kn -->|"HTTPS"| reg[("Registry<br>GHCR, the only one the workflow logs in to")]
+  rg -->|"HTTPS"| reg
+  kn -->|"keyless signing"| sig["Sigstore Fulcio and Rekor<br>public"]
+```
+
+| Element | What it carries | Setting that matters |
+|---------|-----------------|----------------------|
+| Job `name` | The policy's `metadata.name`, read by `uske list` | `contents: read`; fails if the path names no policy, or more than one |
+| Job `screen` | A whole screening of one policy, by `uske screen` | `contents`, `packages` and `id-token: write`, granted by the caller; one lock per policy name (`concurrency`), at most one run waiting |
+| `regis` and `knock` containers | The judge and the placer, each in its image, started by `uske` through `USKE_REGIS_CMD` and `USKE_KNOCK_CMD` | Versions pinned in the workflow, followed by Renovate; host network, runner uid, the work directory under `$RUNNER_TEMP` mounted at the same path |
+| `buildkitd` container | Rebuilds, by `transform:` and by remediation | Privileged, published on `127.0.0.1` only; acceptable on a throwaway hosted runner |
+| Branch `uske-journal` | The journal, one file per policy | Born orphan, written only by the hook (`USKE_AFTER_RECORD`) and the final push, three rebases at most; never protected against the workflow |
+| Run artifact | The reports, as one `reports.tar` that keeps the paths the journal lines cite | `report-retention-days`, 90 by default and at most on a public repository |
+| Actions cache | The `grype` database, one per UTC day, shared by the judgements of a run | Filled once by `grype db update` when empty; `GRYPE_DB_AUTO_UPDATE=false` in `regis` |
+| Credentials | The registry token (secret `registry-token`, else `GITHUB_TOKEN`) for `ghcr.io`, the only registry the workflow logs in to, in `config.json`, mounted read-only in `regis` and `knock`; the journal token only in the hook's git calls; the signing identity (the run's OpenID Connect token, which Sigstore's certificate authority, Fulcio, turns into a certificate, logged in its public transparency log, Rekor) or the `cosign-key`, in `knock` only | No input is interpolated into a script; secrets cross into a container by name only |
+
+**Block mapping.** *Screen* runs in the `screen` job, and through it the *Subcommands*, *Outcomes*,
+the *Gate*, the *Policies* and the *Journal*, in one process installed from the tag of the called
+workflow. There is no *Parent Workflow*, *Child Workflow* or *Merge*: the caller's job is the unit,
+one per policy, and the journal is pushed from the job itself. The *Tracker sync* and the *Census*
+do not run here.
+
+**TLS.** As in the cluster, `uske` terminates none. `buildkitd` listens in cleartext, on the
+runner's loopback only.
+
+**What serves Operability here**: a failed run is replayed from GitHub's interface, for one policy;
+a run that finds the journal already holds a decision judges nothing again; a push refused after a
+placement is caught by the final push, and the job fails rather than lose the line. Design and
+trade-offs: change `github-action`, D1 to D7.
 
 ## Infrastructure Level 2
 
@@ -613,10 +670,10 @@ MADR format. This section is their **log**: it points to them, and copies neithe
 nor their options, nor their values — each ADR says that its values are written in it "and nowhere
 else", and that is what keeps them from being contradicted here.
 
-Eighteen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
-one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; thirteen are therefore in force. Eleven are inherited from the method — see *Architecture
+Nineteen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
+one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; fourteen are therefore in force. Eleven are inherited from the method — see *Architecture
 Constraints*: ten questions that it asks every repository adopting it, and the rule that says how
-to answer them. Seven are specific to `uske`: `SDR-0016` to `SDR-0022`. A new decision is written
+to answer them. Eight are specific to `uske`: `SDR-0016` to `SDR-0023`. A new decision is written
 when a choice is expensive to undo, touches several blocks, arbitrates between two quality goals,
 or constrains the following changes.
 
@@ -663,6 +720,7 @@ supersedes `SDR-0020`.
 | [SDR-0020](../adr/SDR-0020-readme-en-anglais.md) | The README in English, like those of `regis` and `knock` | accepted — superseded by SDR-0022 | 2026-10-17 | Contestability | not applicable — superseded |
 | [SDR-0021](../adr/SDR-0021-screen-et-repartition.md) | A verb that runs both tools, and one Workflow per policy | accepted | 2026-10-17 | Operability, against Thinness | yes — `uske screen`, and the parent and child templates proven on the `kind` bench on 2026-10-17 |
 | [SDR-0022](../adr/SDR-0022-documentation-en-anglais.md) | Documentation in English; ADRs, discovery and commits in French | accepted | 2026-10-17 | Contestability | yes |
+| [SDR-0023](../adr/SDR-0023-workflow-github.md) | Off the cluster, a reusable GitHub workflow, and the journal on a branch of the calling repository | accepted | 2026-10-17 | Operability and Contestability, against Thinness | yes — the bench `extra-screen-example.yml` proven on GitHub on 2026-10-17, repair promoted included |
 
 ## Open gaps
 
@@ -710,12 +768,16 @@ Thinness, in the name of Safety. The ranking of the goals settles it — that is
 
 | ID | Priority | Risk | Probability × impact | What reduces it |
 |----|----------|------|----------------------|-----------------|
-| RISK-01 | **high** | The journal lives on a volume, without history: a direct write to the volume rewrites a line, and nothing sees it. The Contestability goal promises "no modified line" with no way to prove it outside `uske`. | possible × severe | Nothing yet. A dated copy of the journal outside the volume would make QS-04 verifiable; the storage is still to be decided (`DEBT-08`) |
+| RISK-01 | **high** | The journal lives on a volume, without history: a direct write to the volume rewrites a line, and nothing sees it. The Contestability goal promises "no modified line" with no way to prove it outside `uske`. | possible × severe | In the cluster, nothing yet: a dated copy of the journal outside the volume would make QS-04 verifiable; the storage is still to be decided (`DEBT-08`). On the GitHub Actions runner, the journal is a branch of the policy repository, and its history makes "no modified line" checkable — at one repository's scale, and only as far as the branch is not force-pushed (change `github-action`) |
 | RISK-04 | **high** | A transit that consumers can pull from exposes a rebuilt image **before** it is judged. `knock` only refuses a transit that is also a destination. | possible × severe | The registry closes the transit to consumers (README, *Rebuilds and repairs*); `uske` does not check it |
+| RISK-08 | medium | On the GitHub Actions runner, without the `registry-token` secret, the registry credential is `GITHUB_TOKEN`, which can also write to the calling repository; it reaches `regis` and `knock` through their `config.json`, so a compromised tool in either container could write to the repository. | low × severe | Accepted for the demonstration (Tristan, 2026-10-17); the guide asks for a packages-only token beyond it, and the journal's git token never reaches a container |
+| RISK-09 | medium | On the GitHub Actions runner, keyless promotion accepts a signature from **any** repository that calls `extra-screen.yml`: the certificate names the called workflow, not the caller. Abusing it also needs write access to the caller's transit. | low × severe | Accepted (Tristan, 2026-10-17). A change in `knock` that checks the certificate's workflow repository closes it; until then, a `cosign-key` signs instead |
+| RISK-11 | medium | The workflow's key-signing mode (`cosign-key`) has only been checked by tests of the workflow's text, never by a run: the keyless mode is the one the GitHub bench proves. | possible × medium | One bench run with a throwaway key |
 | RISK-02 | medium | `uske` is not deployed anywhere: QS-03 has never been measured, and the 5-minute rhythm has not been tested against a real registry. | certain × medium | The first production overlay, then a measurement of QS-03 on a real refusal |
 | RISK-03 | medium | With a `knock` older than 0.13.0, nothing is remediated, and nothing says why. | low × medium | The overlay pins `knock` by digest; the bench runs 0.16.0 |
 | RISK-05 | low | The journal volume is `ReadWriteOnce`: a reading pod waits for the end of the snapshot or the merge of a screening that runs on another node — the only pods that mount it. Between a placement and the merge, the journal on the volume lags behind what was placed. | likely × low | Wait; the decision is already durable in the artifact repository before its placement, and a failed merge fails the parent and replays (`argo retry`). The snapshot leaves the mark `.pending-merge/<run>`, which only a successful merge clears: while it stays, the next screening fails at its snapshot, naming the run, and never judges on a lagging journal (`Forbid` alone is not enough: a failed parent is finished, and the `CronWorkflow` starts the next one). The storage no longer needs to be shared: no child mounts the volume, whatever the ceilings. A line written by hand during that lag escapes the child, which may place the image that the line quarantines: the merge then refuses the child's lines on that digest, names them, fails and keeps the mark — the conflict is visible (fail-visible), the placement is not undone |
 | RISK-06 | low | On the bench, `buildkitd` listens in cleartext on the cluster network. | certain × low, on the bench only | Outside the bench: mTLS or a `NetworkPolicy` |
+| RISK-10 | low | On the GitHub Actions runner, keyless signing writes the name and digest of every placed image to the public Rekor log. | certain × low | The `cosign-key` secret signs without a public log |
 | RISK-07 | medium | One child Workflow per policy: beyond 10,000 policies, a screening creates more than 10,000 `Workflow` objects every 5 minutes, which load the Argo controller and etcd; each `resource` step that waits for its child holds a pod, and each successful child starts one more pod for its `done/` mark. The list of policies is passed as a parameter to the parent's single `withParam`: the size of the parent's status at 10,000 is not known. No measurement exists. | possible × medium | `ttlStrategy` (one day) and `podGC: OnPodSuccess` on the child; the parent owns the children and takes them with it; the waiting pods are bounded by the ceiling of policies. The volume spike of 2026-10-19 measures it; if it does not hold, split into several `CronWorkflow`s over subdirectories of `policies` |
 
 ## Technical Debts
@@ -733,7 +795,7 @@ The others come from a review.
 | DEBT-05 | Nothing produces a release: deliveries cannot be deduced from any commit | — the pipeline | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. The release tool installed — it depends on DEBT-03 |
 | DEBT-06 | Nobody runs the ADR schema: a decision left empty or undecided gets through without anything saying so | — the pipeline | review of 2026-09-20 | The check added to the `lint` target of the `Makefile`, or declared manual in an ADR that supersedes [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
 | DEBT-07 | Argo Workflows chains the steps, and nothing says why: it is what makes a replay possible, and leaving it would rewrite all of `deploy/` | *Parent Workflow*, *Child Workflow* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the scheduler, rejected options included |
-| DEBT-08 | The journal is one JSON Lines file per policy on a volume, and nothing says why: `SDR-0016` sets its vocabulary, not its storage; the Contestability goal rests on this storage (RISK-01) | *Journal* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the journal storage, rejected options included |
+| DEBT-08 | The journal is one JSON Lines file per policy on a volume, and nothing says why: `SDR-0016` sets its vocabulary, not its storage; the Contestability goal rests on this storage (RISK-01) | *Journal* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the journal storage, rejected options included. On the GitHub Actions runner, a branch of the policy repository holds it, proven by the bench (change `github-action`); [`SDR-0023`](../adr/SDR-0023-workflow-github.md) decides it for that environment only |
 | DEBT-09 | `README.md` is English-first, against the French-by-default rule | — the documentation | [`SDR-0002`](../adr/SDR-0002-localization.md) | *Closed* 2026-10-17 by [`SDR-0020`](../adr/SDR-0020-readme-en-anglais.md) for the README, then [`SDR-0022`](../adr/SDR-0022-documentation-en-anglais.md) for all documentation: it is in English; ADRs, discovery, OpenSpec artefacts and commit messages stay in French. (Original criterion: the README rewritten in French, or the gap accepted in an ADR.) |
 
 **Two patterns recur, and they are the ones to watch.** The first: a check decided without being

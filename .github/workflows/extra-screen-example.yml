@@ -1,0 +1,34 @@
+# Banc du workflow réutilisable (change github-action, D7) : appelle extra-screen.yml par son
+# chemin, sur le code de la PR. Les PR venues d'un fork sont exclues : leur jeton ne peut pas pousser.
+name: extra-screen-example
+
+on:
+  workflow_dispatch:
+    inputs:
+      policy:
+        type: string
+        default: examples/github/policies/alpine.yaml
+  pull_request:
+    paths:
+      - .github/workflows/extra-screen.yml
+      - .github/workflows/extra-screen-example.yml
+      - examples/github/**
+
+permissions: {}
+
+jobs:
+  screen:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/extra-screen.yml
+    with:
+      policy: ${{ inputs.policy || 'examples/github/policies/alpine.yaml' }}
+      registries: '{"ghcr": {"host": "ghcr.io"}, "transit": {"host": "ghcr.io/trivoallan/uske-transit"}}'
+      transit: transit
+      playbooks: examples/github/playbooks
+      journal-branch: uske-journal-example
+      package-mirrors: '{"public": {"apt": "http://deb.debian.org", "apk": "https://dl-cdn.alpinelinux.org"}}'
+      uske-ref: ${{ github.event.pull_request.head.sha || github.sha }}
