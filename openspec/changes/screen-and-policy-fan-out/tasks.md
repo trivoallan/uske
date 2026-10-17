@@ -71,13 +71,13 @@
 
 ## 3. Renouveler l'ordre sur un tag réparé
 
-- [ ] 3.1 Dans `tests/test_orchestrator.py`, les quatre scénarios de
+- [x] 3.1 Dans `tests/test_orchestrator.py`, les quatre scénarios de
   `specs/rebuild-gate/spec.md` (*Un correctif amont sur un tag réparé*, *Un tag réparé, sans
   transit*, *Un tag jamais réparé*, *Un tag réparé dont la nouvelle source est refusée*), sur des
   plans en fixture qui portent ou non `"remediated": true`. Puis, dans `_decide` de
   `uske/gate.py`, la branche D11 avant le `return None` de `direct-placement`. Attendu :
   `uv run python -m pytest --no-cov tests/test_orchestrator.py -k remediated` rend `4 passed`.
-- [ ] 3.2 Commit : `feat(gate): renouveler la réparation d'un tag qui en porte une`.
+- [x] 3.2 Commit : `feat(gate): renouveler la réparation d'un tag qui en porte une`.
 
 ## 4. Le workflow réparti
 
