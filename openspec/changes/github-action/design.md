@@ -152,6 +152,16 @@ banc l'a montré (run 39018191729). Tranché par Tristan le 2026-10-17 :
   `knock` ; le préfixe porte `-e KNOCK_ATTEST_SIGNER=key -e KNOCK_ATTEST_KEY_REF=<chemin monté>
   -e COSIGN_PASSWORD`. Pour qui ne peut pas inscrire ses noms d'images dans un journal public.
 
+- **La promotion vérifie l'identité du workflow appelé.** En signature sans clé, le préfixe de
+  `knock` porte aussi `-e KNOCK_ATTEST_VERIFY_OIDC_ISSUER=https://token.actions.githubusercontent.com`
+  et `-e 'KNOCK_ATTEST_VERIFY_IDENTITY=^https://github\.com/trivoallan/uske/\.github/workflows/extra-screen\.yml@'`,
+  quel que soit le ref. Dans un workflow réutilisable, le certificat nomme le workflow appelé, pas
+  le dépôt appelant ; `knock` n'expose que l'identité et l'émetteur. Le banc l'a montré
+  (run 39019892612 : `PromotionRefusedError`). Tranché par Tristan le 2026-10-17, après
+  comparaison : épingler le ref (gain marginal, banc cassé) et exiger une clé pour réparer
+  (démonstration amputée) sont écartés. Lier la signature au dépôt appelant demande une option de
+  `knock` (`--certificate-github-workflow-repository` de cosign) : change de suivi dans `knock`.
+
 `package-mirrors` suit le même chemin, par nom seul : `-e KNOCK_TRANSFORM_PACKAGE_MIRRORS`.
 
 ### D3 — Un trio épinglé par version d'`uske`, suivi par Renovate sans toucher au socle
@@ -258,6 +268,9 @@ tient lieu.
   groupes 2-3, tranché par Tristan le 2026-10-17).
 - [La signature sans clé inscrit le nom de chaque image placée dans Rekor public] → C'est le prix
   d'une démonstration sans secret ; le secret `cosign-key` l'évite (D2bis).
+- [Tout dépôt qui appelle ce workflow produit une signature que la promotion accepte] → Pour en
+  abuser, il faut aussi écrire dans le transit de l'appelant, son propre registre. Accepté ; le
+  change de suivi dans `knock` lie la signature au dépôt appelant (D2bis).
 - [Une étiquette d'image est republiée sous le même numéro] → Le risque est accepté (D3).
 - [Le nom `extra-screen.yml` et ses entrées deviennent une interface] → Retirer ou renommer une
   entrée est un changement cassant, noté dans le CHANGELOG.

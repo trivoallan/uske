@@ -55,7 +55,16 @@ SHALL signer sans clé (`KNOCK_ATTEST_SIGNER=keyless`), avec l'identité OIDC du
 `id-token: write`, et seules les deux variables qui permettent de demander ce jeton atteignent le
 conteneur du placeur, par leur nom. Avec `cosign-key` (et `cosign-password`), il SHALL signer par
 clé (`KNOCK_ATTEST_SIGNER=key`) : la clé est écrite dans un fichier lisible du seul runner, monté
-en lecture seule dans le seul conteneur du placeur.
+en lecture seule dans le seul conteneur du placeur. Sans clé, la promotion d'une image réparée
+SHALL exiger une signature émise par `token.actions.githubusercontent.com` pour l'identité du
+workflow appelé, `trivoallan/uske/.github/workflows/extra-screen.yml`, quel que soit son ref.
+
+#### Scenario: Une image réparée promue sans clé
+
+- **GIVEN** un appel sans `cosign-key`, et une image retenue dans le transit, signée par ce run et
+  jugée `direct-placement`
+- **WHEN** le placeur la promeut
+- **THEN** la signature est vérifiée contre l'identité du workflow appelé, et l'image est promue
 
 #### Scenario: Sans clé
 
