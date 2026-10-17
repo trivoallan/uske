@@ -8,8 +8,10 @@ spec:
   artifactType: image
   source: {registry: docker.io, repository: library/alpine}
   imports:
-    - name: v3-22-0
-      tags: {includeRegex: "^3\\.22\\.0$"}
+    # 3.22.0 a été réparée et promue avant uske 0.10 ; 3.22.1, nouvelle pour cette politique,
+    # éprouve la réparation sous le contrat de la 0.10 (tier `id`, règle `curable`).
+    - name: v3-22-0-1
+      tags: {includeRegex: "^3\\.22\\.[01]$"}
       remediate:
         - rewritePackageSources: {mirror: public}
         - upgradePackages: {}
