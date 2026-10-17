@@ -87,13 +87,13 @@
 
 ## 6. Pages
 
-- [ ] 6.1 Traduire la section « Décisions » de `docs/explanation/how-it-works.md` (titre
+- [x] 6.1 Traduire la section « Décisions » de `docs/explanation/how-it-works.md` (titre
   `## Decisions`). Elle dit désormais que la documentation est en anglais, et que les ADR et la
   discovery restent en français (`SDR-0022`).
-- [ ] 6.2 Traduire `docs/architecture/arc42.md` section par section, glossaire du 3.2 en main.
+- [x] 6.2 Traduire `docs/architecture/arc42.md` section par section, glossaire du 3.2 en main.
   Garder les ancres et les identifiants (`QS-nn`, `R-n`, `SDR-nnnn`, `D-nn`). Les citations de
   réponses datées gardent leur date.
-- [ ] 6.3 Commit : `docs(architecture): l'arc42 en anglais`.
+- [x] 6.3 Commit : `docs(architecture): l'arc42 en anglais`.
 
 ## 7. Vérification
 

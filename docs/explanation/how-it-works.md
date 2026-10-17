@@ -66,16 +66,17 @@ The next screening judges it again. The date must be in exactly that format and 
 the source's last line, or `uske record` refuses or drops it. The file lives on a volume: writing
 to it takes a throwaway pod.
 
-## Décisions
+## Decisions
 
-La prose de ce dépôt s'écrit en français, le code en anglais : c'est l'une des décisions ci-dessous.
+The documentation is in English; architecture decisions, discovery and change proposals are
+written in French, the language of the people who decide ([`SDR-0022`](../adr/SDR-0022-documentation-en-anglais.md)).
 
-- [`docs/adr/`](../adr/) — les décisions d'architecture, une par fichier, chacune avec son verdict
-  et la provenance de ses valeurs.
-- [`docs/architecture/arc42.md`](../architecture/arc42.md) — les objectifs qualité et le journal des
-  décisions, en un lieu.
-- [`openspec/discovery.md`](../../openspec/discovery.md) — les personas, les objectifs qualité ordonnés,
-  et les stories à venir.
+- [`docs/architecture/arc42.md`](../architecture/arc42.md): the quality goals, the architecture,
+  the decision log and the glossary, in one place. Start here.
+- [`docs/adr/`](../adr/): the architecture decisions, one per file, each with its verdict and
+  where each value comes from. In French.
+- [`openspec/discovery.md`](../../openspec/discovery.md): the personas, the ordered quality goals,
+  and the stories to come. In French.
 
 ## The name
 
