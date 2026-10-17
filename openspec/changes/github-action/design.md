@@ -70,6 +70,8 @@ Entrées :
 | `playbooks` | `playbooks` | répertoire des playbooks dans le dépôt appelant |
 | `journal-branch` | `uske-journal` | branche où vit le journal |
 | `report-retention-days` | `90` | durée de vie de l'artefact des rapports |
+| `registry-username` | vide (l'acteur du run) | utilisateur du registre, avec le secret ci-dessous |
+| secret `registry-token` | absent (`GITHUB_TOKEN`) | jeton du registre ; seul à atteindre le juge et le placeur |
 
 Aucune entrée ne remplace une image : le trio est épinglé (D3). Les identifiants de registre ne
 passent pas par les entrées : `docker login` les écrit dans `config.json` (D2).
@@ -227,8 +229,14 @@ tient lieu.
   éphémère, avec un port publié sur `127.0.0.1`. La page how-to dit qu'un runner auto-hébergé
   partagé demande BuildKit sans root.
 - [Le jeton écrit sur tout le dépôt appelant et sur ses paquets] → Le job déclare ses permissions au
-  plus juste. `persist-credentials: false`, l'authentification passe par le seul crochet, et aucune
-  entrée n'est interpolée dans un script : les entrées passent par l'environnement.
+  plus juste. `persist-credentials: false`, l'authentification git passe par le seul crochet, et
+  aucune entrée n'est interpolée dans un script : les entrées passent par l'environnement.
+- [Le jeton du registre atteint le juge et le placeur par `config.json`] → C'est voulu : le placeur
+  pousse, et le juge lit l'image retenue dans le transit, privée sur GHCR. Mais sans le secret
+  `registry-token`, ce jeton est `GITHUB_TOKEN`, qui porte aussi `contents: write` : un outil
+  compromis pourrait écrire dans le dépôt appelant. Accepté pour la démonstration ; le guide
+  demande un jeton de registre dédié, limité aux paquets, pour tout autre usage (revue de tâche des
+  groupes 2-3, tranché par Tristan le 2026-10-17).
 - [Une étiquette d'image est republiée sous le même numéro] → Le risque est accepté (D3).
 - [Le nom `extra-screen.yml` et ses entrées deviennent une interface] → Retirer ou renommer une
   entrée est un changement cassant, noté dans le CHANGELOG.

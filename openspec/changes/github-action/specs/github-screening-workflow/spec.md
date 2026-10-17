@@ -178,11 +178,15 @@ SHALL échouer quand elle sort autrement.
 - **WHEN** le workflow la crible
 - **THEN** le job réussit, et le journal porte la ligne de refus
 
-### Requirement: Permissions au plus juste, jeton hors des conteneurs, entrées hors des scripts
+### Requirement: Permissions au plus juste, jeton du dépôt hors des conteneurs, entrées hors des scripts
 
-Le workflow SHALL déclarer les seules permissions `contents: write` et `packages: write`. Le jeton
-MUST NOT être écrit dans un fichier monté dans le conteneur du juge ou du placeur. Aucune entrée
-MUST NOT être interpolée dans le texte d'un script : les entrées passent par l'environnement.
+Le workflow SHALL déclarer les seules permissions `contents: write` et `packages: write`. Il SHALL
+accepter un secret facultatif `registry-token`, et une entrée `registry-username` (vide par défaut,
+ce qui vaut l'acteur du run). Le registre SHALL être authentifié par ce secret quand l'appelant le
+fournit, sinon par `GITHUB_TOKEN`. Seule cette authentification de registre atteint le juge et le
+placeur, par leur `config.json`. Le jeton qui pousse le journal MUST NOT être écrit dans un fichier
+monté dans leurs conteneurs. Aucune entrée MUST NOT être interpolée dans le texte d'un script : les
+entrées passent par l'environnement.
 
 #### Scenario: Un chemin piégé
 
@@ -191,11 +195,19 @@ MUST NOT être interpolée dans le texte d'un script : les entrées passent par 
 - **THEN** aucune commande n'est lancée en dehors d'`uske` et de ses outils
 - **AND** `uske` ne trouve pas la politique, le job échoue, et rien n'est placé
 
-#### Scenario: Le jeton hors de portée des outils
+#### Scenario: Un jeton de registre fourni
 
-- **GIVEN** un run en cours
+- **GIVEN** un appel qui fournit le secret `registry-token`
 - **WHEN** le juge ou le placeur lit les fichiers montés dans son conteneur
-- **THEN** aucun de ces fichiers ne contient `GITHUB_TOKEN`
+- **THEN** aucun de ces fichiers ne contient `GITHUB_TOKEN`, et leur `config.json` porte le jeton de
+  registre
+
+#### Scenario: Sans jeton de registre
+
+- **GIVEN** un appel sans le secret `registry-token`
+- **WHEN** le workflow s'authentifie auprès du registre
+- **THEN** il emploie `GITHUB_TOKEN`, qui atteint alors le juge et le placeur par `config.json`
+- **AND** le jeton qui pousse le journal n'est écrit dans aucun fichier monté
 
 ### Requirement: Une étiquette mobile suit chaque version
 
