@@ -14,7 +14,7 @@ The file name and the inputs are a public interface: renaming or removing one is
 | `registry-username` | string | empty | User for the login to `ghcr.io`. Empty, the actor of the run. |
 | `playbooks` | string | `playbooks` | Directory of the playbooks in the calling repository, one `<track>.yaml` per track. Missing, or holding a playbook `uske` cannot read, the job fails before anything is judged. A track with no file is recorded `inconclusive` (`uske/unknown-track`). |
 | `journal-branch` | string | `uske-journal` | Branch of the calling repository that holds the journal. |
-| `report-retention-days` | number | `90` | Lifetime of the reports artifact, in days. |
+| `report-retention-days` | number | `90` | Lifetime of the reports artifact, a copy of the reports on the journal branch, in days. |
 | `package-mirrors` | string | empty | `KNOCK_TRANSFORM_PACKAGE_MIRRORS`: JSON of the mirrors that `rewritePackageSources` names. Empty, a source to repair ends in quarantine (`uske/remediation-undeclared`). |
 | `uske-ref` | string | empty | Reserved for this repository's tests. Installs `uske` from this commit instead of the release tag. Do not set it. |
 
@@ -50,7 +50,8 @@ The workflow has no outputs. It produces:
 | Product | Where | Content |
 | --- | --- | --- |
 | Journal | Branch `journal-branch`, cloned under `$RUNNER_TEMP`, outside your checkout | `<metadata.name>.jsonl`. Each line carries `run`, the URL of the run. |
-| Reports | Artifact `uske-reports-<metadata.name>` | `reports.tar`, holding `reports/<name>/<digest>/…`. Re-running the job deletes the artifact of its earlier attempt (RISK-13). Kept `report-retention-days` days, at most 90 on a public repository. |
+| Reports | Branch `journal-branch` | `reports/<metadata.name>/<digest>/…`, committed with the first line that cites them, at the path it cites. |
+| Reports copy | Artifact `uske-reports-<metadata.name>` | `reports.tar`, holding the same paths. Re-running the job deletes the copy of its earlier attempt, not the reports on the branch. Kept `report-retention-days` days, at most 90 on a public repository. |
 
 ## Concurrency
 
@@ -61,13 +62,15 @@ newer run replaces the pending one.
 ## Journal commits
 
 A commit is made after each step that writes the journal, and once more at the end of the run.
+Each one holds the policy's journal and its new reports.
 
 ```text
 journal (<metadata.name>) : <step>, <run URL>
 ```
 
 `<step>` is a `uske` step, such as `record` or `record-applied`, or `final`. The first commit of a
-new branch reads `journal : naissance de la branche`.
+new branch reads `journal : naissance de la branche`, and is empty. A branch born in `v0.11.0`
+also holds a `.gitignore` that excludes `reports/`; the workflow commits the reports anyway.
 
 ## Tags
 
