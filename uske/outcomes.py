@@ -170,9 +170,7 @@ REASONS = (
         "regis/unknown-tier",
         (Outcome.INCONCLUSIVE,),
         "The tier returned is none of those `uske` knows. They are named as the playbooks "
-        "write them: "
-        + ", ".join(f"`{name}`" for name in TIERS)
-        + ".",
+        "write them: " + ", ".join(f"`{name}`" for name in TIERS) + ".",
         "Align the playbook's tier names with this list.",
     ),
     Reason(
