@@ -210,8 +210,74 @@ class Shape(unittest.TestCase):
             self.workflow["jobs"]["name"]["permissions"], {"contents": "read"}
         )
         self.assertEqual(
-            self.screen["permissions"], {"contents": "write", "packages": "write"}
+            self.screen["permissions"],
+            {"contents": "write", "packages": "write", "id-token": "write"},
         )
+
+    def compose(self) -> str:
+        return next(
+            s
+            for s in self.all_steps()
+            if s.get("name") == "Composer les commandes du juge et du placeur"
+        )["run"]
+
+    def prefix(self, name: str) -> str:
+        line = next(line for line in self.compose().splitlines() if f'"{name}=' in line)
+        return line
+
+    def test_the_package_mirrors_reach_the_placer_by_name(self) -> None:
+        # Exigence « la reconstruction est disponible sur un runner hébergé ».
+        call = self.workflow[True]["workflow_call"]
+        self.assertEqual(call["inputs"]["package-mirrors"]["type"], "string")
+        self.assertEqual(call["inputs"]["package-mirrors"]["default"], "")
+        env = next(s for s in self.all_steps() if s.get("name") == "Cribler")["env"]
+        self.assertEqual(
+            env["KNOCK_TRANSFORM_PACKAGE_MIRRORS"], "${{ inputs.package-mirrors }}"
+        )
+        self.assertIn(
+            "-e KNOCK_TRANSFORM_PACKAGE_MIRRORS ", self.prefix("USKE_KNOCK_CMD")
+        )
+        self.assertNotIn("KNOCK_TRANSFORM", self.prefix("USKE_REGIS_CMD"))
+
+    def test_the_signing_key_is_an_optional_secret(self) -> None:
+        # Exigence « le placeur signe ce qu'il place ».
+        secrets = self.workflow[True]["workflow_call"]["secrets"]
+        for name in ("cosign-key", "cosign-password"):
+            self.assertIs(secrets[name]["required"], False)
+        env = next(s for s in self.all_steps() if s.get("name") == "Cribler")["env"]
+        self.assertEqual(env["COSIGN_PASSWORD"], "${{ secrets.cosign-password }}")
+
+    def test_the_placer_signs_keyless_by_default(self) -> None:
+        compose = self.compose()
+        self.assertIn(
+            "-e KNOCK_ATTEST_SIGNER=keyless -e ACTIONS_ID_TOKEN_REQUEST_URL"
+            " -e ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+            compose,
+        )
+        self.assertIn("$signer", self.prefix("USKE_KNOCK_CMD"))
+
+    def test_the_placer_signs_with_a_key_when_given(self) -> None:
+        compose = self.compose()
+        self.assertIn('[ -n "$COSIGN_KEY" ]', compose)
+        self.assertIn("umask 077", compose)
+        self.assertIn('"$RUNNER_TEMP/cosign.key"', compose)
+        self.assertIn(":/tmp/cosign.key:ro", compose)
+        self.assertIn(
+            "-e KNOCK_ATTEST_SIGNER=key -e KNOCK_ATTEST_KEY_REF=/tmp/cosign.key",
+            compose,
+        )
+        self.assertIn("-e COSIGN_PASSWORD", compose)
+        step_env = next(
+            s
+            for s in self.all_steps()
+            if s.get("name") == "Composer les commandes du juge et du placeur"
+        )["env"]
+        self.assertEqual(step_env, {"COSIGN_KEY": "${{ secrets.cosign-key }}"})
+
+    def test_the_judge_never_sees_the_signer(self) -> None:
+        regis = self.prefix("USKE_REGIS_CMD")
+        for word in ("ACTIONS_ID_TOKEN", "cosign", "COSIGN", "KNOCK_ATTEST", "$signer"):
+            self.assertNotIn(word, regis)
 
     def test_the_lock_is_the_policy_name(self) -> None:
         self.assertEqual(

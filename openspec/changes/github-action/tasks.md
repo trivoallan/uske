@@ -285,8 +285,74 @@ interface.
               self.workflow["jobs"]["name"]["permissions"], {"contents": "read"}
           )
           self.assertEqual(
-              self.screen["permissions"], {"contents": "write", "packages": "write"}
+              self.screen["permissions"],
+              {"contents": "write", "packages": "write", "id-token": "write"},
           )
+
+      def compose(self) -> str:
+          return next(
+              s
+              for s in self.all_steps()
+              if s.get("name") == "Composer les commandes du juge et du placeur"
+          )["run"]
+
+      def prefix(self, name: str) -> str:
+          line = next(line for line in self.compose().splitlines() if f'"{name}=' in line)
+          return line
+
+      def test_the_package_mirrors_reach_the_placer_by_name(self) -> None:
+          # Exigence « la reconstruction est disponible sur un runner hébergé ».
+          call = self.workflow[True]["workflow_call"]
+          self.assertEqual(call["inputs"]["package-mirrors"]["type"], "string")
+          self.assertEqual(call["inputs"]["package-mirrors"]["default"], "")
+          env = next(s for s in self.all_steps() if s.get("name") == "Cribler")["env"]
+          self.assertEqual(
+              env["KNOCK_TRANSFORM_PACKAGE_MIRRORS"], "${{ inputs.package-mirrors }}"
+          )
+          self.assertIn(
+              "-e KNOCK_TRANSFORM_PACKAGE_MIRRORS ", self.prefix("USKE_KNOCK_CMD")
+          )
+          self.assertNotIn("KNOCK_TRANSFORM", self.prefix("USKE_REGIS_CMD"))
+
+      def test_the_signing_key_is_an_optional_secret(self) -> None:
+          # Exigence « le placeur signe ce qu'il place ».
+          secrets = self.workflow[True]["workflow_call"]["secrets"]
+          for name in ("cosign-key", "cosign-password"):
+              self.assertIs(secrets[name]["required"], False)
+          env = next(s for s in self.all_steps() if s.get("name") == "Cribler")["env"]
+          self.assertEqual(env["COSIGN_PASSWORD"], "${{ secrets.cosign-password }}")
+
+      def test_the_placer_signs_keyless_by_default(self) -> None:
+          compose = self.compose()
+          self.assertIn(
+              "-e KNOCK_ATTEST_SIGNER=keyless -e ACTIONS_ID_TOKEN_REQUEST_URL"
+              " -e ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+              compose,
+          )
+          self.assertIn("$signer", self.prefix("USKE_KNOCK_CMD"))
+
+      def test_the_placer_signs_with_a_key_when_given(self) -> None:
+          compose = self.compose()
+          self.assertIn('[ -n "$COSIGN_KEY" ]', compose)
+          self.assertIn("umask 077", compose)
+          self.assertIn('"$RUNNER_TEMP/cosign.key"', compose)
+          self.assertIn(":/tmp/cosign.key:ro", compose)
+          self.assertIn(
+              "-e KNOCK_ATTEST_SIGNER=key -e KNOCK_ATTEST_KEY_REF=/tmp/cosign.key",
+              compose,
+          )
+          self.assertIn("-e COSIGN_PASSWORD", compose)
+          step_env = next(
+              s
+              for s in self.all_steps()
+              if s.get("name") == "Composer les commandes du juge et du placeur"
+          )["env"]
+          self.assertEqual(step_env, {"COSIGN_KEY": "${{ secrets.cosign-key }}"})
+
+      def test_the_judge_never_sees_the_signer(self) -> None:
+          regis = self.prefix("USKE_REGIS_CMD")
+          for word in ("ACTIONS_ID_TOKEN", "cosign", "COSIGN", "KNOCK_ATTEST", "$signer"):
+              self.assertNotIn(word, regis)
 
       def test_the_lock_is_the_policy_name(self) -> None:
           self.assertEqual(
@@ -406,6 +472,10 @@ Renovate le suivra.
           description: durée de vie de l'archive des rapports, en jours
           type: number
           default: 90
+        package-mirrors:
+          description: KNOCK_TRANSFORM_PACKAGE_MIRRORS, miroirs de paquets nommés par les politiques
+          type: string
+          default: ""
         uske-ref:
           description: réservé au banc de ce dépôt ; installe uske depuis ce commit
           type: string
@@ -413,6 +483,12 @@ Renovate le suivra.
       secrets:
         registry-token:
           description: jeton du registre ; absent, GITHUB_TOKEN
+          required: false
+        cosign-key:
+          description: clé cosign du placeur ; absente, signature sans clé (OIDC du run)
+          required: false
+        cosign-password:
+          description: mot de passe de cosign-key
           required: false
 
   permissions: {}
@@ -463,6 +539,7 @@ Renovate le suivra.
       permissions:
         contents: write
         packages: write
+        id-token: write
       concurrency:
         group: uske-screen-${{ needs.name.outputs.name }}
         cancel-in-progress: false
@@ -554,14 +631,23 @@ Renovate le suivra.
               -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_CHECK_FOR_APP_UPDATE=false \
               --entrypoint grype "ghcr.io/trivoallan/regis:$REGIS_VERSION-full" db update
         - name: Composer les commandes du juge et du placeur
+          env:
+            COSIGN_KEY: ${{ secrets.cosign-key }}
           run: |
             W="$GITHUB_WORKSPACE"; T="$RUNNER_TEMP/uske-work"; U="$(id -u):$(id -g)"
             C="$HOME/.docker/config.json"
             mkdir -p "$T"
+            # Le placeur signe (D2bis) : sans clé par l'OIDC du run, ou par la clé fournie.
+            signer="-e KNOCK_ATTEST_SIGNER=keyless -e ACTIONS_ID_TOKEN_REQUEST_URL -e ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+            if [ -n "$COSIGN_KEY" ]; then
+              K="$RUNNER_TEMP/cosign.key"
+              (umask 077; printf '%s\n' "$COSIGN_KEY" > "$K")
+              signer="-v $K:/tmp/cosign.key:ro -e KNOCK_ATTEST_SIGNER=key -e KNOCK_ATTEST_KEY_REF=/tmp/cosign.key -e COSIGN_PASSWORD"
+            fi
             common="docker run --rm --network host --user $U -v $W:$W -v $T:$T -w $W"
             {
               echo "USKE_REGIS_CMD=$common -v $C:/home/regis/.docker/config.json:ro -v $RUNNER_TEMP/grype-db:/grype-db -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_DB_AUTO_UPDATE=false -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
-              echo "USKE_KNOCK_CMD=$common -v $C:/tmp/.docker/config.json:ro -e KNOCK_REGISTRIES -e BUILDKIT_HOST=tcp://127.0.0.1:1234 ghcr.io/trivoallan/knock:$KNOCK_VERSION"
+              echo "USKE_KNOCK_CMD=$common -v $C:/tmp/.docker/config.json:ro -e KNOCK_REGISTRIES -e KNOCK_TRANSFORM_PACKAGE_MIRRORS $signer -e BUILDKIT_HOST=tcp://127.0.0.1:1234 ghcr.io/trivoallan/knock:$KNOCK_VERSION"
               echo "USKE_AFTER_RECORD=$RUNNER_TEMP/after-record.sh"
               echo "USKE_WORK=$T"
             } >> "$GITHUB_ENV"
@@ -571,6 +657,8 @@ Renovate le suivra.
             PLAYBOOKS: ${{ inputs.playbooks }}
             TRANSIT: ${{ inputs.transit }}
             KNOCK_REGISTRIES: ${{ inputs.registries }}
+            KNOCK_TRANSFORM_PACKAGE_MIRRORS: ${{ inputs.package-mirrors }}
+            COSIGN_PASSWORD: ${{ secrets.cosign-password }}
             GITHUB_TOKEN: ${{ github.token }}
           run: |
             set -- --policy "$POLICY" --results "$RESULTS" --work "$USKE_WORK" \
@@ -706,6 +794,7 @@ Renovate le suivra.
       permissions:
         contents: write
         packages: write
+        id-token: write
       uses: ./.github/workflows/extra-screen.yml
       with:
         policy: ${{ inputs.policy || 'examples/github/policies/alpine.yaml' }}
@@ -713,6 +802,7 @@ Renovate le suivra.
         transit: transit
         playbooks: examples/github/playbooks
         journal-branch: uske-journal-example
+        package-mirrors: '{"public": {"apt": "http://deb.debian.org/debian", "apk": "https://dl-cdn.alpinelinux.org/alpine"}}'
         uske-ref: ${{ github.event.pull_request.head.sha || github.sha }}
   ```
 - [x] 5.4 Lancer : `actionlint .github/workflows/extra-screen-example.yml`. Attendu : aucune

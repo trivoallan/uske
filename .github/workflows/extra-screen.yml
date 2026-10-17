@@ -34,6 +34,10 @@ on:
         description: durée de vie de l'archive des rapports, en jours
         type: number
         default: 90
+      package-mirrors:
+        description: KNOCK_TRANSFORM_PACKAGE_MIRRORS, miroirs de paquets nommés par les politiques
+        type: string
+        default: ""
       uske-ref:
         description: réservé au banc de ce dépôt ; installe uske depuis ce commit
         type: string
@@ -41,6 +45,12 @@ on:
     secrets:
       registry-token:
         description: jeton du registre ; absent, GITHUB_TOKEN
+        required: false
+      cosign-key:
+        description: clé cosign du placeur ; absente, signature sans clé (OIDC du run)
+        required: false
+      cosign-password:
+        description: mot de passe de cosign-key
         required: false
 
 permissions: {}
@@ -91,6 +101,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     concurrency:
       group: uske-screen-${{ needs.name.outputs.name }}
       cancel-in-progress: false
@@ -182,14 +193,23 @@ jobs:
             -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_CHECK_FOR_APP_UPDATE=false \
             --entrypoint grype "ghcr.io/trivoallan/regis:$REGIS_VERSION-full" db update
       - name: Composer les commandes du juge et du placeur
+        env:
+          COSIGN_KEY: ${{ secrets.cosign-key }}
         run: |
           W="$GITHUB_WORKSPACE"; T="$RUNNER_TEMP/uske-work"; U="$(id -u):$(id -g)"
           C="$HOME/.docker/config.json"
           mkdir -p "$T"
+          # Le placeur signe (D2bis) : sans clé par l'OIDC du run, ou par la clé fournie.
+          signer="-e KNOCK_ATTEST_SIGNER=keyless -e ACTIONS_ID_TOKEN_REQUEST_URL -e ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+          if [ -n "$COSIGN_KEY" ]; then
+            K="$RUNNER_TEMP/cosign.key"
+            (umask 077; printf '%s\n' "$COSIGN_KEY" > "$K")
+            signer="-v $K:/tmp/cosign.key:ro -e KNOCK_ATTEST_SIGNER=key -e KNOCK_ATTEST_KEY_REF=/tmp/cosign.key -e COSIGN_PASSWORD"
+          fi
           common="docker run --rm --network host --user $U -v $W:$W -v $T:$T -w $W"
           {
             echo "USKE_REGIS_CMD=$common -v $C:/home/regis/.docker/config.json:ro -v $RUNNER_TEMP/grype-db:/grype-db -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_DB_AUTO_UPDATE=false -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
-            echo "USKE_KNOCK_CMD=$common -v $C:/tmp/.docker/config.json:ro -e KNOCK_REGISTRIES -e BUILDKIT_HOST=tcp://127.0.0.1:1234 ghcr.io/trivoallan/knock:$KNOCK_VERSION"
+            echo "USKE_KNOCK_CMD=$common -v $C:/tmp/.docker/config.json:ro -e KNOCK_REGISTRIES -e KNOCK_TRANSFORM_PACKAGE_MIRRORS $signer -e BUILDKIT_HOST=tcp://127.0.0.1:1234 ghcr.io/trivoallan/knock:$KNOCK_VERSION"
             echo "USKE_AFTER_RECORD=$RUNNER_TEMP/after-record.sh"
             echo "USKE_WORK=$T"
           } >> "$GITHUB_ENV"
@@ -199,6 +219,8 @@ jobs:
           PLAYBOOKS: ${{ inputs.playbooks }}
           TRANSIT: ${{ inputs.transit }}
           KNOCK_REGISTRIES: ${{ inputs.registries }}
+          KNOCK_TRANSFORM_PACKAGE_MIRRORS: ${{ inputs.package-mirrors }}
+          COSIGN_PASSWORD: ${{ secrets.cosign-password }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -- --policy "$POLICY" --results "$RESULTS" --work "$USKE_WORK" \

@@ -22,6 +22,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     uses: ./.github/workflows/extra-screen.yml
     with:
       policy: ${{ inputs.policy || 'examples/github/policies/alpine.yaml' }}
@@ -29,4 +30,5 @@ jobs:
       transit: transit
       playbooks: examples/github/playbooks
       journal-branch: uske-journal-example
+      package-mirrors: '{"public": {"apt": "http://deb.debian.org/debian", "apk": "https://dl-cdn.alpinelinux.org/alpine"}}'
       uske-ref: ${{ github.event.pull_request.head.sha || github.sha }}

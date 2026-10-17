@@ -1,0 +1,16 @@
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: example-repair
+  labels:
+    admission-track: standard
+spec:
+  artifactType: image
+  source: {registry: docker.io, repository: library/nginx}
+  imports:
+    - name: v1-29
+      tags: {includeRegex: "^1\\.29$"}
+      remediate:
+        - rewritePackageSources: {mirror: public}
+        - upgradePackages: {}
+      destinations: [{registry: ghcr, project: trivoallan, repository: uske-example/nginx}]
