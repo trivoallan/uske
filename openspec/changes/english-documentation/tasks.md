@@ -97,19 +97,19 @@
 
 ## 7. Vérification
 
-- [ ] 7.1 Prose française restante :
+- [x] 7.1 Prose française restante :
   `git grep -nP '[àâçéèêëîïôûùüœ]' -- README.md docs/architecture docs/explanation docs/how-to docs/reference uske tests/golden`.
   Attendu : seulement les noms de tiers des playbooks, les citations en français volontaires (la
   devise du README) et les commentaires de code qui citent un tier.
-- [ ] 7.2 Cohérence du vocabulaire : pour chaque terme anglais du glossaire, `git grep -niw` sur les
+- [x] 7.2 Cohérence du vocabulaire : pour chaque terme anglais du glossaire, `git grep -niw` sur les
   pages traduites et `uske/*.py`. Attendu : aucun synonyme concurrent (par exemple `vetting` ou
   `scan` pour `screening`).
-- [ ] 7.3 Suite complète : `uv run --with pyyaml python -m unittest discover tests -t .`. Attendu :
+- [x] 7.3 Suite complète : `uv run --with pyyaml python -m unittest discover tests -t .`. Attendu :
   `OK`.
-- [ ] 7.4 Test lectoral : un agent vierge lit `docs/architecture/arc42.md` (sections 1 à 5) et
+- [x] 7.4 Test lectoral : un agent vierge lit `docs/architecture/arc42.md` (sections 1 à 5) et
   `docs/reference/reasons.md`, puis explique ce que fait `uske` et ce que veut dire
   `uske/remediation-undeclared`. Corriger ce qu'il comprend de travers.
-- [ ] 7.5 `openspec validate english-documentation --type change --strict`. Attendu : valide.
+- [x] 7.5 `openspec validate english-documentation --type change --strict`. Attendu : valide.
 - [ ] 7.6 Dans la merge request, signaler l'ordre de fusion avec `feat/screen-and-policy-fan-out`.
   Si elle fusionne en premier, traduire au rebase ce qu'elle a ajouté (pages, entrées de
   `REASONS`).

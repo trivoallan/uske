@@ -35,7 +35,7 @@ each decision. It judges nothing and places nothing: it calls, it waits, it writ
 - Classify each verdict into one of four outcomes: direct placement, transformation required,
   quarantine, inconclusive.
 - Return the plan to the placer, minus the refused operations; the placer applies only that. A
-  source refused on rules that its track declares remediable stays in the plan, with a remediation
+  source refused on rules that its track declares repairable stays in the plan, with a remediation
   order.
 - Have the placer hold what it builds in a transit, have it judged by its own digest, and return
   to the placer for promotion only what comes out as direct placement.
@@ -82,7 +82,7 @@ The measurable scenarios are in *Quality Requirements* (`QS-01` to `QS-07`).
 
 | Role/Name | Contact | Expectations |
 |-----------|---------|--------------|
-| **Platform owner** — runs the registry; main persona | persona; with no real person in the role, the maintainer answers | A screening runs on schedule without her, nothing doubtful gets in, and she understands the sequence of steps well enough to replay a failed screening on her own. |
+| **Platform owner** — runs the registry; main persona | persona; with no real person in the role, the maintainer answers | A screening runs on schedule without them, nothing doubtful gets in, and they understand the sequence of steps well enough to replay a failed screening on their own. |
 | **Application team** — waits for an image to ship | persona; the maintainer answers | To know why its image did not arrive: the reason for the refusal and the rule applied, without digging. |
 | **Security / compliance auditor** | persona; the maintainer answers | A journal that is authoritative: for an image and a date, the decision, the playbook and the reason; and proof that no line was rewritten. |
 | **Author and maintainer** | repository `trivoallan/uske` | To know where to put code and what may depend on what; to find why a decision was made. First real user, on a single registry. |
@@ -227,7 +227,7 @@ verdict is read as a refusal.
 
 | Goal | Main mechanism | Where |
 |------|----------------|-------|
-| 1. **Safety** `#safe` | **Fail closed**: a missing or unreadable report becomes `inconclusive` (`outcomes.py`, D-23 of the reference dossier). Only direct placement is returned to the placer, plus transformation required when `uske` orders a remediation (the track's remediable rules, `playbooks.REPAIRABLE`). The placer applies an operation only if its source digest has not changed since the plan (`gate.py`, D-30). What it rebuilds goes through a **second gate**, from a mandatory transit. | `SDR-0016`; *Runtime View* R-2, R-3; QS-01, QS-02 |
+| 1. **Safety** `#safe` | **Fail closed**: a missing or unreadable report becomes `inconclusive` (`outcomes.py`, D-23 of the reference dossier). Only direct placement is returned to the placer, plus transformation required when `uske` orders a remediation (the track's repairable rules, `playbooks.REPAIRABLE`). The placer applies an operation only if its source digest has not changed since the plan (`gate.py`, D-30). What it rebuilds goes through a **second gate**, from a mandatory transit. | `SDR-0016`; *Runtime View* R-2, R-3; QS-01, QS-02 |
 | 2. **Contestability** `#secure` | **An append-only journal that only moves forward**: a line older than the last one for the same digest is not written. Each line carries its state, its playbook, its reason and its screening (`run`); `uske decisions` makes them readable. | `SDR-0016`, `SDR-0018` |
 | 3. **Operability** `#operable` | **Separate, replayable steps**: JSON on output, exit code 0 for any business outcome and 1 for a technical failure, which Argo replays. The one-way journal makes a replay have no effect on what is already written; an image held without a verdict is retried three times at most. | *Runtime View* R-4; *Deployment View*; QS-05, QS-06 |
 | 4. **Thinness** `#flexible` | **Nothing to judge, nothing to place**: the only business table is the one that maps a track to a playbook (`playbooks.py`). The other tools are known only by their command line or their API. | *Architecture Constraints* |
@@ -386,7 +386,7 @@ sequenceDiagram
 
 
 1. As in R-1 up to step 4; the verdict is *transformation required*, and each failed critical rule
-   is among the track's remediable rules (`playbooks.REPAIRABLE`).
+   is among the track's repairable rules (`playbooks.REPAIRABLE`).
 2. The *Gate* returns the operation with a remediation order, only if the workflow names a
    transit; without a transit, the source is recorded as `inconclusive` (`uske/no-transit`) and
    judged again at the next screening. Copies and rebuilds by simple transformation are placed
@@ -708,7 +708,7 @@ decision log does not say what the repository does.
 | tier | Tier | The name that the playbook gives to its verdict; `uske` reduces it to an outcome. |
 | quarantine | Quarantaine | The outcome of a refused image: nothing is placed. |
 | inconclusive | Non concluant, `inconclusive` | The outcome of an evaluation that did not complete: nothing is decided, nothing is placed, and the next screening judges again. |
-| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source refused on rules that its track declares remediable. The remediated image is judged before it is placed. |
+| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source refused on rules that its track declares repairable. The remediated image is judged before it is placed. |
 | transit | Transit | The place where the placer holds a rebuilt image until it has its own verdict. Consumers must not be able to pull from it. |
 | second gate | Seconde porte | The judging of an image held in transit, by its own digest. |
 | bypass | Contournement | What is in the registry without having gone through `uske`: the census counts it. |

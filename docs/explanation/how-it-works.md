@@ -8,7 +8,7 @@ What uske knows, how rebuilds and repairs flow, where decisions live, and where 
 own image, by its command line, and `uske` reads the files they write. It knows **Harbor** by its
 API (`census`: enumerate the registry, subtract what was admitted, count the bypass) and
 **Dependency-Track** (`dt-*`: send the SBOMs `knock` signed, retire what left the registry). The
-regime-to-playbook table lives in [`uske/playbooks.py`](../../uske/playbooks.py), and nowhere else.
+track-to-playbook table lives in [`uske/playbooks.py`](../../uske/playbooks.py), and nowhere else.
 
 Policies and playbooks are not in the image: a screening checks out the repository that holds them.
 
@@ -21,7 +21,7 @@ image is judged before it is placed. That needs a `knock` with remediation order
 and `--applied-out`); an older one refuses the plan.
 
 `uske` orders a remediation when the source's verdict is the tier *Transformation requise*, at
-least one of its failed rules is in its regime's repairable list (`REPAIRABLE` in
+least one of its failed rules is in its track's repairable list (`REPAIRABLE` in
 [`uske/playbooks.py`](../../uske/playbooks.py): `standard` repairs `cve-critical`), and every failed
 **critical** rule is. A failed rule that is not critical does not stop the order. The order carries
 the screening's epoch (its start, UTC). A refusal on a critical rule outside that list is not
