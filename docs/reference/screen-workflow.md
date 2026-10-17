@@ -23,7 +23,7 @@ The file name and the inputs are a public interface: renaming or removing one is
 | Name | Required | Meaning |
 | --- | --- | --- |
 | `registry-token` | no | Token for the login to `ghcr.io`. Absent, `GITHUB_TOKEN`. |
-| `cosign-key` | no | Cosign key for the placer. Absent, the placer signs without a key. Not yet proven on the bench (RISK-11). |
+| `cosign-key` | no | Cosign key for the placer. Absent, the placer signs without a key. With it, signatures and attestations carry the public key and go to no public log. |
 | `cosign-password` | no | Password of `cosign-key`. |
 
 ## Registries

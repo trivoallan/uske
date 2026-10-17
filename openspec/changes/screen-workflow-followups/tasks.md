@@ -23,6 +23,8 @@ commit n'ont pas de portée (SDR-0017). Chaque tâche : test d'abord dans
 - [x] 4. Pas de suffixe : aucun conflit, et il ne garderait rien. `RISK-13` et le guide.
 - [x] 5. Consigner l'absence d'épinglage des dépendances d'`uske` (arc42, section 11).
 - [x] 6. Retirer `examples/github/playbooks/admission/` ; test : seuls des fichiers de piste.
-- [ ] 7. Banc : entrée `signer`, secrets `BENCH_COSIGN_KEY` et `BENCH_COSIGN_PASSWORD` (accord de
-      Tristan), puis un run en `key` ; clore ou amender `RISK-11`.
+- [x] 7. Banc : entrée `signer`, secrets `BENCH_COSIGN_KEY` et `BENCH_COSIGN_PASSWORD` (accord de
+      Tristan, 2026-10-17), puis un run en `key` ; clore ou amender `RISK-11`. Run 39026824035, sur
+      une politique temporaire à destination neuve (`uske-example/alpine-repaired-key`) : réparée,
+      promue, signée par clé, sans entrée Rekor. `RISK-11` clos.
 - [ ] 8. Docs, puis PR verte.
