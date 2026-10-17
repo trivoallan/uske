@@ -603,7 +603,7 @@ Renovate le suivra.
   La tâche 1 a retenu `-full` et montré que la base grype se télécharge à chaque jugement : le
   cache quotidien ci-dessus (étapes `grype-date`, `actions/cache` et « Remplir ») suit D2.
 - [x] 3.2 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
-  Attendu : `16 passed, 2 failed` ; les deux échecs sont ceux de `MovingTag`
+  Attendu : `19 passed, 2 failed` ; les deux échecs sont ceux de `MovingTag`
   (`FileNotFoundError` sur `extra-major-tag.yml`), réparés au groupe 4.
 - [x] 3.3 Lancer : `actionlint .github/workflows/extra-screen.yml`. Attendu : aucune sortie,
   code 0.
@@ -655,7 +655,7 @@ Renovate le suivra.
             git -c "http.extraheader=$auth" push -f origin "refs/tags/$TAG"
   ```
 - [ ] 4.3 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
-  Attendu : `18 passed`.
+  Attendu : `21 passed`.
 - [ ] 4.4 Lancer : `actionlint .github/workflows/extra-major-tag.yml`. Attendu : aucune sortie.
 - [ ] 4.5 Commit : `feat: suivre chaque version par une étiquette mobile du workflow GitHub`.
 
