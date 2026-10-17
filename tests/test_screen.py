@@ -330,13 +330,37 @@ class Reports(Fakes):
             f"reports/fixture-redistribution/{D4}/{EPOCH}.md",
         )
 
-    def test_a_run_given_as_a_url_keeps_its_last_segment(self):
+    def test_a_run_given_as_a_url_becomes_a_file_name(self):
         self.screen(
             "--policy", str(REDISTRIBUTION), "--run", "https://ci.example/runs/77/"
         )
         line = self.journal("fixture-redistribution")[0]
-        self.assertEqual(line["report"], f"reports/fixture-redistribution/{D4}/77.md")
+        self.assertEqual(
+            line["report"],
+            f"reports/fixture-redistribution/{D4}/https_ci.example_runs_77.md",
+        )
         self.assertEqual(line["run"], "https://ci.example/runs/77/")
+
+    def test_a_run_of_dots_falls_back_to_the_epoch(self):
+        self.screen("--policy", str(REDISTRIBUTION), "--run", "../..")
+        self.assertEqual(
+            self.journal("fixture-redistribution")[0]["report"],
+            f"reports/fixture-redistribution/{D4}/{EPOCH}.md",
+        )
+
+    def test_a_json_only_report_is_copied_and_cited(self):
+        wrapper = self.tmp / "regis-json"
+        wrapper.write_text(
+            '#!/bin/sh\nfor a; do shift; case "$a" in --markdown|--html) ;; '
+            '*) set -- "$@" "$a";; esac; done\n'
+            f'exec "{FAKES / "regis"}" "$@"\n'
+        )
+        wrapper.chmod(0o755)
+        os.environ["USKE_REGIS_CMD"] = str(wrapper)
+        self.screen("--policy", str(REDISTRIBUTION), "--run", "41")
+        relative = f"reports/fixture-redistribution/{D4}/41.json"
+        self.assertEqual(self.journal("fixture-redistribution")[0]["report"], relative)
+        self.assertTrue((self.results / relative).is_file())
 
     def test_the_html_is_cited_when_there_is_no_markdown(self):
         # a judge without --markdown: drop the flag through a wrapper
@@ -394,16 +418,19 @@ class UnknownRegime(Fakes):
         )
 
 
+def only_a_source_to_repair(tmp: Path) -> None:
+    """fixture-standard's plan reduced to 1.1, D2: a source to repair."""
+    os.environ["FAKE_PLANS"] = str(tmp / "plans")
+    (tmp / "plans").mkdir()
+    plan = json.loads((HERE / "fixtures/fakes/plans/fixture-standard.json").read_text())
+    plan["operations"] = plan["operations"][1:2]
+    (tmp / "plans/fixture-standard.json").write_text(json.dumps(plan))
+
+
 class Repair(Fakes):
     def setUp(self) -> None:
         super().setUp()
-        os.environ["FAKE_PLANS"] = str(self.tmp / "plans")
-        (self.tmp / "plans").mkdir()
-        plan = json.loads(
-            (HERE / "fixtures/fakes/plans/fixture-standard.json").read_text()
-        )
-        plan["operations"] = plan["operations"][1:2]  # 1.1, D2: a source to repair
-        (self.tmp / "plans/fixture-standard.json").write_text(json.dumps(plan))
+        only_a_source_to_repair(self.tmp)
 
     def test_a_source_to_repair_is_held_judged_then_promoted(self):
         """*Une source à réparer*: promoted on direct-placement."""
@@ -435,8 +462,10 @@ class Repair(Fakes):
 
     def test_without_a_transit_nothing_is_ordered(self):
         self.verdicts(**{D2: "repairable"})
-        code, _, _ = self.screen("--policy", str(STANDARD))
+        code, _, err = self.screen("--policy", str(STANDARD))
         self.assertEqual(code, 0)
+        self.assertIn("warning: fixture-standard: 1 source(s) to repair", err)
+        self.assertIn("--transit", err)
         self.assertEqual(
             self.journal("fixture-standard")[-1]["reason"], "uske/no-transit"
         )
@@ -534,19 +563,163 @@ class Policies(Fakes):
         self.assertTrue((work / "plans" / "fixture-redistribution.json").is_file())
 
 
+class Names(Fakes):
+    def write_policy(self, directory: Path, name: str) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{len(list(directory.iterdir()))}.yaml"
+        path.write_text(
+            REDISTRIBUTION.read_text().replace("fixture-redistribution", name)
+        )
+        return path
+
+    def test_a_name_that_is_a_path_is_refused(self):
+        canary = self.tmp / "x"
+        canary.mkdir()
+        (canary / "keep").write_text("")
+        policy = self.write_policy(self.tmp / "p", "../x")
+        code, out, err = self.screen("--policy", str(policy))
+        self.assertEqual((code, out), (1, []))
+        self.assertIn("DNS-1123", err)
+        code, out, err = self.screen("--policies", str(self.tmp / "p"))
+        self.assertEqual((code, out), (0, []))
+        self.assertIn("skipped:", err)
+        self.assertTrue((canary / "keep").exists())
+
+    def test_names_follow_the_dns_1123_subdomain_rule(self):
+        for name, valid in [
+            ("base.debian", True),
+            ("a-4711-redis-7", True),
+            ("x" * 253, True),
+            ("x" * 254, False),
+            ("../x", False),
+            ("Upper", False),
+            ("a;b", False),
+            ("-a", False),
+            ("a.", False),
+        ]:
+            with self.subTest(name=name):
+                path = self.write_policy(self.tmp / "n", name)
+                if valid:
+                    self.assertEqual(policies.load(path).name, name)
+                else:
+                    with self.assertRaises(policies.PolicyError):
+                        policies.load(path)
+
+    def test_paths_never_leave_work_or_results_even_for_an_unchecked_name(self):
+        """Belt and braces: a Policy built without `load` cannot escape either."""
+        canary = self.tmp / "x"
+        (canary / "keep").mkdir(parents=True)
+        loaded = policies.load(REDISTRIBUTION)
+        escaping = policies.Policy(
+            "../../x", loaded.path, loaded.track, loaded.document
+        )
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            summary = screen.screen_policy(
+                escaping, self.work, self.results, PLAYBOOKS, None, EPOCH, "",
+                screen.Tools.from_env(os.environ), None, False,
+            )  # fmt: skip
+        self.assertEqual(summary["outcome"], "failed")
+        self.assertIn("outside", err.getvalue())
+        self.assertTrue((canary / "keep").is_dir())
+        self.assertEqual(self.calls(), [])
+
+    def test_a_digest_that_is_a_path_is_refused(self):
+        plans = self.tmp / "plans"
+        plans.mkdir()
+        plan = json.loads(
+            (HERE / "fixtures/fakes/plans/fixture-redistribution.json").read_text()
+        )
+        plan["operations"][0]["sourceDigest"] = "sha256:../../../x"
+        (plans / "fixture-redistribution.json").write_text(json.dumps(plan))
+        os.environ["FAKE_PLANS"] = str(plans)
+        code, out, err = self.screen("--policy", str(REDISTRIBUTION))
+        self.assertEqual((code, out[0]["outcome"]), (1, "failed"))
+        self.assertIn("outside", err)
+
+    def test_a_dotted_name_with_nothing_owed_is_ok(self):
+        """`lines/base.debian` missing is no line, not a missing file."""
+        policy = self.write_policy(self.tmp / "p", "base.debian")
+        code, out, _ = self.screen("--policy", str(policy))
+        self.assertEqual((code, out[0]["outcome"], out[0]["judged"]), (0, "ok", 0))
+
+    def test_a_malformed_plan_fails_its_policy_only(self):
+        plans = self.tmp / "plans"
+        plans.mkdir()
+        plan = json.loads(
+            (HERE / "fixtures/fakes/plans/fixture-redistribution.json").read_text()
+        )
+        del plan["operations"][0]["sourceDigest"]
+        (plans / "fixture-redistribution.json").write_text(json.dumps(plan))
+        (plans / "fixture-standard.json").write_text(
+            (HERE / "fixtures/fakes/plans/fixture-standard.json").read_text()
+        )
+        os.environ["FAKE_PLANS"] = str(plans)
+        two = self.tmp / "two"
+        two.mkdir()
+        (two / "a.yaml").write_text(REDISTRIBUTION.read_text())
+        (two / "b.yaml").write_text(STANDARD.read_text())
+        code, out, err = self.screen("--policies", str(two))
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            [(o["policy"], o["outcome"]) for o in out],
+            [("fixture-redistribution", "failed"), ("fixture-standard", "ok")],
+        )
+        self.assertIn("error: fixture-redistribution: unexpected input: KeyError", err)
+
+
 class Journal(Fakes):
     def test_an_unwritable_journal_stops_before_placement(self):
-        """*Le journal ne peut pas être écrit*."""
-        self.results.mkdir()
+        """*Le journal ne peut pas être écrit*: the report lands, the journal does not."""
+        reports = self.results / "reports" / "fixture-redistribution" / D4
+        reports.mkdir(
+            parents=True
+        )  # writable: the first write that fails is the journal's
         self.results.chmod(stat.S_IRUSR | stat.S_IXUSR)
         self.addCleanup(self.results.chmod, stat.S_IRWXU)
         code, out, err = self.screen("--policy", str(REDISTRIBUTION))
         self.assertEqual((code, out[0]["outcome"]), (1, "failed"))
+        self.assertTrue(list(reports.iterdir()))
         self.assertFalse([c for c in self.calls() if "--apply-plan" in c])
         self.assertIn("error: fixture-redistribution:", err)
+        self.assertIn("fixture-redistribution.jsonl", err)
 
 
 class Hook(Fakes):
+    def screen_policy(self, policy: policies.Policy) -> dict:
+        with contextlib.redirect_stderr(io.StringIO()):
+            return screen.screen_policy(
+                policy,
+                self.work,
+                self.results,
+                PLAYBOOKS,
+                "transit",
+                EPOCH,
+                "",
+                screen.Tools.from_env(os.environ),
+                os.environ["USKE_AFTER_RECORD"],
+                False,
+            )
+
+    def test_a_hook_failing_at_the_second_gate_stops_the_promotion(self):
+        only_a_source_to_repair(self.tmp)
+        self.verdicts(**{D2: "repairable", held(D2): "direct"})
+        count = self.tmp / "count"
+        # succeeds after the first gate's record, fails after the held image's
+        os.environ["USKE_AFTER_RECORD"] = (
+            f'n=$(cat "{count}" 2>/dev/null || echo 0); n=$((n+1)); '
+            f'echo $n > "{count}"; [ $n -lt 2 ]'
+        )
+        code, out, _ = self.screen("--policy", str(STANDARD), "--transit", "transit")
+        self.assertEqual((code, out[0]["outcome"]), (1, "failed"))
+        self.assertEqual(count.read_text().strip(), "2")
+        calls = self.calls()
+        self.assertTrue(any("--apply-plan" in c for c in calls))
+        self.assertTrue(
+            any(c.startswith("regis analyze") and held(D2) in c for c in calls)
+        )
+        self.assertFalse([c for c in calls if c.startswith("knock promote")])
+
     def test_the_journal_is_committed_before_the_placement(self):
         """*Commiter le journal avant de placer*."""
         os.environ["USKE_AFTER_RECORD"] = (
@@ -571,9 +744,15 @@ class Hook(Fakes):
         self.assertIn("exit 1: sh -c false", err)
 
     def test_the_policy_name_never_reaches_the_shell(self):
+        # `policies.load` refuses such a name; the hook must not rely on it
         name = "a;touch pwned"
-        policy = self.tmp / "odd.yaml"
-        policy.write_text(STANDARD.read_text().replace("fixture-standard", name))
+        loaded = policies.load(STANDARD)
+        odd = policies.Policy(
+            name,
+            loaded.path,
+            loaded.track,
+            {**loaded.document, "metadata": {"name": name}},
+        )
         plans = self.tmp / "plans"
         plans.mkdir()
         plan = json.loads(
@@ -590,8 +769,8 @@ class Hook(Fakes):
         cwd = os.getcwd()
         os.chdir(self.tmp)
         self.addCleanup(os.chdir, cwd)
-        code, _, _ = self.screen("--policy", str(policy))
-        self.assertEqual(code, 0)
+        summary = self.screen_policy(odd)
+        self.assertEqual(summary["outcome"], "ok")
         self.assertEqual(witness.read_text(), name)
         self.assertFalse((self.tmp / "pwned").exists())
         self.assertFalse(Path(cwd, "pwned").exists())

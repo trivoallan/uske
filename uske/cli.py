@@ -30,16 +30,16 @@ def _json(value) -> None:
     print(json.dumps(value, ensure_ascii=False))
 
 
-def _read_json(path: str):
+def read_json(path: str):
     try:
         return json.loads(Path(path).read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise Failure(f"{path}: {exc}") from exc
 
 
-def _read_staged(path: str) -> dict:
+def read_staged(path: str) -> dict:
     """knock's StagedRebuilds. No file: knock held nothing, or did not get that far."""
-    return _read_json(path) if Path(path).exists() else {"entries": []}
+    return read_json(path) if Path(path).exists() else {"entries": []}
 
 
 def _policy(path: str) -> policies.Policy:
@@ -56,7 +56,7 @@ def cmd_list(args) -> None:
     _json([{"name": p.name, "path": str(p.path)} for p in found])
 
 
-def _target(candidate: dict) -> dict:
+def target(candidate: dict) -> dict:
     """What the workflow needs per digest: `regis` evaluates by digest, never by tag (D-24)."""
     repository = candidate["ref"]
     if ":" in repository.rsplit("/", 1)[-1]:
@@ -73,10 +73,10 @@ def cmd_pending(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
     if args.staged:
-        found = gate.staged_candidates(_read_staged(args.staged), policy)
+        found = gate.staged_candidates(read_staged(args.staged), policy)
     else:
-        found = gate.candidates(_read_json(args.plan), policy)
-    _json([_target(c) for c in results.pending(found, lines)])
+        found = gate.candidates(read_json(args.plan), policy)
+    _json([target(c) for c in results.pending(found, lines)])
 
 
 def cmd_prepare(args) -> None:
@@ -215,17 +215,17 @@ def record_lines(
         # a directory holds one line per digest, written by each `classify` of the fan-out
         if source.is_dir():
             files = sorted(source.glob("*.json"))
-        else:  # no directory: no candidate this screening
-            files = [source] if source.exists() or source.suffix else []
+        else:  # nothing written, a file or a directory, whatever its name: no line
+            files = [source] if source.exists() else []
     found: list[dict] = []
     for f in files:
-        value = _read_json(str(f))
+        value = read_json(str(f))
         found.extend(value if isinstance(value, list) else [value])
     journal_path = results.path_for(str(results_dir), policy.name)
     if applied and Path(applied).exists():
         found.extend(
             gate.from_applied(
-                _read_json(str(applied)),
+                read_json(str(applied)),
                 policy,
                 results.read(journal_path),
                 ts=_now(),
@@ -235,7 +235,7 @@ def record_lines(
     if promoted:
         found.extend(
             gate.from_promoted(
-                _read_staged(str(promoted)),
+                read_staged(str(promoted)),
                 policy,
                 results.read(journal_path),
                 ts=_now(),
@@ -271,7 +271,7 @@ def approve_staged(
 ) -> tuple[dict, dict]:
     """The held rebuilds this screening approves, and their count."""
     lines = results.read(results.path_for(str(results_dir), policy.name))
-    approved = gate.approve_staged(_read_staged(str(staged)), policy, lines)
+    approved = gate.approve_staged(read_staged(str(staged)), policy, lines)
     return approved, {"approved": len(approved["entries"])}
 
 
@@ -287,7 +287,7 @@ def approve_plan(
     """The plan minus its refused operations, and its count; the transit lines go to `lines_out`."""
     lines = results.read(results.path_for(str(results_dir), policy.name))
     approved, discarded, written = gate.approve(
-        _read_json(str(plan)),
+        read_json(str(plan)),
         policy,
         lines,
         transit,
@@ -379,6 +379,7 @@ environment:
                          git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY)"'
 
 Paths are handed to the tools as uske sees them: a container mounts them at the same path.
+An unreadable policy file under --policies is reported `skipped:` and leaves the exit code as is.
 Exit 0 when every policy went through, whatever its verdicts; 1 when one failed.
 """
 
@@ -400,7 +401,7 @@ def _sync(step):
 
 def cmd_dt_plan(args) -> None:
     def step():
-        fleet = dtsync.placed(_read_json(args.audit))
+        fleet = dtsync.placed(read_json(args.audit))
         found, errors = policies.load_dir(args.policies)
         for error in errors:
             print(f"skipped: {error}", file=sys.stderr)

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 TRACK_LABEL = "admission-track"
+# metadata.name names files and directories (journal, reports, work): a Kubernetes DNS-1123
+# subdomain, so never a path (`../x`) nor a shell word (`a;b`)
+NAME = re.compile(r"[a-z0-9]([-a-z0-9.]*[a-z0-9])?")
+NAME_MAX = 253
 
 
 class PolicyError(Exception):
@@ -33,6 +38,12 @@ def load(path: str | Path) -> Policy:
     meta = doc.get("metadata") or {}
     if not meta.get("name"):
         raise PolicyError(f"{path}: metadata.name is missing")
+    name = meta["name"]
+    if not isinstance(name, str) or len(name) > NAME_MAX or not NAME.fullmatch(name):
+        raise PolicyError(
+            f"{path}: metadata.name {name!r} is not a DNS-1123 subdomain "
+            "(lowercase letters, digits, '-' and '.', at most 253 characters)"
+        )
     return Policy(meta["name"], path, (meta.get("labels") or {}).get(TRACK_LABEL), doc)
 
 

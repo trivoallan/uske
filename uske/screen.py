@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -24,13 +25,13 @@ import yaml
 from uske import gate, playbooks, policies, results
 from uske.cli import (
     Failure,
-    _read_json,
-    _read_staged,
-    _target,
     approve_plan,
     approve_staged,
     classify_lines,
+    read_json,
+    read_staged,
     record_lines,
+    target,
 )
 
 
@@ -60,27 +61,32 @@ class Tools:
 
 
 def launch(command: list[str], env: Mapping[str, str] | None = None) -> int:
-    """Run `command`, its output sent to stderr: stdout is uske's. Its exit code, 127 if it
-    could not start. A failure names the whole command line, the first clue when a prefix mounts
-    a path elsewhere (review, finding 2)."""
+    """Run `command`, its output streamed to stderr (fd 2): stdout is uske's. Its exit code, 127
+    if it could not start. A failure names the whole command line, the first clue when a prefix
+    mounts a path elsewhere (review, finding 2)."""
     line = shlex.join(command)
+    sys.stdout.flush()
+    sys.stderr.flush()
     try:
         done = subprocess.run(
             command,
-            stdout=subprocess.PIPE,
-            text=True,
-            errors="replace",
+            stdout=2,
             env=dict(env) if env is not None else None,
             check=False,
         )
     except OSError as exc:
         print(f"failed to start: {line}: {exc}", file=sys.stderr)
         return 127
-    if done.stdout:
-        sys.stderr.write(done.stdout)
     if done.returncode:
         print(f"exit {done.returncode}: {line}", file=sys.stderr)
     return done.returncode
+
+
+def inside(path: Path, root: Path) -> Path:
+    """`path`, once checked to stay under `root`: a name or a digest is never a way out."""
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise Failure(f"{path}: outside {root}")
+    return path
 
 
 class _Paths:
@@ -97,6 +103,8 @@ class _Paths:
         self.staged = work / "staged" / f"{name}.json"
         self.staged_approved = work / "staged" / f"{name}.approved.json"
         self.applied = work / "applied" / f"{name}.json"
+        for path in vars(self).values():
+            inside(path, work)
 
     def clear(self) -> None:
         """A reused work directory must not replay an earlier screening's files."""
@@ -116,7 +124,7 @@ class _Paths:
             (self.work / directory).mkdir(parents=True, exist_ok=True)
 
     def report(self, key: str) -> Path:
-        return self.work / "reports" / key
+        return inside(self.work / "reports" / key, self.work / "reports")
 
 
 class _Screening:
@@ -134,7 +142,8 @@ class _Screening:
         judge_only: bool,
     ) -> None:
         self.policy = policy
-        self.paths = _Paths(work, policy.name)
+        self.work = work
+        self.paths: _Paths  # set by steps(): its checks are failures of this policy
         self.results = results_dir
         self.playbooks = playbooks_dir
         self.transit = transit
@@ -159,6 +168,14 @@ class _Screening:
         except (Failure, OSError) as exc:
             print(f"error: {self.policy.name}: {exc}", file=sys.stderr)
             self.summary["outcome"] = "failed"
+        except (KeyError, TypeError, ValueError) as exc:
+            # a file a tool wrote, not in the shape uske reads: this policy fails, not the others
+            print(
+                f"error: {self.policy.name}: unexpected input: "
+                f"{type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+            self.summary["outcome"] = "failed"
         if self.judge_only:
             return {
                 "policy": self.policy.name,
@@ -168,7 +185,9 @@ class _Screening:
         return self.summary
 
     def steps(self) -> None:
-        p, name = self.paths, self.policy.name
+        name = self.policy.name
+        self.paths = p = _Paths(self.work, name)
+        inside(results.path_for(self.results, name), self.results)
         p.clear()
         # prepare
         p.policy.mkdir(parents=True, exist_ok=True)
@@ -183,8 +202,8 @@ class _Screening:
         ):
             raise Failure("knock reconcile --plan-out failed")
         # pending, resolve
-        found = gate.candidates(_read_json(str(p.plan)), self.policy)
-        todo = [_target(c) for c in results.pending(found, self.journal())]
+        found = gate.candidates(read_json(str(p.plan)), self.policy)
+        todo = [target(c) for c in results.pending(found, self.journal())]
         playbook = playbooks.resolve(self.policy.track, self.playbooks)
         # evaluate, unevaluated
         for item in todo:
@@ -208,6 +227,12 @@ class _Screening:
             count["approved"],
             count["ordered"],
         )
+        if not self.transit and count["discarded"].get("no-transit"):
+            print(
+                f"warning: {name}: {count['discarded']['no-transit']} source(s) to repair "
+                "recorded inconclusive (uske/no-transit): pass --transit to have them repaired",
+                file=sys.stderr,
+            )
         # record-approve
         self.record(lines=p.approve_lines)
         if not count["approved"]:
@@ -242,8 +267,8 @@ class _Screening:
     def second_gate(self, playbook: Path | None) -> None:
         p = self.paths
         # pending
-        found = gate.staged_candidates(_read_staged(str(p.staged)), self.policy)
-        held = [_target(c) for c in results.pending(found, self.journal())]
+        found = gate.staged_candidates(read_staged(str(p.staged)), self.policy)
+        held = [target(c) for c in results.pending(found, self.journal())]
         # evaluate: a held image by its own digest
         for item in held:
             self.evaluate(item, playbook, p.staged_lines, "")
@@ -325,17 +350,21 @@ class _Screening:
     def keep_report(self, out: Path, digest: str) -> str | None:
         """Copy the reports next to the journal, before the line that cites them is written (D5).
 
-        The line cites the Markdown, else the HTML, relative to the results directory. A judged-
-        only screening writes nothing there: its line cites the report in the work directory.
+        The line cites the Markdown, else the HTML, else the JSON, relative to the results
+        directory. A judged-only screening writes nothing there: its line cites the report in the
+        work directory.
         """
         written = [ext for ext in ("md", "html") if (out / f"report.{ext}").is_file()]
+        if not written and (out / "report.json").is_file():
+            written = ["json"]
         if not written:
             return None
         if self.judge_only:
             return str(out / f"report.{written[0]}")
-        # a run given as a URL keeps its last segment: a file name, not a path
-        stem = (self.run or self.epoch).rstrip("/").rsplit("/", 1)[-1]
+        # a run may be a URL (SDR-0018): a file name, never a path
+        stem = _file_name(self.run) or _file_name(self.epoch) or "report"
         relative = Path("reports") / self.policy.name / digest
+        inside(self.results / relative, self.results / "reports")
         (self.results / relative).mkdir(parents=True, exist_ok=True)
         for ext in written:
             shutil.copyfile(
@@ -372,6 +401,10 @@ class _Screening:
             raise Failure("USKE_AFTER_RECORD failed: nothing more is placed")
 
 
+def _file_name(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._")
+
+
 def screen_policy(
     policy: policies.Policy,
     work: Path,
@@ -387,7 +420,8 @@ def screen_policy(
     """Screen one policy; never raises for the policy's own failure.
 
     Returns `{"policy", "judged", "approved", "ordered", "promoted", "outcome"}`, outcome `ok` or
-    `failed`; with `judge_only`, `{"policy", "lines", "outcome"}`, the verdict lines it would have
+    `failed`. `judged` counts every digest given a verdict line at either gate, the digests of an
+    unknown regime too, which are recorded without being sent to regis; with `judge_only`, `{"policy", "lines", "outcome"}`, the verdict lines it would have
     recorded.
     """
     return _Screening(
