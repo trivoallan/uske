@@ -303,7 +303,7 @@ class _Screening:
         """One digest judged; its lines written where `record` reads them."""
         digest, source_digest = item["digest"], item.get("source", "")
         if playbook is None:
-            # unknown regime: never sent to regis (D-21)
+            # unknown track: never sent to regis (D-21)
             lines = classify_lines(
                 None, item["ref"], digest, None, None, 0, "", "", "", "", self.run
             )
@@ -421,7 +421,7 @@ def screen_policy(
 
     Returns `{"policy", "judged", "approved", "ordered", "promoted", "outcome"}`, outcome `ok` or
     `failed`. `judged` counts every digest given a verdict line at either gate, the digests of an
-    unknown regime too, which are recorded without being sent to regis; with `judge_only`, `{"policy", "lines", "outcome"}`, the verdict lines it would have
+    unknown track too, which are recorded without being sent to regis; with `judge_only`, `{"policy", "lines", "outcome"}`, the verdict lines it would have
     recorded.
     """
     return _Screening(

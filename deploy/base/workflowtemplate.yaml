@@ -4,7 +4,7 @@
 # then merges their lines into the journals in one pod.
 #
 # In a child, knock plans, regis judges the plan's digests, and knock applies only the approved
-# operations (D-30, knock's gate). A source refused on rules its regime lists as repairable is
+# operations (D-30, knock's gate). A source refused on rules its track lists as repairable is
 # handed back with a remediation order: knock repairs that digest, holds it in a transit registry,
 # where it is judged by its own digest and promoted only if it is sound (change
 # `split-knock-policy-transform-remediate`). A transform-only rebuild is placed directly.
@@ -425,7 +425,7 @@ spec:
                 - {name: track, value: "{{=jsonpath(steps.resolve.outputs.result, '$.track') ?? ''}}"}
               artifacts:
                 - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
-          - name: unevaluated  # unknown regime: never sent to regis (D-21)
+          - name: unevaluated  # unknown track: never sent to regis (D-21)
             template: classify
             withParam: "{{steps.pending.outputs.result}}"
             when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') == nil}}"
@@ -551,7 +551,7 @@ spec:
           - {name: source-ref, value: ""}
           - {name: source-digest, value: ""}
           - {name: lines, value: lines}
-          - {name: track, value: ""}  # first gate: the regime whose repairable rules apply
+          - {name: track, value: ""}  # first gate: the track whose repairable rules apply
           - {name: epoch, value: ""}  # held image: the remediation order it was built under
         artifacts:
           - name: work
@@ -813,7 +813,7 @@ spec:
             value: lines
           - name: key
           - name: digest
-          - {name: html, value: ""}  # where regis wrote it; empty for an unknown regime (D-21)
+          - {name: html, value: ""}  # where regis wrote it; empty for an unknown track (D-21)
         artifacts:
           - *work-in
           - {name: report, path: /tmp/report, optional: true, mode: 511, recurseMode: true}

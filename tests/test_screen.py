@@ -230,7 +230,7 @@ class Parity(Fakes):
             step(*record, "--promoted", str(staged_approved), "--run", run)
 
     def test_parity_screen_writes_the_lines_of_the_steps(self):
-        # a copy, a source to repair whose repair is sound, a quarantine; then an unknown regime
+        # a copy, a source to repair whose repair is sound, a quarantine; then an unknown track
         self.verdicts(
             **{D1: "direct", D2: "repairable", D3: "quarantine", "*": "direct"}
         )
@@ -404,7 +404,7 @@ class JudgeOnly(Fakes):
 
 
 class UnknownRegime(Fakes):
-    def test_an_unknown_regime_is_never_judged(self):
+    def test_an_unknown_track_is_never_judged(self):
         """*Un régime inconnu*."""
         code, _, _ = self.screen("--policy", str(UNKNOWN))
         self.assertEqual(code, 0)

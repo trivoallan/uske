@@ -188,12 +188,14 @@ Context* of the first section.
 
 ## Technical Context
 
-Each business interface has a single channel. **No `uske` subcommand starts `regis` or `knock`
-as a process**: the workflow that `uske` ships (`deploy/base`) runs each one in its own image, at
-its own step, and the steps pass files to each other on the screening's `/work` volume
-(*Cross-cutting Concepts*, *Files between the steps*). When this document says that `uske` calls the judge or the placer,
-it means this: its workflow runs the tool, and a following subcommand reads what it left. `uske` speaks HTTP only to the two
-APIs it knows by name.
+Each business interface has a single channel. **In the cluster, no `uske` subcommand starts
+`regis` or `knock` as a process**: the workflow that `uske` ships (`deploy/base`) runs each one in
+its own image, at its own step of the child Workflow, and the steps pass files to each other on
+`/work`, which travels from step to step as an Argo artifact (*Cross-cutting Concepts*, *Files
+between the steps*). When this document says that `uske` calls the judge or the placer, it means
+this: its workflow runs the tool, and a following subcommand reads what it left. **Outside the
+cluster, `uske screen` runs them itself**, by the same command lines, and reads the same files and
+exit codes (`SDR-0021`, `proposed`). `uske` speaks HTTP only to the two APIs it knows by name.
 
 | ID | Channel | Format | Authentication |
 |----|---------|--------|----------------|
@@ -213,7 +215,8 @@ APIs it knows by name.
 > ADR; a line without an ADR is a decision that does not have one yet.
 
 **A command chainer that fails closed.** Each step of a screening is a short `uske` subcommand —
-it reads files, decides or calls an HTTP API, writes JSON — and the scheduler chains them. `uske` keeps no state in
+it reads files, decides or calls an HTTP API, writes JSON — and the scheduler chains them. Outside
+the cluster, `uske screen` chains the same decisions in the same order, in one process. `uske` keeps no state in
 memory from one step to the next: what passes from one step to the next is a file, and what remains
 after the screening is a line in the journal. Anything that is not a readable verdict places
 nothing; it is `inconclusive` — not refused, judged again at the next screening.
@@ -223,9 +226,9 @@ nothing; it is `inconclusive` — not refused, judged again at the next screenin
 | Topic | Choice | Rationale | Where |
 |-------|--------|-----------|-------|
 | Language | Python ≥ 3.12 | One of the three that the method recommends; the one used by `regis` and `knock`, so one toolchain for all three repositories | [`SDR-0004`](../adr/SDR-0004-languages.md) |
-| Chaining | Argo Workflows: one `CronWorkflow`, one subcommand per step | Replay, retries and the trace of each step come from the tool, not from `uske` | **no ADR** — `DEBT-07` |
-| Integration | `regis` and `knock` at their own workflow steps, through files; Harbor and Dependency-Track over HTTP, with the standard library | Share neither code nor image with the chained tools; a single runtime dependency (`pyyaml`) | *Architecture Constraints* |
-| Persistence | One JSON Lines file per policy, append-only, on a volume | A file can be read, copied and contested without a server; append-only can be checked in its history | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md); the storage itself: **no ADR** — `DEBT-08` |
+| Chaining | Argo Workflows: one `CronWorkflow`, a parent Workflow that creates one child Workflow per policy, one subcommand per step; outside the cluster, the `uske screen` verb | Replay, retries and the trace of each step come from the tool, not from `uske`; a policy replays alone; a workstation or a CI judges without copying the steps | the scheduler: **no ADR** — `DEBT-07`; the fan-out and the verb: [`SDR-0021`](../adr/SDR-0021-screen-et-repartition.md), `proposed` |
+| Integration | `regis` and `knock` at their own workflow steps, through files; in `uske screen` only, started by `uske` by their command line, which a prefix can move (`USKE_REGIS_CMD`, `USKE_KNOCK_CMD`); Harbor and Dependency-Track over HTTP, with the standard library | Share neither code nor image with the chained tools; a single runtime dependency (`pyyaml`) | *Architecture Constraints*; `SDR-0021`, `proposed` |
+| Persistence | One JSON Lines file per policy, append-only, on a volume that only the merge writes | A file can be read, copied and contested without a server; append-only can be checked in its history | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md); the storage itself: **no ADR** — `DEBT-08` |
 | Code structure | Hexagonal: the domain without input/output | An agent changes and tests a rule without a running environment | [`SDR-0003`](../adr/SDR-0003-architecture.md) — not met, `DEBT-01` |
 | Validation | `pydantic` at the boundaries, JSON Schema for files | A missing field becomes a named error, not a silent default | [`SDR-0005`](../adr/SDR-0005-validation.md) — not met, `DEBT-02` |
 
@@ -235,7 +238,7 @@ nothing; it is `inconclusive` — not refused, judged again at the next screenin
 |------|----------------|-------|
 | 1. **Safety** `#safe` | **Fail closed**: a missing or unreadable report becomes `inconclusive` (`outcomes.py`, D-23 of the reference dossier). Only direct placement is returned to the placer, plus transformation required when `uske` orders a remediation (the track's repairable rules, `playbooks.REPAIRABLE`). The placer applies an operation only if its source digest has not changed since the plan (`gate.py`, D-30). What it rebuilds goes through a **second gate**, from a mandatory transit. | `SDR-0016`; *Runtime View* R-2, R-3; QS-01, QS-02 |
 | 2. **Contestability** `#secure` | **An append-only journal that only moves forward**: a line older than the last one for the same digest is not written. Each line carries its state, its playbook, its reason and its screening (`run`); `uske decisions` makes them readable. | `SDR-0016`, `SDR-0018` |
-| 3. **Operability** `#operable` | **Separate, replayable steps**: JSON on output, exit code 0 for any business outcome and 1 for a technical failure, which Argo replays. The one-way journal makes a replay have no effect on what is already written; an image held without a verdict is retried three times at most. | *Runtime View* R-4; *Deployment View*; QS-05, QS-06 |
+| 3. **Operability** `#operable` | **Separate, replayable steps**: JSON on output, exit code 0 for any business outcome and 1 for a technical failure, which Argo replays. Each policy has its own child Workflow: it replays alone, and its failure does not stop the others. The one-way journal makes a replay have no effect on what is already written; an image held without a verdict is retried three times at most. | *Runtime View* R-4; *Deployment View*; QS-05, QS-06 |
 | 4. **Thinness** `#flexible` | **Nothing to judge, nothing to place**: the only business table is the one that maps a track to a playbook (`playbooks.py`). The other tools are known only by their command line or their API. | *Architecture Constraints* |
 
 **Safety already costs some Thinness, and that is intended**: `gate.py` counts the attempts itself
@@ -245,8 +248,8 @@ do. The ranking of the goals allows it; row 4 of *Quality Goals* announced it.
 # Building Block View
 
 > LEAN level: level 1 only, as a diagram and a table. A block is a group of `uske/` modules, or
-> the `deploy/base` workflow; none goes down to file level more than needed — the package has ten
-> flat modules, and four blocks have only one.
+> the `deploy/base` workflow; none goes down to file level more than needed — the package has
+> twelve flat modules, and most blocks have only one.
 
 ## Whitebox Overall System
 
@@ -257,28 +260,40 @@ nothing in the directory tree separates the domain from the adapters (`DEBT-01`)
 
 ```mermaid
 flowchart TD
-  W["Workflow<br><code>deploy/base/</code>"]
+  WP["Parent Workflow<br><code>uske-screening</code>"]
+  WC["Child Workflow<br><code>uske-policy</code>"]
+  Sc["Screen<br><code>screen.py</code>"]
   S["Subcommands<br><code>cli.py</code>"]
+  M["Merge<br><code>merge.py</code>"]
   P["Gate<br><code>gate.py</code>"]:::pure
   I["Outcomes<br><code>outcomes.py</code>"]:::pure
   Pol["Policies<br><code>policies.py</code>, <code>playbooks.py</code>"]
   J["Journal<br><code>results.py</code>, <code>decisions.py</code>"]
   R["Census<br><code>census.py</code>"]
   Sy["Tracker sync<br><code>dtsync.py</code>"]
-  W -->|"command line"| S
-  S --> P & I & Pol & J & R & Sy
+  WP -->|"one per policy"| WC
+  WP -->|"command line"| S
+  WC -->|"command line"| S
+  S --> P & I & Pol & J & R & Sy & M
+  S -.->|"deferred import"| Sc
+  Sc --> S & P & Pol & J
+  M --> Pol & J
   P --> I & Pol & J
   J --> I
   Sy --> Pol
   classDef pure stroke-width:3px
 ```
 
-Thick border: without input/output. Each arrow is an import dependency, except the first one.
+Thick border: without input/output. Each arrow is an import dependency, except the three that
+leave the Workflows.
 
 | Block | Responsibility | Source | Depends on | Interfaces | Input/output |
 |-------|----------------|--------|------------|------------|--------------|
-| **Workflow** | Chain the steps of a screening: check out the repository, run `knock`, `regis` and the `uske` subcommands, each in its own image, and pass them files on `/work` | `deploy/base/` | all the subcommands, through their command line | IF-01, IF-02, IF-03, IF-04 | yes — that is its purpose |
-| **Subcommands** | One subcommand per step: read the files and the environment, call the block that decides, write JSON, and turn the outcome into an exit code (0 business, 1 technical) | `uske/cli.py` | all the blocks below | IF-01, IF-07, IF-08 | yes |
+| **Parent Workflow** | Fix what a screening shares — the repository commit, the epoch, the `run` —, list the policies, publish a snapshot of the journals, create one child Workflow per policy and wait for it, then run the merge and name the failed policies | `deploy/base/workflowtemplate.yaml`, `uske-screening` | Child Workflow; the `list` and `merge` subcommands, through their command line | IF-01, IF-02 | yes — the only one that mounts the journal, for its snapshot and its merge |
+| **Child Workflow** | Chain the steps of one policy: run `knock`, `regis` and the `uske` subcommands, each in its own image, and pass them its work as artifacts, on a copy of its policy's journal; upload its new lines as an artifact before any placement | `deploy/base/workflowtemplate.yaml`, `uske-policy` | the subcommands, through their command line | IF-01, IF-02, IF-03, IF-04 | yes — that is its purpose |
+| **Screen** | Run a whole screening outside the cluster, in the child's order: start `regis` and `knock` by their command line, read their files and exit codes, write the journal before each placement, run the `USKE_AFTER_RECORD` hook | `uske/screen.py` | Subcommands (their decision functions), Gate, Policies, Journal | IF-03, IF-04 | yes |
+| **Subcommands** | One subcommand per step: read the files and the environment, call the block that decides, write JSON, and turn the outcome into an exit code (0 business, 1 technical) | `uske/cli.py` | all the blocks below; Screen, for the `screen` verb only | IF-01, IF-07, IF-08 | yes |
+| **Merge** | Write the archive of a child's new lines (`export`); append these archives to the journal by the usual rule, and copy their reports without overwriting (`merge`); refuse a name or an archive member that would leave its directory | `uske/merge.py` | Policies, Journal | — | yes |
 | **Outcomes** | Reduce a judge report to one of the four outcomes, failing closed | `uske/outcomes.py` | — | IF-04, through the report that the subcommands pass to it | **no** |
 | **Gate** | Return the plan minus the withheld operations, refused or inconclusive; count the attempts of a rebuild and close a refused source | `uske/gate.py` | Outcomes, Policies, Journal (the latest states, already read) | IF-03, through the plan that the subcommands pass to it | **no** |
 | **Policies** | Read the policies; map a track to a playbook — the only business table in `uske` | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | read-only |
@@ -286,13 +301,16 @@ Thick border: without input/output. Each arrow is an import dependency, except t
 | **Census** | Count the bypass: what is in the registry, minus what went through the gate, then ask for the usage of the suspects only | `uske/census.py` | — | IF-05, IF-09 | yes |
 | **Tracker sync** | Send the signed inventories to the vulnerability tracker, after verifying their signature; remove what has left the registry | `uske/dtsync.py` | Policies | IF-06 | yes |
 
-**No circular dependency.** *Outcomes*, *Policies* and *Census* import nothing from `uske`; the
-*Journal* depends only on *Outcomes*, and the *Gate* on three blocks that do not depend on it.
-*Outcomes* is a separate block for this reason: placed with the *Gate*, it created a cycle — the
-*Gate* reads the *Journal*, and the *Journal* writes outcomes.
+**One circular dependency, deferred.** *Screen* reuses the decision functions of the
+*Subcommands*, and the `screen` subcommand imports it in its body, when called: that is what
+guarantees that a local screening decides as the steps do. No other: *Outcomes*, *Policies* and
+*Census* import nothing from `uske`; the *Journal* depends only on *Outcomes*, the *Merge* on two
+blocks that do not depend on it, and the *Gate* on three. *Outcomes* is a separate block for this
+reason: placed with the *Gate*, it created a cycle — the *Gate* reads the *Journal*, and the
+*Journal* writes outcomes.
 
 **The Journal belongs to `uske`, and it is the only block that keeps state** from one screening to
-the next. Everything else is recomputed: *Outcomes* and the *Gate* from a report and a plan, the
+the next; in the cluster, only the *Merge* writes it. Everything else is recomputed: *Outcomes* and the *Gate* from a report and a plan, the
 Census and the Tracker sync from the registry itself.
 
 **What the table says about `DEBT-01`.** The *Input/output* column traces the boundary that the
@@ -348,17 +366,20 @@ sequenceDiagram
 ```
 
 
-1. The scheduler starts a screening (IF-01); the *Workflow* checks out the policy repository
-   (`checkout`, IF-02), then `list` extracts the active policies from it.
-2. For each policy, one at a time (one lock per policy): `prepare`, then the placer writes its
-   plan without placing anything (`plan`, IF-03).
+1. The scheduler starts a screening (IF-01); the *Parent Workflow* checks out the policy
+   repository (`checkout`, IF-02), then `list` extracts the active policies from it, and the
+   snapshot copies their journals to the artifact repository.
+2. For each policy, a *Child Workflow* (one lock per policy) on a copy of its journal: `prepare`,
+   then the placer writes its plan without placing anything (`plan`, IF-03).
 3. `pending` removes from the plan what the *Journal* has already decided; `resolve` asks the
    *Policies* for the playbook that the track calls for.
 4. For each digest still due, the judge analyses it (`regis`, IF-04); *Outcomes* reduces its report
    to an outcome, and `classify` writes the line for it on `/work`.
 5. `record` appends these lines to the *Journal*; `approve` asks the *Gate* for the plan minus the
-   withheld operations, refused or inconclusive; the placer applies only that (`place`, IF-03).
-6. `record-applied` records what was placed. The screening ends in success.
+   withheld operations, refused or inconclusive; the child uploads its new lines, then the
+   placer applies only that (`place`, IF-03).
+6. `record-applied` records what was placed. Once every child has ended, the parent's `merge`
+   appends their lines to the *Journal* on the volume. The screening ends in success.
 
 ## R-2 — A source to remediate, and the second gate
 
@@ -441,7 +462,8 @@ The scenario that demonstrates the **Contestability** goal.
 3. The *Journal* reads back all the lines for the image, in file order, and returns a timeline and
    a table: date, state, playbook, reason, screening, report.
 4. A short reference gets the full references as suggestions; the volume is `ReadWriteOnce`: while
-   a screening runs on another node, the read waits.
+   a screening's snapshot or merge runs on another node, the read waits. Lines decided since the
+   last merge are not there yet (RISK-05).
 
 # Deployment View
 
@@ -460,17 +482,21 @@ flowchart LR
   subgraph ns["Kubernetes namespace, with Argo Workflows"]
     c1["CronWorkflow <code>uske</code><br>every 5 min, Forbid"]
     c2["CronWorkflow <code>dt-sync</code><br>every 15 min"]
-    wt["WorkflowTemplate<br><code>uske-screening</code>"]
-    pods["Step pods<br>uske, regis, knock, git images"]
-    work[("<code>work</code> 1 Gi RWO<br>one per screening")]
-    res[("<code>uske-results</code> 5 Gi RWO<br>journal, HTML reports")]
+    wt["Parent Workflow<br><code>uske-screening</code>"]
+    wc["Child Workflows<br><code>uske-policy</code>, one per policy"]
+    pp["Parent pods<br>checkout, list, snapshot, merge, summary"]
+    pods["Child step pods<br>uske, regis, knock, git images"]
+    work[("<code>work</code> 1 Gi RWO<br>the parent's checkout and list")]
+    res[("<code>uske-results</code> 5 Gi RWO<br>journal, reports")]
     sec["Secrets<br><code>uske-repository</code>, <code>uske-harbor</code>,<br><code>uske-knock</code>, <code>uske-dt</code>"]
-    c1 --> wt --> pods
+    c1 --> wt --> pp
+    wt -->|"creates, Role <code>uske-children</code>"| wc --> pods
     c2 --> pods
-    pods --- work
-    pods --- res
+    pp --- work
+    pp ---|"snapshot (read), merge"| res
     sec -.->|"environment"| pods
   end
+  pp & pods <-->|"artifacts"| art[("Artifact repository<br>S3")]
   pods -->|"HTTPS"| git[("Policy repository")]
   pods -->|"HTTPS"| reg[("Registry")]
   pods -->|"HTTPS"| dt["Dependency-Track"]
@@ -479,25 +505,31 @@ flowchart LR
 | Element | What it carries | Setting that matters |
 |---------|-----------------|----------------------|
 | `CronWorkflow` `uske` | One screening every 5 minutes | `concurrencyPolicy: Forbid`: never two screenings at once |
-| `WorkflowTemplate` `uske-screening` | The steps of R-1 to R-4 | `parallelism: 1`; one lock per policy; two retries per container step |
+| `WorkflowTemplate` `uske-screening` (parent) | The commit, the epoch and the `run` of a screening; the snapshot of the journals; one child Workflow per policy, created by a `resource` template that owns it; the merge; the summary | `parallelism: 1`, the ceiling of policies at a time, which the overlay sets with a kustomize patch; a failed child does not stop the others |
+| `WorkflowTemplate` `uske-policy` (child) | The steps of R-1 to R-4, for one policy; resubmitted alone with `merge=true`, it merges its own lines | `parallelism: 1`, the ceiling of judgements at a time, set the same way; one lock per policy, across all the screenings of the namespace; two retries per container step; deleted a day after it ends (`ttlStrategy`), pods deleted on success (`podGC`) |
 | `CronWorkflow` for `dt-sync` | The tracker sync (IF-06) | Every 15 minutes |
-| Volume `work`, 1 Gi, `ReadWriteOnce` | The files passed from one step to the next | Created and destroyed with each screening |
-| Volume `uske-results`, 5 Gi, `ReadWriteOnce` | The journal, one file per policy, and one HTML report per decision | Outlives the screenings; only `record` writes lines to it |
-| Service account `uske` | The screening pods | A single permission: report step outputs to Argo |
+| Volume `work`, 1 Gi, `ReadWriteOnce` | The checked-out repository and the list of policies, for the parent only | Created and destroyed with each screening; no child mounts it |
+| Artifact repository | A child's work from step to step (`work`), the snapshot of the journals, each child's new lines as an archive of its own (`runs/<run>/out/<policy>/<created>-<child>.tgz`), and its success mark (`runs/<run>/done/<policy>`) | Provided by the overlay: configmap `artifact-repositories`, key `default-v1`; unreachable, nothing is placed. A child's work goes with it (`artifactGC`); the lines and the marks stay: a lifecycle rule on the bucket's `runs/` expires them |
+| Volume `uske-results`, 5 Gi, `ReadWriteOnce` | The journal, one file per policy, and one report per decision | Outlives the screenings; mounted by the snapshot, which writes only its mark `.pending-merge/<run>` there, and by the merge, the only one to write the journal and which clears the mark, both under the `uske-journal` lock; one namespace per volume, since the locks are namespace resources |
+| Service account `uske` | The screening pods | Two permissions: report step outputs and artifact GC tasks to Argo (`uske-executor`); create, read and watch `Workflow`s, and update their finalizers, which `blockOwnerDeletion` requires on OpenShift (`uske-children`) |
 | Secrets | `uske-repository` (repository token), `uske-harbor` (registry credentials), `uske-knock` (the placer's credentials and signing key), `uske-dt` (Dependency-Track) | Read through the environment of only the containers that need them; none is a workflow parameter |
 
-**Block mapping.** The *Workflow* is the `WorkflowTemplate` and its two `CronWorkflow`s. The
-*Subcommands*, *Outcomes*, the *Gate*, the *Policies*, the *Journal* and the *Tracker sync* run in
-the `uske` image, one pod per step; the *Journal* writes to `uske-results`. The *Census* is in the
-same image but **is scheduled by no workflow**: it is run by hand. `regis` and `knock` run in their
+**Block mapping.** The *Parent Workflow* is `uske-screening` and its two `CronWorkflow`s; the
+*Child Workflow* is `uske-policy`. The *Subcommands*, *Outcomes*, the *Gate*, the *Policies*, the
+*Journal*, the *Merge* and the *Tracker sync* run in the `uske` image, one pod per step; the
+*Journal* writes to `uske-results` only in the merge pod. *Screen* runs in no workflow: it is the
+verb of the workstation and the CI. The *Census* is in the same image but **is scheduled by no workflow**: it is run by hand. `regis` and `knock` run in their
 own images, pinned by digest in the overlay.
 
 **TLS.** `uske` terminates none: it is a client of each partner. Harbor and Dependency-Track are
 reached through the URLs that the overlay gives; encryption is their concern. The repository is
 cloned over HTTPS.
 
-**What serves Operability here**: step retries, the ban on two simultaneous screenings, and a fresh
-work volume at each screening — a replay never finds the state of another one.
+**What serves Operability here**: step retries, the ban on two simultaneous screenings, fresh work
+for each child — a replay never finds the state of another one —, and a merge that replays without
+doubling anything: `argo retry` on the parent, which also re-creates its failed children, or a
+child resubmitted alone with `merge=true`. While a merge is pending, the next screening fails and
+names the run to replay.
 
 ## Infrastructure Level 2
 
@@ -506,7 +538,9 @@ work volume at each screening — a replay never finds the state of another one.
 `deploy/kind/up.sh` sets up a kind cluster, Argo Workflows, and Zot in place of Harbor (TLS, with a
 self-signed certificate authority that each tool receives through `SSL_CERT_FILE`). The
 `CronWorkflow` is suspended there: screenings are started by hand. `regis` 0.41.0 and `knock`
-0.16.0 are pinned there by digest. `up.sh repair` adds `buildkitd` and two sources to remediate;
+0.16.0 are pinned there by digest. An S3 gateway (RustFS) holds the artifact repository there,
+with the `artifact-repositories` configmap; both ceilings stay at 1, and its patches target the
+parent's and the child's templates. `up.sh repair` adds `buildkitd` and two sources to remediate;
 `buildkitd` listens **in cleartext** on the cluster network there, which is acceptable only for a
 throwaway cluster (RISK-06).
 
@@ -540,8 +574,8 @@ never taken for a refusal.
 
 ## Files between the steps
 
-No block keeps state in memory from one step to the next. The *Workflow* passes files on `/work`,
-in formats that the other tools write (`knock`'s plan and audit, `regis`'s report) or that `uske`
+No block keeps state in memory from one step to the next. The *Child Workflow* passes files on
+`/work`, an artifact that each step receives and hands back — no volume is shared —, in formats that the other tools write (`knock`'s plan and audit, `regis`'s report) or that `uske`
 writes as JSON. Each step can be reread, replayed and tested with its input files alone.
 
 ## What is not in the code
@@ -555,8 +589,9 @@ them.
 
 - **Secrets** arrive through the environment, from Kubernetes `Secret`s, and are never workflow
   parameters: they do not show in the Argo interface.
-- **Least privilege**: the service account can only report step outputs. The journal is read
-  through a volume mounted read-only.
+- **Least privilege**: the service account can only report step outputs and artifact GC tasks,
+  and create and watch the child Workflows (*Deployment View*). The journal is read through a
+  volume mounted read-only.
 - **Nothing is taken on trust**: the *Tracker sync* verifies the placer's CycloneDX attestation,
   with its public key, before sending an inventory.
 - **What `uske` does not protect**: the transit, which the registry must close to consumers
@@ -571,10 +606,11 @@ MADR format. This section is their **log**: it points to them, and copies neithe
 nor their options, nor their values — each ADR says that its values are written in it "and nowhere
 else", and that is what keeps them from being contradicted here.
 
-Seventeen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`, one each
-by `SDR-0019`, `SDR-0020` and `SDR-0022`; twelve are therefore in force. Eleven are inherited from the method — see *Architecture
+Eighteen ADRs to date. Seventeen are decided, of which five are superseded — two by `SDR-0017`,
+one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; twelve are therefore in force. One is
+`proposed`: `SDR-0021`, which awaits its verdict. Eleven are inherited from the method — see *Architecture
 Constraints*: ten questions that it asks every repository adopting it, and the rule that says how
-to answer them. Six are specific to `uske`: `SDR-0016` to `SDR-0020`, and `SDR-0022`. A new decision is written
+to answer them. Seven are specific to `uske`: `SDR-0016` to `SDR-0022`. A new decision is written
 when a choice is expensive to undo, touches several blocks, arbitrates between two quality goals,
 or constrains the following changes.
 
@@ -619,6 +655,7 @@ supersedes `SDR-0020`.
 | [SDR-0018](../adr/SDR-0018-journal-run.md) | A journal line names the screening that wrote it (`run` key) | accepted | 2026-10-16 | Contestability, Operability | yes — `classify --run` receives `{{workflow.name}}` from the `WorkflowTemplate` |
 | [SDR-0019](../adr/SDR-0019-documentation-publique.md) | Documentation audience: `public` | accepted | 2026-10-17 | Contestability | yes — pages reviewed on 2026-10-17 |
 | [SDR-0020](../adr/SDR-0020-readme-en-anglais.md) | The README in English, like those of `regis` and `knock` | accepted — superseded by SDR-0022 | 2026-10-17 | Contestability | not applicable — superseded |
+| [SDR-0021](../adr/SDR-0021-screen-et-repartition.md) | A verb that runs both tools, and one Workflow per policy | proposed | 2026-10-17 | Operability, against Thinness | not applicable — awaiting its verdict |
 | [SDR-0022](../adr/SDR-0022-documentation-en-anglais.md) | Documentation in English; ADRs, discovery and commits in French | accepted | 2026-10-17 | Contestability | yes |
 
 ## Open gaps
@@ -671,8 +708,9 @@ Thinness, in the name of Safety. The ranking of the goals settles it — that is
 | RISK-04 | **high** | A transit that consumers can pull from exposes a rebuilt image **before** it is judged. `knock` only refuses a transit that is also a destination. | possible × severe | The registry closes the transit to consumers (README, *Rebuilds and repairs*); `uske` does not check it |
 | RISK-02 | medium | `uske` is not deployed anywhere: QS-03 has never been measured, and the 5-minute rhythm has not been tested against a real registry. | certain × medium | The first production overlay, then a measurement of QS-03 on a real refusal |
 | RISK-03 | medium | With a `knock` older than 0.13.0, nothing is remediated, and nothing says why. | low × medium | The overlay pins `knock` by digest; the bench runs 0.16.0 |
-| RISK-05 | low | The journal volume is `ReadWriteOnce`: a reading pod waits for the end of a screening that runs on another node. | likely × low | Wait; `ReadWriteMany` storage would remove the wait and the `parallelism: 1` |
+| RISK-05 | low | The journal volume is `ReadWriteOnce`: a reading pod waits for the end of the snapshot or the merge of a screening that runs on another node — the only pods that mount it. Between a placement and the merge, the journal on the volume lags behind what was placed. | likely × low | Wait; the decision is already durable in the artifact repository before its placement, and a failed merge fails the parent and replays (`argo retry`). The snapshot leaves the mark `.pending-merge/<run>`, which only a successful merge clears: while it stays, the next screening fails at its snapshot, naming the run, and never judges on a lagging journal (`Forbid` alone is not enough: a failed parent is finished, and the `CronWorkflow` starts the next one). The storage no longer needs to be shared: no child mounts the volume, whatever the ceilings. A line written by hand during that lag escapes the child, which may place the image that the line quarantines: the merge then refuses the child's lines on that digest, names them, fails and keeps the mark — the conflict is visible (fail-visible), the placement is not undone |
 | RISK-06 | low | On the bench, `buildkitd` listens in cleartext on the cluster network. | certain × low, on the bench only | Outside the bench: mTLS or a `NetworkPolicy` |
+| RISK-07 | medium | One child Workflow per policy: beyond 10,000 policies, a screening creates more than 10,000 `Workflow` objects every 5 minutes, which load the Argo controller and etcd; each `resource` step that waits for its child holds a pod, and each successful child starts one more pod for its `done/` mark. The list of policies is passed as a parameter to the parent's single `withParam`: the size of the parent's status at 10,000 is not known. No measurement exists. | possible × medium | `ttlStrategy` (one day) and `podGC: OnPodSuccess` on the child; the parent owns the children and takes them with it; the waiting pods are bounded by the ceiling of policies. The volume spike of 2026-10-19 measures it; if it does not hold, split into several `CronWorkflow`s over subdirectories of `policies` |
 
 ## Technical Debts
 
@@ -688,7 +726,7 @@ The others come from a review.
 | DEBT-04 | Test coverage is not measured: the decided threshold is neither met nor refuted | — the pipeline | [`SDR-0007`](../adr/SDR-0007-tests.md) | *Closed* 2026-10-16. An instrument connected, and a first measurement taken |
 | DEBT-05 | Nothing produces a release: deliveries cannot be deduced from any commit | — the pipeline | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. The release tool installed — it depends on DEBT-03 |
 | DEBT-06 | Nobody runs the ADR schema: a decision left empty or undecided gets through without anything saying so | — the pipeline | review of 2026-09-20 | The check added to the `lint` target of the `Makefile`, or declared manual in an ADR that supersedes [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
-| DEBT-07 | Argo Workflows chains the steps, and nothing says why: it is what makes a replay possible, and leaving it would rewrite all of `deploy/` | *Workflow* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the scheduler, rejected options included |
+| DEBT-07 | Argo Workflows chains the steps, and nothing says why: it is what makes a replay possible, and leaving it would rewrite all of `deploy/` | *Parent Workflow*, *Child Workflow* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the scheduler, rejected options included |
 | DEBT-08 | The journal is one JSON Lines file per policy on a volume, and nothing says why: `SDR-0016` sets its vocabulary, not its storage; the Contestability goal rests on this storage (RISK-01) | *Journal* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the journal storage, rejected options included |
 | DEBT-09 | `README.md` is English-first, against the French-by-default rule | — the documentation | [`SDR-0002`](../adr/SDR-0002-localization.md) | *Closed* 2026-10-17 by [`SDR-0020`](../adr/SDR-0020-readme-en-anglais.md) for the README, then [`SDR-0022`](../adr/SDR-0022-documentation-en-anglais.md) for all documentation: it is in English; ADRs, discovery, OpenSpec artefacts and commit messages stay in French. (Original criterion: the README rewritten in French, or the gap accepted in an ADR.) |
 
