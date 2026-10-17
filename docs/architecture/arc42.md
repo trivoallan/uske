@@ -21,9 +21,11 @@ contributors. See <https://arc42.org>.
 
 ## Requirements Overview
 
-`uske` runs together a tool that **judges** a container image and a tool that **places** it in a
-registry. On a schedule, it runs a *screening* on each active policy of a repository and records
-each decision. It judges nothing and places nothing: it calls, it waits, it writes.
+`uske` runs together a tool that **judges** a container image — the *judge*, `regis` — and a
+tool that **places** it in a registry — the *placer*, `knock`. On a schedule, it runs a
+*screening* on each active policy of a repository and records each decision. It judges nothing and
+places nothing: its workflow has the judge and the placer run, each at its own step, and its
+subcommands read what they leave, decide what goes on, and write it down.
 
 ### Essential Features
 
@@ -34,12 +36,13 @@ each decision. It judges nothing and places nothing: it calls, it waits, it writ
   calls for.
 - Classify each verdict into one of four outcomes: direct placement, transformation required,
   quarantine, inconclusive.
-- Return the plan to the placer, minus the refused operations; the placer applies only that. A
-  source refused on rules that its track declares repairable stays in the plan, with a remediation
-  order.
+- Return the plan to the placer, minus the withheld operations — refused or inconclusive; the
+  placer applies only that. A
+  source judged *transformation required* only on rules that its track declares repairable stays
+  in the plan, with a remediation order.
 - Have the placer hold what it builds in a transit, have it judged by its own digest, and return
   to the placer for promotion only what comes out as direct placement.
-- Append one line per decision to a journal. Lines are appended, never rewritten.
+- Append one line per outcome to a journal. Lines are appended, never rewritten.
 - Run a census of the registry: what is in it, minus what was admitted, gives the bypass.
 - Send the inventories signed by the placer to the vulnerability tracker, and remove from it what
   has left the registry.
@@ -71,7 +74,7 @@ interface.
 
 | Rank | Goal | Verifiable scenario | Gives up |
 |:----:|------|---------------------|----------|
-| 1 | **Safety** `#safe` — when in doubt, place nothing | A missing, unreadable or inconclusive verdict counts as a refusal: in a screening where the judge does not answer, **zero** operations are returned to the placer for the affected digests. | Freshness: a sound image can wait one more screening. |
+| 1 | **Safety** `#safe` — when in doubt, place nothing | A missing, unreadable or inconclusive verdict places nothing, as a refusal does — but it refuses nothing either: the outcome is `inconclusive`, and the next screening judges the image again. In a screening where the judge does not answer, **zero** operations are returned to the placer for the affected digests. | Freshness: a sound image can wait one more screening. |
 | 2 | **Contestability** `#secure` (non-repudiation) — every decision is recorded, never rewritten, and can be found again | A refusal that is three weeks old is found and explained **in one minute** — date, state, playbook, reason; and the history of the journal shows **no** modified or deleted line. | A compact journal, and any in-place correction of a wrong line: you append, you do not cross out. |
 | 3 | **Operability** `#operable` — a failed screening can be diagnosed and replayed without damage | **One** person replays an interrupted screening at any step; the replay places nothing twice and loses no result line. | Execution speed: the steps stay separate, readable and replayable rather than merged. |
 | 4 | **Thinness** `#flexible` — `uske` neither judges nor places, and does not grow | `uske` contains **no** judging rule and **no** placing action: removing the judge or the placer leaves it with nothing to decide. | The convenience of a tool that would do everything. Last in rank: when safety requires `uske` to check something itself, it grows. |
@@ -123,7 +126,7 @@ those cannot be waived — they are rejected as a whole.
 # Context and Scope
 
 > LEAN level: one diagram and one table per context. The boundary fits in one sentence — `uske`
-> and its journal are inside, everything it calls is outside. The diagrams in this document are in
+> and its journal are inside, everything it works with is outside. The diagrams in this document are in
 > Mermaid, which GitHub renders without a tool: that is what
 > [`SDR-0019`](../adr/SDR-0019-documentation-publique.md) (`tool: aucun`) allows.
 > The `IF-nn` identifiers are those of this document: an `IF-nn` cited in the code comes from the
@@ -149,7 +152,7 @@ flowchart LR
   lect(["Application team,<br>auditor"])
   plan <-->|"IF-01 trigger / outcome"| U
   depot -->|"IF-02 policies, playbooks"| U
-  knock <-->|"IF-03 plan / plan minus refusals"| U
+  knock <-->|"IF-03 plan / plan minus withheld"| U
   regis <-->|"IF-04 verdict / digest, playbook"| U
   reg -->|"IF-05 what is in it"| U
   U <-->|"IF-06 signed inventories, removals"| dt
@@ -162,7 +165,7 @@ flowchart LR
 |----|---------|------------------------|-------------------------|
 | IF-01 | **Scheduler** | The trigger of a screening | An outcome: success (refusals and inconclusive results included) or technical failure, to replay |
 | IF-02 | **Policy and playbook repository** | The active policies and their track; the playbooks | nothing — read, never written |
-| IF-03 | **Placer** (`knock`) | Its plan; what it held in transit; what it placed | The plan minus the refused operations; the list to promote |
+| IF-03 | **Placer** (`knock`) | Its plan; what it held in transit; what it placed | The plan minus the withheld operations (refused or inconclusive); the list to promote |
 | IF-04 | **Judge** (`regis`) | A verdict and its report, per digest | A digest and the playbook that the track calls for |
 | IF-05 | **Registry** | What is in it | nothing — read, never written; `uske` neither places anything in it nor removes anything from it |
 | IF-06 | **Vulnerability tracker** | What it already tracks | The inventories signed by the placer; the removal of what has left the registry |
@@ -172,7 +175,8 @@ flowchart LR
 
 **Outside the boundary, even if you think they are inside:**
 
-- **The transit.** `uske` names it to the placer, but neither reads nor writes it: the placer
+- **The transit**, a repository path on the registry (see *Glossary*). `uske` names it to the
+  placer, but neither reads nor writes it: the placer
   holds images there, the judge reads them there. Closing it to consumers is the registry's job.
 - **Signing and attestation**: the placer signs; `uske` verifies a signature before sending an
   inventory (IF-06), and produces none.
@@ -184,9 +188,11 @@ Context* of the first section.
 
 ## Technical Context
 
-Each business interface has a single channel. **`uske` calls neither `regis` nor `knock`**: each
-one runs in its own image, at its own step of the workflow, and the steps pass files to each other
-on the screening's `/work` volume (*Architecture Constraints*). `uske` speaks HTTP only to the two
+Each business interface has a single channel. **No `uske` subcommand starts `regis` or `knock`
+as a process**: the workflow that `uske` ships (`deploy/base`) runs each one in its own image, at
+its own step, and the steps pass files to each other on the screening's `/work` volume
+(*Cross-cutting Concepts*, *Files between the steps*). When this document says that `uske` calls the judge or the placer,
+it means this: its workflow runs the tool, and a following subcommand reads what it left. `uske` speaks HTTP only to the two
 APIs it knows by name.
 
 | ID | Channel | Format | Authentication |
@@ -207,10 +213,10 @@ APIs it knows by name.
 > ADR; a line without an ADR is a decision that does not have one yet.
 
 **A command chainer that fails closed.** Each step of a screening is a short `uske` subcommand —
-it reads files, calls a tool, writes JSON — and the scheduler chains them. `uske` keeps no state in
+it reads files, decides or calls an HTTP API, writes JSON — and the scheduler chains them. `uske` keeps no state in
 memory from one step to the next: what passes from one step to the next is a file, and what remains
-after the screening is a line in the journal. Anything that is not a readable direct placement
-verdict is read as a refusal.
+after the screening is a line in the journal. Anything that is not a readable verdict places
+nothing; it is `inconclusive` — not refused, judged again at the next screening.
 
 ## Technical choices
 
@@ -274,7 +280,7 @@ Thick border: without input/output. Each arrow is an import dependency, except t
 | **Workflow** | Chain the steps of a screening: check out the repository, run `knock`, `regis` and the `uske` subcommands, each in its own image, and pass them files on `/work` | `deploy/base/` | all the subcommands, through their command line | IF-01, IF-02, IF-03, IF-04 | yes — that is its purpose |
 | **Subcommands** | One subcommand per step: read the files and the environment, call the block that decides, write JSON, and turn the outcome into an exit code (0 business, 1 technical) | `uske/cli.py` | all the blocks below | IF-01, IF-07, IF-08 | yes |
 | **Outcomes** | Reduce a judge report to one of the four outcomes, failing closed | `uske/outcomes.py` | — | IF-04, through the report that the subcommands pass to it | **no** |
-| **Gate** | Return the plan minus the refusals; count the attempts of a rebuild and close a refused source | `uske/gate.py` | Outcomes, Policies, Journal (the latest states, already read) | IF-03, through the plan that the subcommands pass to it | **no** |
+| **Gate** | Return the plan minus the withheld operations, refused or inconclusive; count the attempts of a rebuild and close a refused source | `uske/gate.py` | Outcomes, Policies, Journal (the latest states, already read) | IF-03, through the plan that the subcommands pass to it | **no** |
 | **Policies** | Read the policies; map a track to a playbook — the only business table in `uske` | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | read-only |
 | **Journal** | Write one line per decision, append-only and forward-only; read the journal back for a person | `uske/results.py`, `uske/decisions.py` | Outcomes | IF-07, IF-08 | yes |
 | **Census** | Count the bypass: what is in the registry, minus what went through the gate, then ask for the usage of the suspects only | `uske/census.py` | — | IF-05, IF-09 | yes |
@@ -333,7 +339,7 @@ sequenceDiagram
     W->>S: record
     S->>J: appends the lines
     W->>S: approve (Gate)
-    S-->>W: plan minus refusals
+    S-->>W: plan minus withheld
     W->>K: reconcile --apply-plan
     K-->>W: what was placed
     W->>S: record-applied
@@ -351,7 +357,7 @@ sequenceDiagram
 4. For each digest still due, the judge analyses it (`regis`, IF-04); *Outcomes* reduces its report
    to an outcome, and `classify` writes the line for it on `/work`.
 5. `record` appends these lines to the *Journal*; `approve` asks the *Gate* for the plan minus the
-   refusals; the placer applies only that (`place`, IF-03).
+   withheld operations, refused or inconclusive; the placer applies only that (`place`, IF-03).
 6. `record-applied` records what was placed. The screening ends in success.
 
 ## R-2 — A source to remediate, and the second gate
@@ -510,7 +516,8 @@ throwaway cluster (RISK-06).
 
 ## Fail closed
 
-Anything that is not a readable answer counts as a refusal. *Outcomes* returns `inconclusive` for
+Anything that is not a readable answer places nothing, as a refusal does, without being one.
+*Outcomes* returns `inconclusive` for
 a report that is missing, empty, unreadable or has no known tier; the *Gate* returns nothing for an
 inconclusive digest; a missing apply file means that nothing was applied; a policy with an unknown
 track is never sent to the judge. The *Census* does the opposite, and says so: an image whose usage
@@ -521,12 +528,13 @@ stays unanswered is counted separately, so that the figure it publishes does not
 The *Journal* appends, never rewrites, and refuses a line older than the last one for the same
 digest. The *Gate* and `pending` read the latest states of this journal to decide what is still
 due. That is what makes a replay safe (R-4), and a decision contestable (R-5). Correcting a wrong
-line means appending a new one, dated now — reopening a source is the only written use of this.
+line means appending a new one, dated now — a line appended by hand (a reopening, a placement by exception, an abandonment) is the only
+written use of this.
 
 ## Business outcome, technical failure
 
-All the *Subcommands* follow the same rule: a business outcome — refusal, quarantine,
-inconclusive — exits with code 0; only a technical failure exits with code 1, and that is what
+All the *Subcommands* follow the same rule: a business outcome — quarantine, transformation
+required, inconclusive — exits with code 0; only a technical failure exits with code 1, and that is what
 Argo replays. A business outcome is therefore never replayed by mistake, and a technical failure is
 never taken for a refusal.
 
@@ -642,7 +650,7 @@ Thinness, in the name of Safety. The ranking of the goals settles it — that is
 
 | ID | Stimulus | Environment | Expected response | Measure | Met? |
 |----|----------|-------------|-------------------|---------|------|
-| QS-01 | The judge fails, or returns a report that is empty, unreadable or has no known tier | degraded | The decision is `inconclusive`; no operation is returned to the placer for this digest | **0** operations returned, across the six cases of the test | yes — `test_fail_closed` |
+| QS-01 | The judge fails, or returns a report that is empty, unreadable or has no known tier | degraded | The outcome is `inconclusive`; no operation is returned to the placer for this digest | **0** operations returned, across the six cases of the test | yes — `test_fail_closed` |
 | QS-02 | A remediated image is refused at the second gate | normal | The source is closed and is no longer remediated | **0** remediation orders for this source in the following screenings | yes — `test_a_refused_rebuild_closes_its_source` |
 | QS-03 | A team contests a refusal that is three weeks old | normal | Date, state, playbook and reason found with `uske decisions` | **1 minute** at most, from question to answer | **not measured** — no real journal is three weeks old (RISK-02) |
 | QS-04 | Two successive copies of a journal file are compared | normal | The older one is a prefix of the newer one | **0** modified or deleted lines | partly — `test_append_only_and_repeat_suppressed` covers `uske`; nothing protects the volume itself (RISK-01) |
@@ -704,19 +712,21 @@ decision log does not say what the repository does.
 | track | Régime | The level of requirement of a policy. It designates the playbook with which the judge evaluates it (`playbooks.py`). |
 | playbook | Jeu de règles, *playbook* | The rules that the judge applies, and the tiers they lead to. |
 | digest | Empreinte, *digest* | The identifier of an image by its content. A verdict applies to a digest, not to a tag. |
-| outcome | Issue | What a verdict decides for an image: direct placement, transformation required, quarantine or inconclusive. |
+| outcome | Issue | What `uske` makes of a verdict for an image: direct placement, transformation required, quarantine or inconclusive. |
+| state | État, `state` | The `state` key of a journal line. A state written by `uske` is an outcome (`direct-placement`, `transformation-required`, `quarantine`, `inconclusive`); a person may also write a line by hand with a state of their own, `placed-by-exception` or `abandoned`, which records an arbitration. A reopening is also written by hand, but under the `inconclusive` state (reason `uske/reopened`). A placement line repeats its source's state and adds the `placed` key. |
 | tier | Tier | The name that the playbook gives to its verdict; `uske` reduces it to an outcome. |
 | quarantine | Quarantaine | The outcome of a refused image: nothing is placed. |
-| inconclusive | Non concluant, `inconclusive` | The outcome of an evaluation that did not complete: nothing is decided, nothing is placed, and the next screening judges again. |
-| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source refused on rules that its track declares repairable. The remediated image is judged before it is placed. |
-| transit | Transit | The place where the placer holds a rebuilt image until it has its own verdict. Consumers must not be able to pull from it. |
+| refusal | Refus | A decision that places nothing: quarantine, or transformation required that `uske` does not remediate. An inconclusive outcome places nothing too, but is not a refusal: nothing is decided. |
+| inconclusive | Non concluant, `inconclusive` | The outcome when nothing could be decided: the evaluation did not complete, or the source must be judged again (`uske/no-transit`, `uske/reopened`). Nothing is placed, as for a refusal, but nothing is decided: the image is not refused, and the next screening judges it again. |
+| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source judged *transformation required* whose failed critical rules are all repairable for its track (`playbooks.REPAIRABLE`). The remediated image is held in transit and judged before it is placed. |
+| transit | Transit | A repository path on the destination registry's host (for example `harbor.example/transit`; in Harbor, a project), where the placer holds a remediated image until it has its own verdict. The workflow names it by its `transit` parameter, an entry of `KNOCK_REGISTRIES`. Consumers must not be able to pull from it. |
 | second gate | Seconde porte | The judging of an image held in transit, by its own digest. |
 | bypass | Contournement | What is in the registry without having gone through `uske`: the census counts it. |
 | screening | Screening | One run of `uske` on a policy: the placer's plan, the judge's verdicts, then the placement of what is accepted. |
 | journal | Journal | The results file of a policy, append-only: one line per decision. |
 | rebuild | Reconstruction | An image rebuilt by the placer from its source, instead of a copy. |
 | direct placement | Placement direct | The outcome of an image accepted as is: the placer copies it. |
-| transformation required | Transformation requise | The outcome of an image that enters only after a rebuild. |
+| transformation required | Transformation requise | The outcome of an image that could enter only after a rebuild. It is the judge's verdict, not an action: `uske` acts on it with a remediation only when every failed critical rule is repairable for the track; otherwise the image is not placed. |
 | census | Recensement | The count of what is in the registry, which measures the bypass. |
 | arbitration | Arbitrage | The person and the rationale behind a decision taken by hand: placement by exception, abandonment, reopening. |
 | `D-nn` | — | A decision of the workspace's reference dossier, not of this repository. Cited in the code (`D-23`, `D-30`). |
