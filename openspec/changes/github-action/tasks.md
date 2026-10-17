@@ -744,7 +744,7 @@ Renovate le suivra.
   `gh workflow run extra-screen-example.yml -f policy=examples/github/policies/repair.yaml`.
   Attendu : le journal porte une ligne de placement après une remédiation, et l'image retenue a sa
   propre ligne de verdict. Si aucune candidate ne ressort, revenir à la personne avant de continuer.
-- [ ] 5.10 Chemin piégé. Lancer :
+- [x] 5.10 Chemin piégé. Lancer :
   `gh workflow run extra-screen-example.yml -f policy='x.yaml"; echo PWNED; "'`. Attendu : le job
   `name` échoue, `PWNED` n'apparaît pas dans `gh run view <id> --log`, et le job `screen` ne tourne
   pas.
