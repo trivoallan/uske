@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/extra-screen.yml
     with:
       policy: ${{ inputs.policy || 'examples/github/policies/alpine.yaml' }}
-      registries: '{"ghcr": {"host": "ghcr.io"}, "transit": {"host": "ghcr.io"}}'
+      registries: '{"ghcr": {"host": "ghcr.io"}, "transit": {"host": "ghcr.io/trivoallan/uske-transit"}}'
       transit: transit
       playbooks: examples/github/playbooks
       journal-branch: uske-journal-example
