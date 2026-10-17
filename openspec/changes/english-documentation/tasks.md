@@ -113,4 +113,4 @@
 - [ ] 7.6 Dans la merge request, signaler l'ordre de fusion avec `feat/screen-and-policy-fan-out`.
   Si elle fusionne en premier, traduire au rebase ce qu'elle a ajouté (pages, entrées de
   `REASONS`).
-- [ ] 7.7 Commit : `docs(openspec): cocher la vérification du change`.
+- [x] 7.7 Commit : `docs(openspec): cocher la vérification du change`.
