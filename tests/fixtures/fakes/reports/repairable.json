@@ -2,6 +2,7 @@
   "playbooks": [
     {
       "tier": "Transformation requise puis placement",
+      "tier_id": "transformation-required",
       "rules": [
         {
           "slug": "cve-critical",

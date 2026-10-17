@@ -9,8 +9,14 @@ each in its own image, by its command line, and `uske` reads the files they writ
 `uske screen`, which runs a whole screening outside the cluster, runs them itself, by their command
 lines too, and reads nothing else from them than their files and exit codes. It knows **Harbor** by its
 API (`census`: enumerate the registry, subtract what was admitted, count the bypass) and
-**Dependency-Track** (`dt-*`: send the SBOMs `knock` signed, retire what left the registry). The
-track-to-playbook table lives in [`uske/playbooks.py`](../../uske/playbooks.py), and nowhere else.
+**Dependency-Track** (`dt-*`: send the SBOMs `knock` signed, retire what left the registry).
+
+A policy's track names its playbook: `admission-track: derogation` is judged with
+`<playbooks>/derogation.yaml`. `uske` knows no track, so a repository adds one by adding its file; a
+track without its file is never evaluated (`uske/unknown-track`). Of a playbook, `uske` reads only
+two things: the `id` of each tier (`direct-placement`, `transformation-required`, `quarantine`), never
+its name, and the rules tagged `curable`. Before anything is judged, it refuses a playbooks directory
+whose tiers lack such an `id` ([`uske/playbooks.py`](../../uske/playbooks.py)).
 
 Policies and playbooks are not in the image: a screening checks out the repository that holds them.
 
@@ -22,11 +28,11 @@ applied to every rebuild, which is placed directly: it is not judged again. `rem
 image is judged before it is placed. That needs a `knock` with remediation orders (`remediate:`
 and `--applied-out`); an older one refuses the plan.
 
-`uske` orders a remediation when the source's verdict is the tier *Transformation requise*, at
-least one of its failed rules is in its track's repairable list (`REPAIRABLE` in
-[`uske/playbooks.py`](../../uske/playbooks.py): `standard` repairs `cve-critical`), and every failed
-**critical** rule is. A failed rule that is not critical does not stop the order. The order carries
-the screening's epoch (its start, UTC). A refusal on a critical rule outside that list is not
+`uske` orders a remediation when the source's verdict is the tier `transformation-required`, at
+least one of its failed rules is tagged `curable` in its track's playbook (in the reference
+repository, `standard` tags `cve-critical`), and every failed **critical** rule is. A failed rule
+that is not critical does not stop the order. The order carries
+the screening's epoch (its start, UTC). A refusal on a critical rule that is not `curable` is not
 ordered.
 
 An overlay must provide:

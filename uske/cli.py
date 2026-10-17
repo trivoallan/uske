@@ -59,7 +59,17 @@ def _policy(path: str) -> policies.Policy:
         raise Failure(str(exc)) from exc
 
 
+def check_playbooks(directory: str) -> None:
+    """A playbooks directory uske could not classify fails the screening before it starts."""
+    try:
+        playbooks.check(directory)
+    except playbooks.PlaybookError as exc:
+        raise Failure(str(exc)) from exc
+
+
 def cmd_list(args) -> None:
+    if args.playbooks:
+        check_playbooks(args.playbooks)
     found, errors = policies.load_dir(args.policies)
     for error in errors:
         print(f"skipped: {error}", file=sys.stderr)
@@ -115,7 +125,6 @@ def classify_lines(
     regis_exit: int,
     source_ref: str,
     source_digest: str,
-    track: str,
     epoch: str,
     run: str,
 ) -> list[dict]:
@@ -129,7 +138,7 @@ def classify_lines(
     report_path = report
     if playbook is None:
         # unknown regime: never evaluated, recorded as such (D-21, D-23)
-        ruleset, report_path, document = "none", None, None
+        ruleset, report_path, document, rules = "none", None, None, {}
         outcome, reason = outcomes.Outcome.INCONCLUSIVE, "uske/unknown-track"
     else:
         try:
@@ -146,7 +155,7 @@ def classify_lines(
     repairable = (
         outcome is outcomes.Outcome.TRANSFORMATION_REQUIRED
         and not source_digest  # a repaired image is judged, never repaired again
-        and outcomes.repairable(document, playbooks.repairable(track or None))
+        and outcomes.repairable(document, playbooks.curable(rules))
     )
     line = results.ResultLine(
         ts=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -196,7 +205,6 @@ def cmd_classify(args) -> None:
         args.regis_exit,
         args.source_ref,
         args.source_digest,
-        args.track,
         args.epoch,
         args.run_id,
     )
@@ -342,6 +350,7 @@ def cmd_screen(args) -> None:
 
     tools = screen.Tools.from_env(os.environ)
     tools.check()  # before any step: a missing tool writes nothing
+    check_playbooks(args.playbooks)
     if args.policy:
         found = [_policy(args.policy)]
     else:
@@ -621,6 +630,10 @@ def parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("list", help="policies to process this screening")
     s.add_argument("--policies", required=True)
+    s.add_argument(
+        "--playbooks",
+        help="checked before anything is listed: a failure here judges nothing",
+    )
     s.set_defaults(run=cmd_list)
 
     s = sub.add_parser("prepare", help="the policy handed to knock, with admit: true")
@@ -661,11 +674,6 @@ def parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--source-digest", default="", help="for a held image: that source's digest"
-    )
-    s.add_argument(
-        "--track",
-        default="",
-        help="the policy's track: its repairable rules mark a refusal `repairable`",
     )
     s.add_argument(
         "--epoch",

@@ -2,6 +2,7 @@
   "playbooks": [
     {
       "tier": "Placement direct",
+      "tier_id": "direct-placement",
       "rules": []
     }
   ]

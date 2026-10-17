@@ -239,7 +239,7 @@ nothing; it is `inconclusive` — not refused, judged again at the next screenin
 | 1. **Safety** `#safe` | **Fail closed**: a missing or unreadable report becomes `inconclusive` (`outcomes.py`, D-23 of the reference dossier). Only direct placement is returned to the placer, plus transformation required when `uske` orders a remediation (the track's repairable rules, `playbooks.REPAIRABLE`). The placer applies an operation only if its source digest has not changed since the plan (`gate.py`, D-30). What it rebuilds goes through a **second gate**, from a mandatory transit. | `SDR-0016`; *Runtime View* R-2, R-3; QS-01, QS-02 |
 | 2. **Contestability** `#secure` | **An append-only journal that only moves forward**: a line older than the last one for the same digest is not written. Each line carries its state, its playbook, its reason and its screening (`run`); `uske decisions` makes them readable. | `SDR-0016`, `SDR-0018` |
 | 3. **Operability** `#operable` | **Separate, replayable steps**: JSON on output, exit code 0 for any business outcome and 1 for a technical failure, which Argo replays. Each policy has its own child Workflow: it replays alone, and its failure does not stop the others. The one-way journal makes a replay have no effect on what is already written; an image held without a verdict is retried three times at most. | *Runtime View* R-4; *Deployment View*; QS-05, QS-06 |
-| 4. **Thinness** `#flexible` | **Nothing to judge, nothing to place**: the only business table is the one that maps a track to a playbook (`playbooks.py`). The other tools are known only by their command line or their API. | *Architecture Constraints* |
+| 4. **Thinness** `#flexible` | **Nothing to judge, nothing to place**: `uske` holds no business table. A track names its playbook file, and the playbook says which tier is which outcome (its `id`) and which rule a remediation cures (`curable`). The other tools are known only by their command line or their API. | *Architecture Constraints* |
 
 **Safety already costs some Thinness, and that is intended**: `gate.py` counts the attempts itself
 and closes a source whose rebuild was refused, which a `uske` reduced to a simple chain would not
@@ -296,7 +296,7 @@ leave the Workflows.
 | **Merge** | Write the archive of a child's new lines (`export`); append these archives to the journal by the usual rule, and copy their reports without overwriting (`merge`); refuse a name or an archive member that would leave its directory | `uske/merge.py` | Policies, Journal | — | yes |
 | **Outcomes** | Reduce a judge report to one of the four outcomes, failing closed | `uske/outcomes.py` | — | IF-04, through the report that the subcommands pass to it | **no** |
 | **Gate** | Return the plan minus the withheld operations, refused or inconclusive; count the attempts of a rebuild and close a refused source | `uske/gate.py` | Outcomes, Policies, Journal (the latest states, already read) | IF-03, through the plan that the subcommands pass to it | **no** |
-| **Policies** | Read the policies; map a track to a playbook — the only business table in `uske` | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | read-only |
+| **Policies** | Read the policies; find a track's playbook by its file name, and refuse a playbooks directory `uske` could not classify | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | read-only |
 | **Journal** | Write one line per decision, append-only and forward-only; read the journal back for a person | `uske/results.py`, `uske/decisions.py` | Outcomes | IF-07, IF-08 | yes |
 | **Census** | Count the bypass: what is in the registry, minus what went through the gate, then ask for the usage of the suspects only | `uske/census.py` | — | IF-05, IF-09 | yes |
 | **Tracker sync** | Send the signed inventories to the vulnerability tracker, after verifying their signature; remove what has left the registry | `uske/dtsync.py` | Policies | IF-06 | yes |
@@ -413,7 +413,7 @@ sequenceDiagram
 
 
 1. As in R-1 up to step 4; the verdict is *transformation required*, and each failed critical rule
-   is among the track's repairable rules (`playbooks.REPAIRABLE`).
+   is tagged `curable` in the track's playbook.
 2. The *Gate* returns the operation with a remediation order, only if the workflow names a
    transit; without a transit, the source is recorded as `inconclusive` (`uske/no-transit`) and
    judged again at the next screening. Copies and rebuilds by simple transformation are placed
@@ -588,9 +588,9 @@ writes as JSON. Each step can be reread, replayed and tested with its input file
 ## What is not in the code
 
 The policies, their owners and their tracks are in the policy repository; the addresses and the
-secrets, in the environment. The only business knowledge that `uske` carries is the table from a
-track to a playbook (`playbooks.py`), read by the *Policies* and by everything that depends on
-them.
+secrets, in the environment. `uske` carries no business knowledge: a track names its playbook
+file (`playbooks.py`), and what the playbook decides is read from it, its tier `id` and its
+`curable` rules.
 
 ## Security
 
@@ -753,7 +753,7 @@ decision log does not say what the repository does.
 | judge | Juge | The tool that says whether an image can enter: `regis`. It returns a verdict; it places nothing. |
 | placer | Placeur | The tool that brings images into the registry, by copy or by rebuild, and attests what it did: `knock`. It judges nothing. |
 | policy | Politique | A file in the policy repository: a source to bring into the registry, its destination and its track (the `admission-track` label). The placer reads it to write its plan. |
-| track | Régime | The level of requirement of a policy. It designates the playbook with which the judge evaluates it (`playbooks.py`). |
+| track | Régime | The level of requirement of a policy. It names the playbook with which the judge evaluates it: `<playbooks>/<track>.yaml`. |
 | playbook | Jeu de règles, *playbook* | The rules that the judge applies, and the tiers they lead to. |
 | digest | Empreinte, *digest* | The identifier of an image by its content. A verdict applies to a digest, not to a tag. |
 | outcome | Issue | What `uske` makes of a verdict for an image: direct placement, transformation required, quarantine or inconclusive. |
@@ -762,7 +762,7 @@ decision log does not say what the repository does.
 | quarantine | Quarantaine | The outcome of a refused image: nothing is placed. |
 | refusal | Refus | A decision that places nothing: quarantine, or transformation required that `uske` does not remediate. An inconclusive outcome places nothing too, but is not a refusal: nothing is decided. |
 | inconclusive | Non concluant, `inconclusive` | The outcome when nothing could be decided: the evaluation did not complete, or the source must be judged again (`uske/no-transit`, `uske/reopened`). Nothing is placed, as for a refusal, but nothing is decided: the image is not refused, and the next screening judges it again. |
-| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source judged *transformation required* whose failed critical rules are all repairable for its track (`playbooks.REPAIRABLE`). The remediated image is held in transit and judged before it is placed. |
+| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source judged *transformation required* whose failed critical rules are all tagged `curable` in its track's playbook. The remediated image is held in transit and judged before it is placed. |
 | transit | Transit | A repository path on the destination registry's host (for example `harbor.example/transit`; in Harbor, a project), where the placer holds a remediated image until it has its own verdict. The workflow names it by its `transit` parameter, an entry of `KNOCK_REGISTRIES`. Consumers must not be able to pull from it. |
 | second gate | Seconde porte | The judging of an image held in transit, by its own digest. |
 | bypass | Contournement | What is in the registry without having gone through `uske`: the census counts it. |

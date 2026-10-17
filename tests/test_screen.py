@@ -158,7 +158,7 @@ class Parity(Fakes):
         )
         resolved = step("resolve", "--policy", path, "--playbooks", str(PLAYBOOKS))
 
-        def evaluate(item: dict, lines: str, track: str) -> None:
+        def evaluate(item: dict, lines: str) -> None:
             out = work / lines / name / f"{item['key']}.json"
             out.parent.mkdir(parents=True, exist_ok=True)
             if resolved["playbook"] is None:  # unevaluated
@@ -185,12 +185,12 @@ class Parity(Fakes):
                     "--regis-exit", str(code),
                     "--source-ref", item.get("sourceRef", ""),
                     "--source-digest", item.get("source", ""),
-                    "--track", track, "--epoch", item.get("epoch", ""), "--run", run,
+                    "--epoch", item.get("epoch", ""), "--run", run,
                 )  # fmt: skip
             out.write_text(json.dumps(value))
 
         for item in todo:
-            evaluate(item, "lines", resolved["track"] or "")
+            evaluate(item, "lines")
         # record
         record = ("record", "--policy", path, "--results", str(results))
         step(*record, "--lines", str(work / "lines" / name))
@@ -229,7 +229,7 @@ class Parity(Fakes):
             str(results),
         )
         for item in held_items:
-            evaluate(item, "staged-lines", "")
+            evaluate(item, "staged-lines")
         step(*record, "--lines", str(work / "staged-lines" / name))
         promoted = step(
             "approve", "--policy", path, "--results", str(results),

@@ -207,7 +207,7 @@ class _Screening:
         playbook = playbooks.resolve(self.policy.track, self.playbooks)
         # evaluate, unevaluated
         for item in todo:
-            self.evaluate(item, playbook, p.lines, self.policy.track or "")
+            self.evaluate(item, playbook, p.lines)
         if self.judge_only:  # judged, never recorded nor placed
             return
         # record
@@ -271,7 +271,7 @@ class _Screening:
         held = [target(c) for c in results.pending(found, self.journal())]
         # evaluate: a held image by its own digest
         for item in held:
-            self.evaluate(item, playbook, p.staged_lines, "")
+            self.evaluate(item, playbook, p.staged_lines)
         # record
         self.record("record-held", lines=p.staged_lines)
         # approve
@@ -297,15 +297,13 @@ class _Screening:
     def journal(self) -> list[dict]:
         return results.read(results.path_for(self.results, self.policy.name))
 
-    def evaluate(
-        self, item: dict, playbook: Path | None, lines_dir: Path, track: str
-    ) -> None:
+    def evaluate(self, item: dict, playbook: Path | None, lines_dir: Path) -> None:
         """One digest judged; its lines written where `record` reads them."""
         digest, source_digest = item["digest"], item.get("source", "")
         if playbook is None:
             # unknown track: never sent to regis (D-21)
             lines = classify_lines(
-                None, item["ref"], digest, None, None, 0, "", "", "", "", self.run
+                None, item["ref"], digest, None, None, 0, "", "", "", self.run
             )
         else:
             out = self.paths.report(item["key"])
@@ -336,7 +334,6 @@ class _Screening:
                 code,
                 item.get("sourceRef", ""),
                 source_digest,
-                track,
                 item.get("epoch", ""),
                 self.run,
             )

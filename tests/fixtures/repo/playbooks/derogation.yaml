@@ -24,13 +24,15 @@ spec:
   # Rien n'est réparable ici : sans transformation déclarée, la classe
   # « réparable » est vide (spécification §8.8.1a).
   tiers:
-    - name: Placement direct
+    - id: direct-placement
+      name: Placement direct
       condition:
         and:
           - { var: rules.no-secret.passed }
           - { var: rules.no-licence-toxique.passed }
 
-    - name: Quarantaine
+    - id: quarantine
+      name: Quarantaine
       condition:
         or:
           - { "!": [{ var: rules.no-secret.passed }] }

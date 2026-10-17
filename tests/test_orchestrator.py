@@ -24,8 +24,8 @@ FIXTURES = HERE / "fixtures" / "policies"
 ROOT = HERE / "fixtures" / "repo"
 PLAYBOOKS = ROOT / "playbooks"
 JOURNAL = ROOT / "policies" / "projets" / "a-4711" / "redis-7.journal.jsonl"
-FULL = PLAYBOOKS / "version" / "playbook.yaml"
-LIGHT = PLAYBOOKS / "version" / "playbook-allege.yaml"
+FULL = PLAYBOOKS / "standard.yaml"
+LIGHT = PLAYBOOKS / "derogation.yaml"
 
 D1 = "sha256:" + "1" * 64
 D2 = "sha256:" + "2" * 64
@@ -43,8 +43,19 @@ def run(*argv: str) -> tuple[int, object]:
     return code, json.loads(text) if text else None
 
 
+# the fixture playbooks' tier names -> their `id`, which is all uske reads
+TIER_IDS = {
+    "Placement direct": "direct-placement",
+    "Transformation requise puis placement": "transformation-required",
+    "Quarantaine": "quarantine",
+}
+
+
 def report(tier: str | None, rules: list[dict] | None = None) -> dict:
-    return {"playbooks": [{"tier": tier, "rules": rules or []}]}
+    result = {"tier": tier, "rules": rules or []}
+    if tier in TIER_IDS:
+        result["tier_id"] = TIER_IDS[tier]
+    return {"playbooks": [result]}
 
 
 SECRET_FAILED = {
@@ -127,7 +138,7 @@ class ListAndResolve(unittest.TestCase):
         )
 
     def test_each_regime_gets_its_playbook(self):
-        for fixture, expected in [("standard", FULL), ("redistribution", LIGHT)]:
+        for fixture in ("standard", "redistribution"):
             code, out = run(
                 "resolve",
                 "--policy",
@@ -136,7 +147,9 @@ class ListAndResolve(unittest.TestCase):
                 str(PLAYBOOKS),
             )
             self.assertEqual(code, 0)
-            self.assertEqual(Path(out["playbook"]), expected)
+            self.assertEqual(
+                Path(out["playbook"]), (PLAYBOOKS / f"{fixture}.yaml").resolve()
+            )
 
     def test_derogation_uses_the_light_tier(self):
         code, out = run(
@@ -265,7 +278,7 @@ class Classify(Workdir):
         for path in (FULL, LIGHT):
             for tier in yaml.safe_load(path.read_text())["spec"]["tiers"]:
                 with self.subTest(path=path.name, tier=tier["name"]):
-                    self.assertIn(tier["name"], outcomes.TIERS)
+                    self.assertIn(tier["id"], outcomes.TIERS)
 
 
 def plan(
@@ -706,7 +719,7 @@ class Rebuild(Workdir):
     NAME = "fixture-standard"
     SOURCE = "harbor.example/producer/app:1.0"
     HELD = "harbor.example/transit/shared-test/app:1.0"
-    # a critical CVE with a fix: the tier says repair, and `cve-critical` is repairable (standard)
+    # a critical CVE with a fix: the tier says repair, and `cve-critical` is curable (standard)
     REPAIR = report("Transformation requise puis placement", [CVE_FAILED])
 
     def record(self, name: str, lines) -> int:
@@ -723,7 +736,7 @@ class Rebuild(Workdir):
     def judge_source(self, digest: str, value) -> None:
         self.record(
             f"src-{digest[-4:]}.json",
-            self.classify(FULL, self.SOURCE, digest, value, 0, "--track", "standard"),
+            self.classify(FULL, self.SOURCE, digest, value),
         )
 
     def approve(self, value: dict, *extra: str) -> tuple[dict, list[str]]:
@@ -873,15 +886,12 @@ class Rebuild(Workdir):
                     {"refused": 1},
                 )
 
-    def test_a_regime_without_repairable_rules_orders_nothing(self):
-        line = self.classify(
-            FULL, self.SOURCE, D1, self.REPAIR, 0, "--track", "derogation"
+    def test_a_regime_without_curable_rules_orders_nothing(self):
+        """*Même règle, régimes différents* : `curable` vit dans le playbook du régime."""
+        self.assertNotIn(
+            "repairable", self.classify(LIGHT, self.SOURCE, D1, self.REPAIR)
         )
-        self.assertNotIn("repairable", line)
-        line = self.classify(
-            FULL, self.SOURCE, D1, self.REPAIR, 0, "--track", "standard"
-        )
-        self.assertTrue(line["repairable"])
+        self.assertTrue(self.classify(FULL, self.SOURCE, D1, self.REPAIR)["repairable"])
 
     def test_remediated_tag_upstream_fix_renews_the_order(self):
         """Un correctif amont sur un tag réparé (D11)."""
