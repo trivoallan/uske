@@ -27,6 +27,9 @@ def main(argv: list[str]) -> int:
         db = Path(os.environ["GRYPE_DB_CACHE_DIR"]) / "6"
         db.mkdir(parents=True, exist_ok=True)
         (db / "vulnerability.db").write_bytes(b"db")
+        if os.environ.get("FAKE_PACK_FAULT"):
+            (db / "locked").write_bytes(b"x")
+            (db / "locked").chmod(0o000)
         return 0
     if argv[:2] == ["db", "status"]:
         return 1 if os.environ.get("FAKE_STATUS_FAIL") else 0

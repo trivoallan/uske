@@ -11,7 +11,6 @@ import json
 import os
 import shutil
 import subprocess
-import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -66,6 +65,18 @@ class GrypeDb(unittest.TestCase):
                 self.assertEqual(artifact["artifactGC"], {"strategy": "Never"})
         self.assertEqual(outputs[ARCHIVE]["path"], "/tmp/out/current.tar.zst")
         self.assertEqual(outputs[POINTER]["path"], "/tmp/out/current.json")
+
+    def test_the_archive_is_packed_in_staging_and_renamed_before_the_pointer(
+        self,
+    ) -> None:
+        """*Un téléchargement interrompu*: nothing is ever written under `out/` half-done."""
+        for line in self.script.splitlines():
+            if "tarfile.open(" in line:
+                self.assertNotIn("/out", line)
+                self.assertIn("/stage/", line)
+        archive = self.script.index('mv "$W/stage/current.tar.zst" "$W/out/')
+        pointer = self.script.index('mv "$W/latest.json" "$W/out/current.json"')
+        self.assertLess(archive, pointer)
 
     def test_the_retry_is_the_screenings(self) -> None:
         self.assertEqual(self.template["activeDeadlineSeconds"], 1800)
@@ -149,8 +160,22 @@ class Script(unittest.TestCase):
             sorted(p.name for p in out.iterdir()), ["current.json", "current.tar.zst"]
         )
         self.assertEqual(json.loads((out / "current.json").read_text()), NEW)
-        with tarfile.open(out / "current.tar.zst", "r:zst") as archive:
-            names = archive.getnames()
+        # read with the python3 that packed it, which is not always the tests' interpreter
+        listing = subprocess.run(
+            [
+                "python3",
+                "-c",
+                (
+                    "import sys, tarfile; "
+                    "print(*tarfile.open(sys.argv[1], 'r:zst').getnames(), sep='\\n')"
+                ),
+                str(out / "current.tar.zst"),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        names = listing.stdout.split()
         self.assertIn("6", names)
         self.assertIn("6/vulnerability.db", names)
 
@@ -201,6 +226,14 @@ class Script(unittest.TestCase):
         proc, work, _ = self.run_script(pointer="{not json")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertPublished(work)
+
+    @needs_zstd
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode 000 file")
+    def test_a_failure_while_packing_publishes_nothing(self) -> None:
+        """Argo saves optional outputs of a failed container: `out/` must stay empty."""
+        proc, work, _ = self.run_script(pointer=json.dumps(OLD), FAKE_PACK_FAULT="1")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(list((work / "out").iterdir()), [])
 
     def test_no_active_database_fails(self) -> None:
         proc, work, _ = self.run_script(FAKE_LIST="[]")
