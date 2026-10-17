@@ -6,6 +6,7 @@ Chaque test nomme l'exigence de `specs/github-screening-workflow/spec.md` (chang
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -17,10 +18,13 @@ from pathlib import Path
 
 import yaml
 
+from uske import playbooks, policies
+
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 SCREEN = WORKFLOWS / "extra-screen.yml"
 MAJOR_TAG = WORKFLOWS / "extra-major-tag.yml"
+EXAMPLE = ROOT / "examples" / "github"
 
 
 def load(path: Path) -> dict:
@@ -148,11 +152,157 @@ class Scripts(unittest.TestCase):
         self.assertNotEqual(self.record(results, "x"), 0)
         self.assertEqual(len(counter.read_text().splitlines()), 4)
 
-    def test_a_refused_birth_is_not_retried(self) -> None:
+    def test_a_lost_birth_clones_the_winner(self) -> None:
+        # Deux premiers runs simultanés : un `git` posé devant le vrai fait naître la branche
+        # chez le gagnant juste avant le push de naissance du perdant, que le dépôt refuse
+        # (racines sans ancêtre commun). Le perdant doit reprendre la branche gagnante.
+        winner = self.tmp / "winner"
+        winner.mkdir()
+        (winner / "w.jsonl").write_text('{"state": "placed"}\n')
+        for args in (
+            ["init", "-q", "-b", "uske-journal"],
+            ["add", "w.jsonl"],
+            ["commit", "-q", "-m", "gagnant"],
+        ):
+            subprocess.run(
+                ["git", "-C", str(winner), *args],
+                check=True,
+                env=self.env,
+                capture_output=True,
+            )
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        wrapper = bin_dir / "git"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            'case " $* " in *" push "*)\n'
+            f'  [ -e "{self.tmp}/raced" ] || {{ touch "{self.tmp}/raced"; '
+            f'"{shutil.which("git")}" -C "{winner}" push -q "{self.remote}" HEAD:uske-journal; }};;\n'
+            "esac\n"
+            f'exec "{shutil.which("git")}" "$@"\n'
+        )
+        wrapper.chmod(0o755)
+        results = self.tmp / "r1"
+        path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+        self.assertEqual(self.run_script("birth", results, PATH=path), 0)
+        self.assertTrue((self.tmp / "raced").exists())
+        self.assertEqual(self.remote_files(), ["w.jsonl"])
+        self.assertTrue((results / "w.jsonl").is_file())
+        self.assertEqual(
+            git("rev-parse", "HEAD", cwd=results),
+            git("--git-dir", str(self.remote), "rev-parse", "uske-journal"),
+        )
+        self.assertNotIn("extraheader", (results / ".git" / "config").read_text())
+
+    def test_a_refused_birth_without_a_winner_fails(self) -> None:
         hook = self.remote / "hooks" / "pre-receive"
         hook.write_text("#!/bin/sh\nexit 1\n")
         hook.chmod(0o755)
         self.assertNotEqual(self.run_script("birth", self.tmp / "r1"), 0)
+
+
+def stub(directory: Path, name: str, body: str) -> None:
+    path = directory / name
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+
+
+class Name(unittest.TestCase):
+    """Le job `name` : du chemin de la politique à son `metadata.name` (exigence « le verrou
+    porte sur le nom de la politique »). `uv` et `uske` sont des doublures sur le PATH."""
+
+    LISTED = (
+        '[{"name": "x-name", "path": "policies/x.yaml"},'
+        ' {"name": "y-name", "path": "policies/y.yaml"}]'
+    )
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        (self.tmp / "policies").mkdir()
+        for name in ("x", "y", "z"):
+            (self.tmp / "policies" / f"{name}.yaml").write_text("{}\n")
+        self.bin = self.tmp / "bin"
+        self.bin.mkdir()
+        stub(self.bin, "uv", "exit 0")
+        self.listed(self.LISTED)
+        self.script = step(load(SCREEN), "name", "name")["run"]
+
+    def listed(self, text: str, rc: int = 0) -> None:
+        (self.tmp / "listed.json").write_text(text)
+        stub(self.bin, "uske", f'cat "{self.tmp}/listed.json"; exit {rc}')
+
+    def run_name(self, policy: str) -> tuple[int, str, str]:
+        out = self.tmp / "github-output"
+        out.write_text("")
+        done = subprocess.run(
+            ["bash", "-e", "-c", self.script],
+            cwd=self.tmp,
+            check=False,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                "POLICY": policy,
+                "USKE_REF": "",
+                "USKE_VERSION": "0.0.0",
+                "GITHUB_OUTPUT": str(out),
+            },
+        )
+        return done.returncode, out.read_text(), done.stdout + done.stderr
+
+    def test_the_path_gives_the_name(self) -> None:
+        self.assertEqual(self.run_name("policies/x.yaml")[:2], (0, "name=x-name\n"))
+
+    def test_a_dot_slash_path_gives_the_same_name(self) -> None:
+        self.assertEqual(self.run_name("./policies/y.yaml")[:2], (0, "name=y-name\n"))
+
+    def test_a_path_uske_does_not_list_fails(self) -> None:
+        rc, output, log = self.run_name("policies/z.yaml")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(output, "")
+        self.assertIn("::error::", log)
+
+    def test_two_policies_at_one_path_fail(self) -> None:
+        self.listed(
+            '[{"name": "a", "path": "policies/x.yaml"},'
+            ' {"name": "b", "path": "./policies/x.yaml"}]'
+        )
+        rc, output, _ = self.run_name("policies/x.yaml")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(output, "")
+
+    def test_a_failed_listing_fails_on_its_own_error(self) -> None:
+        self.listed("", rc=1)
+        rc, output, log = self.run_name("policies/x.yaml")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(output, "")
+        self.assertNotIn("aucune politique lisible", log)
+
+
+class Tools(unittest.TestCase):
+    """BuildKit démarre même sans transit : `transform:` reconstruit sans rien réparer
+    (exigence « la reconstruction est disponible sur un runner hébergé »)."""
+
+    def test_buildkit_starts_without_a_transit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir, log = Path(tmp), Path(tmp) / "docker.log"
+            stub(bin_dir, "docker", f'echo "$*" >> "{log}"')
+            subprocess.run(
+                ["bash", "-e", "-c", step(load(SCREEN), "screen", "tools")["run"]],
+                check=True,
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                    "TRANSIT": "",
+                    "REGIS_VERSION": "r",
+                    "KNOCK_VERSION": "k",
+                    "BUILDKIT_VERSION": "b",
+                },
+            )
+            calls = log.read_text().splitlines()
+        self.assertTrue([c for c in calls if c.startswith("run -d --name buildkitd")])
 
 
 class Shape(unittest.TestCase):
@@ -373,6 +523,35 @@ class Shape(unittest.TestCase):
         self.assertEqual(len(versions), 3)
         for i in versions:
             self.assertRegex(lines[i - 1], r"# renovate: datasource=docker depName=\S+")
+
+
+class Example(unittest.TestCase):
+    """Le banc : sa version d'uske et ses playbooks suivent le contrat de la release."""
+
+    def test_the_pinned_uske_is_the_released_one(self) -> None:
+        manifest = json.loads((ROOT / ".release-please-manifest.json").read_text())
+        env = load(SCREEN)["env"]
+        self.assertEqual(str(env["USKE_VERSION"]), manifest["."])
+
+    def test_the_judge_writes_the_tier_id(self) -> None:
+        # regis >= 0.42.0 écrit `tier_id`, que lit uske depuis la 0.10.
+        version = tuple(
+            int(n) for n in str(load(SCREEN)["env"]["REGIS_VERSION"]).split(".")
+        )
+        self.assertGreaterEqual(version, (0, 42, 0))
+
+    def test_the_example_playbooks_pass_the_startup_check(self) -> None:
+        self.assertTrue(list((EXAMPLE / "playbooks").glob("*.yaml")))
+        playbooks.check(EXAMPLE / "playbooks")
+
+    def test_each_example_policy_resolves_its_playbook(self) -> None:
+        found, errors = policies.load_dir(str(EXAMPLE / "policies"))
+        self.assertEqual(errors, [])
+        self.assertTrue(found)
+        for policy in found:
+            self.assertIsNotNone(
+                playbooks.resolve(policy.track, EXAMPLE / "playbooks"), policy.name
+            )
 
 
 class MovingTag(unittest.TestCase):

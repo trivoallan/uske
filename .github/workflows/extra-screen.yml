@@ -56,9 +56,9 @@ on:
 permissions: {}
 
 env:
-  USKE_VERSION: 0.9.1 # x-release-please-version
+  USKE_VERSION: 0.10.0 # x-release-please-version
   # renovate: datasource=docker depName=ghcr.io/trivoallan/regis
-  REGIS_VERSION: 0.41.0
+  REGIS_VERSION: 0.42.0
   # renovate: datasource=docker depName=ghcr.io/trivoallan/knock
   KNOCK_VERSION: 0.16.0
   # renovate: datasource=docker depName=moby/buildkit
@@ -83,14 +83,18 @@ jobs:
         run: |
           uv tool install -q "git+https://github.com/trivoallan/uske@${USKE_REF:-v$USKE_VERSION}"
           want="$(realpath -- "$POLICY")"
+          # Une affectation à part : `set -e` arrête le job sur l'erreur d'`uske list` elle-même.
+          out="$(uske list --policies "$(dirname -- "$POLICY")")"
+          rows="$(printf '%s' "$out" | jq -r '.[] | "\(.path)\t\(.name)"')"
           name=""
           count=0
           while IFS="$(printf '\t')" read -r path listed; do
+            [ -n "$path" ] || continue
             [ "$(realpath -- "$path")" = "$want" ] || continue
             name="$listed"
             count=$((count + 1))
           done <<EOF
-          $(uske list --policies "$(dirname -- "$POLICY")" | jq -r '.[] | "\(.path)\t\(.name)"')
+          $rows
           EOF
           [ "$count" -eq 1 ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
           echo "name=$name" >> "$GITHUB_OUTPUT"
@@ -129,12 +133,15 @@ jobs:
           BIRTH: |
             #!/bin/sh
             # Extrait la branche du journal sous $RESULTS, ou la fait naître orpheline.
-            # Un push refusé n'est pas rejoué : deux premiers runs simultanés, le second échoue
-            # ici, avant tout placement.
+            # Deux premiers runs simultanés (D4) : la naissance du perdant est refusée ; s'il
+            # trouve alors la branche, il jette sa racine et clone celle du gagnant, sinon il
+            # échoue, avant tout placement.
             set -eu
             auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
-            if git -c "http.extraheader=$auth" ls-remote --exit-code --heads "$JOURNAL_REMOTE" "$JOURNAL_BRANCH" >/dev/null; then
-              git -c "http.extraheader=$auth" clone -q --single-branch --branch "$JOURNAL_BRANCH" "$JOURNAL_REMOTE" "$RESULTS"
+            exists() { git -c "http.extraheader=$auth" ls-remote --exit-code --heads "$JOURNAL_REMOTE" "$JOURNAL_BRANCH" >/dev/null; }
+            clone() { git -c "http.extraheader=$auth" clone -q --single-branch --branch "$JOURNAL_BRANCH" "$JOURNAL_REMOTE" "$RESULTS"; }
+            if exists; then
+              clone
             else
               rc=$?
               [ "$rc" -eq 2 ] || exit "$rc"
@@ -143,7 +150,11 @@ jobs:
               git -C "$RESULTS" add .gitignore
               git -C "$RESULTS" commit -q -m "journal : naissance de la branche"
               git -C "$RESULTS" remote add origin "$JOURNAL_REMOTE"
-              git -C "$RESULTS" -c "http.extraheader=$auth" push -q origin "HEAD:$JOURNAL_BRANCH"
+              if ! git -C "$RESULTS" -c "http.extraheader=$auth" push -q origin "HEAD:$JOURNAL_BRANCH"; then
+                exists
+                rm -rf "$RESULTS"
+                clone
+              fi
             fi
           HOOK: |
             #!/bin/sh
@@ -177,6 +188,8 @@ jobs:
         run: |
           docker pull -q "ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
           docker pull -q "ghcr.io/trivoallan/knock:$KNOCK_VERSION"
+          # Toujours lancé, même sans transit : une politique à `transform:` est reconstruite
+          # et placée sans être réparée.
           docker run -d --name buildkitd --privileged -p 127.0.0.1:1234:1234 \
             "moby/buildkit:$BUILDKIT_VERSION" --addr tcp://0.0.0.0:1234
       - id: grype-date
