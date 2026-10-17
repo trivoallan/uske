@@ -59,15 +59,15 @@
 
 ## 4. Sortie de `uske decisions`
 
-- [ ] 4.1 Dans `tests/test_decisions.py`, remplacer les attentes des lignes 209, 325 et 326 :
+- [x] 4.1 Dans `tests/test_decisions.py`, remplacer les attentes des lignes 209, 325 et 326 :
   `[backdated]  [no arbitration]`, `(backdated) (no arbitration)`, `|  | backdated; no arbitration |`.
-- [ ] 4.2 `uv run --with pyyaml python -m unittest tests.test_decisions -v`. Attendu : 3 échecs,
+- [x] 4.2 `uv run --with pyyaml python -m unittest tests.test_decisions -v`. Attendu : 3 échecs,
   sur `test_marks_and_missing_reason` et `test_marks_appear_in_the_timeline_and_the_table`.
-- [ ] 4.3 Dans `uske/decisions.py`, fonction `marks()` : `"antidatée"` → `"backdated"`,
+- [x] 4.3 Dans `uske/decisions.py`, fonction `marks()` : `"antidatée"` → `"backdated"`,
   `"arbitrage absent"` → `"no arbitration"`.
-- [ ] 4.4 Relancer 4.2. Attendu : `OK`. Les golden tests `tests/golden/decisions-*` ne portent
+- [x] 4.4 Relancer 4.2. Attendu : `OK`. Les golden tests `tests/golden/decisions-*` ne portent
   aucune marque et ne changent pas.
-- [ ] 4.5 Commit : `fix(decisions): rendre les marques en anglais`.
+- [x] 4.5 Commit : `fix(decisions): rendre les marques en anglais`.
 
 ## 5. Page des raisons
 

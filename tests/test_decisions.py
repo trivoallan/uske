@@ -206,7 +206,7 @@ class Text(Journal):
         text = decisions.render_text(decisions.load(self.dir, "m")[0])
         self.assertIn("2026-10-05T00:00:00Z  direct-placement  —\n", text)
         self.assertIn(
-            "inconclusive  uske/reopened  [antidatée]  [arbitrage absent]", text
+            "inconclusive  uske/reopened  [backdated]  [no arbitration]", text
         )
 
     def test_source_and_rebuilt_are_shown(self):
@@ -322,8 +322,8 @@ class Markdown(Journal):
             ),
         )
         md = decisions.render_md(decisions.load(self.dir, "m")[0])
-        self.assertIn("inconclusive : uske/reopened (antidatée) (arbitrage absent)", md)
-        self.assertIn("|  | antidatée; arbitrage absent |", md)
+        self.assertIn("inconclusive : uske/reopened (backdated) (no arbitration)", md)
+        self.assertIn("|  | backdated; no arbitration |", md)
 
 
 class Strict(Journal):
