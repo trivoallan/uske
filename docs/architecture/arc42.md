@@ -22,7 +22,7 @@ contributors. See <https://arc42.org>.
 ## Requirements Overview
 
 `uske` joue ensemble un outil qui **juge** une image de conteneur et un outil qui la **place**
-dans un registre. Sur planification, pour chaque politique active, il conduit un *screening* et
+dans un registre. Sur planification, il conduit un *screening* sur chaque politique active d'un dépôt et
 consigne chaque décision. Il ne juge rien et ne place rien : il appelle, il attend, il écrit.
 
 ### Essential Features
@@ -618,7 +618,7 @@ dépasse `SDR-0006` et `SDR-0010`, et `SDR-0019` dépasse `SDR-0008`.
 | [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | oui — release-please branché le 2026-10-16 |
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
 | [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
-| [SDR-0018](../adr/SDR-0018-journal-run.md) | Une ligne du journal nomme le criblage qui l'a écrite (clé `run`) | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui — `classify --run` reçoit `{{workflow.name}}` du `WorkflowTemplate` |
+| [SDR-0018](../adr/SDR-0018-journal-run.md) | Une ligne du journal nomme le screening qui l'a écrite (clé `run`) | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui — `classify --run` reçoit `{{workflow.name}}` du `WorkflowTemplate` |
 | [SDR-0019](../adr/SDR-0019-documentation-publique.md) | Audience de la documentation : `public` | accepted | 2026-10-17 | Contestabilité | oui — pages relues le 2026-10-17 |
 
 ## Écarts ouverts
@@ -721,7 +721,6 @@ la même façon : le journal des décisions ne dit pas ce que le dépôt fait.
 | Transit | Le lieu où le placeur retient une image reconstruite tant qu'elle n'a pas son propre verdict. Les consommateurs ne doivent pas pouvoir y tirer. |
 | Seconde porte | Le jugement d'une image retenue dans le transit, par sa propre empreinte. |
 | Contournement | Ce qui est au registre sans être passé par `uske` : le recensement le compte. |
-| *screening*, *criblage* | Le même mot. Ce document et le README disent *screening* ; `SDR-0018` et les raisons écrites au journal (`outcomes.py`, [`raisons.md`](../reference/raisons.md)) disent *criblage*. |
 | `D-nn` | Une décision du dossier de référence de l'espace de travail, pas de ce dépôt. Citée dans le code (`D-23`, `D-30`). |
 | `IF-nn` | Une interface de *Context and Scope*. Un `IF-nn` cité dans le code vient du dossier de référence, et n'est pas le même. |
 | `SDR-nnnn` | Un ADR de ce dépôt, numéroté par la méthode `surdesrails` ; les trous sont expliqués en *Architecture Decisions*. |
