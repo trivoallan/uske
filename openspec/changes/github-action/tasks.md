@@ -876,7 +876,7 @@ Renovate le suivra.
   `gh run download <id> -n uske-reports-example-alpine -D /tmp/a && tar -tf /tmp/a/reports.tar`.
   Attendu : des chemins `reports/example-alpine/sha256:…/…`, identiques à ceux que citent les
   lignes du journal.
-- [ ] 5.9 Reconstruction. Choisir une source que le playbook `standard` refuse sur une règle
+- [x] 5.9 Reconstruction. Choisir une source que le playbook `standard` refuse sur une règle
   réparable : lancer `regis analyze` (commande de la tâche 1.2) sur `docker.io/library/nginx:1.29`,
   puis chercher dans `report.json` un échec marqué réparable. Écrire
   `examples/github/policies/repair.yaml` sur cette source, et lancer
@@ -887,7 +887,7 @@ Renovate le suivra.
   `gh workflow run extra-screen-example.yml -f policy='x.yaml"; echo PWNED; "'`. Attendu : le job
   `name` échoue, aucune ligne de `gh run view <id> --log` n'est `PWNED` seul (le mot ne figure que dans l'écho de l'entrée), et le job `screen` ne tourne
   pas.
-- [ ] 5.11 Commit des corrections que le banc a demandées, avec un message qui nomme le scénario.
+- [x] 5.11 Commit des corrections que le banc a demandées, avec un message qui nomme le scénario.
 
 ## 6. Documentation
 
