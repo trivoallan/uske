@@ -809,7 +809,7 @@ Renovate le suivra.
   sortie.
 - [x] 5.5 Commit : `test: éprouver le workflow GitHub sur une politique d'exemple`, puis pousser
   la branche et ouvrir la PR, qui déclenche le banc.
-- [ ] 5.6 Premier run, appel minimal et branche du journal. Lancer :
+- [x] 5.6 Premier run, appel minimal et branche du journal. Lancer :
   `gh run watch "$(gh run list -w extra-screen-example -L1 --json databaseId -q '.[0].databaseId')" --exit-status`.
   Attendu : code 0. Puis
   `git fetch origin uske-journal-example && git ls-tree -r --name-only origin/uske-journal-example`
@@ -820,10 +820,10 @@ Renovate le suivra.
   `/tmp/.docker/config.json` par `regctl` : déduit, non éprouvé), appliquer le repli : une étape
   qui ajoute `username` et `password` (`github.actor`, `github.token`) à l'entrée `ghcr.io` de
   `KNOCK_REGISTRIES`, masquée par `::add-mask::`. L'écrire dans D2, et la question est close.
-- [ ] 5.7 Second run sans changement : `gh workflow run extra-screen-example.yml`, puis la même
+- [x] 5.7 Second run sans changement : `gh workflow run extra-screen-example.yml`, puis la même
   attente. Attendu : le journal ne gagne aucune ligne de verdict, ce qui montre que le juge n'a pas
   été appelé pour une empreinte déjà décidée.
-- [ ] 5.8 Archive des rapports. Lancer :
+- [x] 5.8 Archive des rapports. Lancer :
   `gh run download <id> -n uske-reports-example-alpine -D /tmp/a && tar -tf /tmp/a/reports.tar`.
   Attendu : des chemins `reports/example-alpine/sha256:…/…`, identiques à ceux que citent les
   lignes du journal.
