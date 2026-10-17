@@ -163,8 +163,9 @@ de code. Le nombre de lignes de l'instantané est passé en paramètre `snapshot
 
 Les jugements répartis (`evaluate`, par empreinte) reçoivent `work` en lecture et rendent leur
 ligne et leur rapport dans des artefacts à clé fixe,
-`runs/{{run}}/{{name}}/lines/<key>.json` et `runs/{{run}}/{{name}}/reports/…` ; l'étape `record`
-qui suit reçoit le préfixe `runs/{{run}}/{{name}}/lines/` comme un répertoire. Argo sait charger
+`runs/{{run}}/{{name}}/<enfant>/lines/<key>.json` et `…/reports/…`, où `<enfant>` est le nom du
+Workflow enfant (un enfant relancé ne relit pas les lignes du premier) ; l'étape `record` qui suit
+reçoit le préfixe `…/lines/` comme un répertoire. Argo sait charger
 un préfixe S3 comme un répertoire ; c'est ce qui remplace le répertoire partagé de la répartition.
 Le rapport est rangé dans `work` à `/work/results/reports/<politique>/<empreinte>/<run>.html`, et la
 ligne cite toujours `/results/reports/…` : la fusion l'y copiera.
@@ -254,6 +255,14 @@ support, `DEBT-08`, hors de ce change.
 - [Le journal du volume retarde sur les placements jusqu'à la fusion] → la décision est durable
   dans le dépôt d'artefacts avant le placement ; la fusion échouée se voit sur le parent et se
   rejoue ; `Forbid` empêche le screening suivant de juger sur un journal en retard.
+- [Un `place` en erreur de pod (et non en échec) ne rend pas `work` : `record-applied` échoue, et
+  le lien source → digest placé manque au journal] → l'enfant échoue et se voit ; le placement
+  lui-même n'est pas refait (le tag est déjà là), seul ce lien manque.
+- [Un enfant relancé après que l'instantané a quitté le dépôt d'artefacts part d'une copie vide, et
+  `uske export` refuse : le compte `snapshot-lines` ne correspond plus] → la panne se voit ;
+  relancer un screening entier.
+- [Un nom de politique sert aussi de valeur de label, bornée à 63 caractères] → `policies.load`
+  borne le nom à 63.
 - [Une ligne écrite à la main entre l'instantané et la fusion rend périmée une ligne de l'enfant]
   → `results.append` ne l'écrit pas et le dit ; c'est la règle « le journal n'avance que vers
   l'avant ».

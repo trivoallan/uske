@@ -589,8 +589,8 @@ class Names(Fakes):
         for name, valid in [
             ("base.debian", True),
             ("a-4711-redis-7", True),
-            ("x" * 253, True),
-            ("x" * 254, False),
+            ("x" * 63, True),
+            ("x" * 64, False),
             ("../x", False),
             ("Upper", False),
             ("a;b", False),

@@ -148,3 +148,19 @@ Markdown s'il existe, le HTML sinon, par un chemin relatif à `--results`.
 - **WHEN** `uske screen` consigne le verdict de l'empreinte `sha256:abc…` de la politique `p`
 - **THEN** `reports/p/sha256:abc…/41.md` existe sous `--results`, et la ligne porte ce chemin en
   `report`
+
+### Requirement: Un nom de politique ne désigne jamais un chemin
+
+Le `metadata.name` d'une politique nomme des fichiers (journal, rapports, travail) et le label de
+son Workflow enfant : il MUST être un label DNS-1123 — minuscules, chiffres, `-` et `.`,
+commençant et finissant par un alphanumérique, 63 caractères au plus. Une politique dont le nom
+ne l'est pas MUST être refusée à la lecture : signalée `skipped:` par `--policies`, en `error:`
+et code 1 par `--policy`. Aucun chemin construit à partir d'un nom ou d'une empreinte MUST NOT
+sortir de `--work` ni de `--results`.
+
+#### Scenario: Un nom qui remonte l'arborescence
+
+- **GIVEN** une politique nommée `../x`, et un répertoire témoin à côté de `--work`
+- **WHEN** `uske screen --policy <fichier>` est lancée
+- **THEN** la commande sort avec le code 1, le répertoire témoin est intact, et aucun outil n'est
+  appelé

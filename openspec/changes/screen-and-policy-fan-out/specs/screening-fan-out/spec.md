@@ -46,14 +46,16 @@ sa branche.
 
 Aucun pod d'un Workflow enfant MUST NOT monter le volume `uske-results` ni un volume que monte un
 autre pod. Ce qui passe d'une étape de l'enfant à la suivante SHALL passer par les artefacts Argo,
-dans le dépôt d'artefacts que l'overlay déclare. Seule l'étape de fusion monte `uske-results`. Le
+dans le dépôt d'artefacts que l'overlay déclare. Seules deux étapes du parent montent
+`uske-results` : l'instantané, en lecture, et la fusion, la seule à l'écrire ; toutes deux sous le
+verrou `uske-journal`. Le
 stockage peut donc rester `ReadWriteOnce` quels que soient les plafonds.
 
 #### Scenario: Le rendu des manifestes
 
 - **WHEN** `deploy/base` est rendu par kustomize
-- **THEN** seul le template de fusion monte `uske-results`, et aucun template de `uske-policy` ne
-  déclare de volume persistant
+- **THEN** seuls les templates d'instantané (en lecture) et de fusion montent `uske-results`, et
+  aucun template de `uske-policy` ne déclare de volume persistant, hors sa fusion
 
 ### Requirement: Un enfant juge sur un instantané du journal de sa politique
 

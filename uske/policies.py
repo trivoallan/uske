@@ -12,7 +12,7 @@ TRACK_LABEL = "admission-track"
 # metadata.name names files and directories (journal, reports, work): a Kubernetes DNS-1123
 # subdomain, so never a path (`../x`) nor a shell word (`a;b`)
 NAME = re.compile(r"[a-z0-9]([-a-z0-9.]*[a-z0-9])?")
-NAME_MAX = 253
+NAME_MAX = 63  # also a label value on the policy's child Workflow (uske.io/policy)
 
 
 class PolicyError(Exception):
@@ -42,7 +42,7 @@ def load(path: str | Path) -> Policy:
     if not isinstance(name, str) or len(name) > NAME_MAX or not NAME.fullmatch(name):
         raise PolicyError(
             f"{path}: metadata.name {name!r} is not a DNS-1123 subdomain "
-            "(lowercase letters, digits, '-' and '.', at most 253 characters)"
+            "(lowercase letters, digits, '-' and '.', at most 63 characters)"
         )
     return Policy(meta["name"], path, (meta.get("labels") or {}).get(TRACK_LABEL), doc)
 
