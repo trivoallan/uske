@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.1](https://github.com/trivoallan/uske/compare/v0.9.0...v0.9.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* un rapport rejugé par uske screen n'écrase plus celui d'une décision antérieure ([#56](https://github.com/trivoallan/uske/issues/56)) ([c4bf159](https://github.com/trivoallan/uske/commit/c4bf159baefaa28f703b042b8218ffeaccbf50a9))
+
+
+### Documentation
+
+* proposer un rapport par jugement, jamais réécrit, et l'étape nommée au crochet ([#54](https://github.com/trivoallan/uske/issues/54)) ([5c77de6](https://github.com/trivoallan/uske/commit/5c77de68f14548e9f952586a84245d9a50a029e8))
+
 ## [0.9.0](https://github.com/trivoallan/uske/compare/v0.8.0...v0.9.0) (2026-10-17)
 
 
