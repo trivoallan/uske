@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/trivoallan/uske/compare/v0.9.1...v0.10.0) (2026-10-17)
+
+
+### Features
+
+* distribuer une base grype rafraîchie hors des screenings ([#57](https://github.com/trivoallan/uske/issues/57)) ([cf8f81a](https://github.com/trivoallan/uske/commit/cf8f81ac72f4f0b9a978011082d8bbfe38181fe8))
+* faire tourner les playbooks d'un autre dépôt sans modifier uske ([#60](https://github.com/trivoallan/uske/issues/60)) ([ee418dc](https://github.com/trivoallan/uske/commit/ee418dc7c5aa71eab627617fe46290aa53657b55))
+
 ## [0.9.1](https://github.com/trivoallan/uske/compare/v0.9.0...v0.9.1) (2026-10-17)
 
 
