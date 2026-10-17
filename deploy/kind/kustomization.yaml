@@ -1,6 +1,6 @@
 # Local environment: kind, Zot (TLS, self-signed CA, with its UI) for Harbor, the published regis
 # and knock. Every tool trusts the CA through SSL_CERT_FILE (a bundle: public CAs plus ours).
-# MinIO is the artifact repository the screening's children pass their work through.
+# RustFS (artifacts.yaml) is the S3 artifact repository the screening's children pass their work through.
 # `up.sh` creates the cluster, the images and the secrets, then applies this.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -8,7 +8,7 @@ namespace: uske
 resources:
   - ../base
   - registry.yaml
-  - minio.yaml
+  - artifacts.yaml
 images:
   - {name: uske, newName: uske, newTag: dev}
   - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:7c09aeae02b4bb039847690983f2ccf10a3307c38987eaffdce79b2720138315"}  # 0.41.0-full

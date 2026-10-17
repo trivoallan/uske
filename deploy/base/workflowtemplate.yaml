@@ -168,7 +168,7 @@ spec:
           - name: uske-journal
       inputs:
         artifacts:
-          - {name: listed, path: /tmp/listed.json}
+          - {name: listed, path: /tmp/listed.json, mode: 292}  # 0444: uske runs as non-root
       volumes:
         - name: results
           persistentVolumeClaim: {claimName: uske-results}
@@ -243,6 +243,8 @@ spec:
         artifacts:
           - name: lines  # <policy>/<created>-<child>.tgz per child that wrote; none at all is fine
             path: /tmp/out
+            mode: 511  # 0777: uske runs as non-root
+            recurseMode: true
             optional: true
             archive: {none: {}}
             s3: {key: "runs/{{workflow.name}}/out/"}
@@ -263,9 +265,11 @@ spec:
       inputs:
         parameters: [{name: merge}]
         artifacts:
-          - {name: expected, path: /tmp/expected.json}  # the snapshot's list of names
+          - {name: expected, path: /tmp/expected.json, mode: 292}  # the snapshot's list of names
           - name: done
             path: /tmp/done
+            mode: 511  # 0777: uske runs as non-root
+            recurseMode: true
             optional: true
             archive: {none: {}}
             s3: {key: "runs/{{workflow.name}}/done/"}
@@ -676,6 +680,8 @@ spec:
         artifacts:
           - name: snapshot  # absent on a first screening: an empty journal
             path: /tmp/snapshot
+            mode: 511  # 0777: uske runs as non-root
+            recurseMode: true
             optional: true
             s3: {key: "runs/{{workflow.parameters.run}}/snapshot.tgz"}
       volumes:
@@ -767,11 +773,15 @@ spec:
           - *work-in
           - name: lines  # none when nothing was owed a decision
             path: /tmp/judged/lines
+            mode: 511  # 0777: uske runs as non-root
+            recurseMode: true
             optional: true
             archive: {none: {}}
             s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/"}
           - name: reports
             path: /tmp/judged/reports
+            mode: 511  # 0777: uske runs as non-root
+            recurseMode: true
             optional: true
             archive: {none: {}}
             s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/reports/"}
@@ -806,7 +816,7 @@ spec:
           - {name: html, value: ""}  # where regis wrote it; empty for an unknown regime (D-21)
         artifacts:
           - *work-in
-          - {name: report, path: /tmp/report, optional: true}
+          - {name: report, path: /tmp/report, optional: true, mode: 511, recurseMode: true}
       container:
         image: uske
         command: [sh, -c]
@@ -856,7 +866,7 @@ spec:
           - secretRef: {name: uske-harbor}
       outputs:
         artifacts:
-          - {name: report, path: /tmp/report, optional: true}
+          - {name: report, path: /tmp/report, optional: true, mode: 511, recurseMode: true}
 
     - name: knock
       retryStrategy: *child-retry
@@ -907,6 +917,8 @@ spec:
         artifacts:
           - name: lines
             path: "/tmp/out/{{workflow.parameters.name}}"
+            mode: 511  # 0777: uske runs as non-root
+            recurseMode: true
             optional: true
             archive: {none: {}}
             s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}/"}

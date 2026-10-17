@@ -111,8 +111,8 @@ patches:
 No volume is shared. A child passes its work from step to step as Argo artifacts, on a copy of its
 policy's journal taken from the parent's snapshot, and uploads its new lines before any
 placement. The overlay must provide the artifact repository: the configmap
-`artifact-repositories`, key `default-v1` (S3 or MinIO; the bench installs MinIO,
-[`deploy/kind/minio.yaml`](../../deploy/kind/minio.yaml)). If it cannot be reached, nothing is
+`artifact-repositories`, key `default-v1` (any S3; the bench runs RustFS,
+[`deploy/kind/artifacts.yaml`](../../deploy/kind/artifacts.yaml)). If it cannot be reached, nothing is
 placed.
 
 After every child, failed ones included, the parent's `merge` step runs `uske merge`: the only
@@ -165,7 +165,7 @@ bucket that expires `runs/` after a few days, longer than you would take to `arg
 merge:
 
 ```bash
-mc ilm rule add --prefix runs/ --expire-days 7 <alias>/<bucket>   # MinIO; S3 has the same rule
+mc ilm rule add --prefix runs/ --expire-days 7 <alias>/<bucket>   # MinIO client; AWS S3 has the same rule
 ```
 
 Artifact GC needs the controller's finalizer on each Workflow and the `uske` account's right to

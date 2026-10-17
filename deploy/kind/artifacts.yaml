@@ -1,0 +1,61 @@
+# The artifact repository the screening's children pass their work through (change
+# `screen-and-policy-fan-out`, D9 and D10): a throwaway S3 store on an emptyDir, its bucket created
+# by Argo on first write. RustFS, because MinIO no longer publishes images and a posix gateway
+# (VersityGW) answers for `prefix/` as an object, which Argo then reads as an empty file instead
+# of a directory. Its credentials are the Secret `uske-artifacts`, created by up.sh.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: artifact-repositories
+  annotations:
+    workflows.argoproj.io/default-artifact-repository: default-v1
+data:
+  default-v1: |
+    s3:
+      bucket: uske
+      endpoint: artifacts:9000
+      createBucketIfNotPresent: {}
+      insecure: true
+      accessKeySecret: {name: uske-artifacts, key: accesskey}
+      secretKeySecret: {name: uske-artifacts, key: secretkey}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifacts
+spec:
+  selector:
+    matchLabels: {app: artifacts}
+  template:
+    metadata:
+      labels: {app: artifacts}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: s3
+          image: docker.io/rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+          env:
+            - {name: RUSTFS_VOLUMES, value: /data}
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: uske-artifacts, key: accesskey}}
+            - name: RUSTFS_SECRET_KEY
+              valueFrom: {secretKeyRef: {name: uske-artifacts, key: secretkey}}
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            tcpSocket: {port: 9000}
+            periodSeconds: 5
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: artifacts
+spec:
+  selector: {app: artifacts}
+  ports:
+    - port: 9000

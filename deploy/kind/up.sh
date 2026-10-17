@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local environment for the uske: kind + Argo Workflows + MinIO for its artifacts + a plain
+# Local environment for the uske: kind + Argo Workflows + an S3 gateway for its artifacts + a plain
 # registry for Harbor, the published regis and knock. Then one screening, started by hand.
 #
 #   deploy/kind/up.sh
@@ -197,14 +197,14 @@ kubectl -n "$NS" create secret generic uske-knock \
   --from-literal=COSIGN_PASSWORD= --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --from-literal=KNOCK_SBOM_FORMATS='["spdx-json","cyclonedx-json"]' \
   --dry-run=client -o yaml | kubectl apply -f -
-# The artifact repository's credentials (MinIO, minio.yaml): created once, never committed.
-kubectl -n "$NS" get secret uske-minio >/dev/null 2>&1 || kubectl -n "$NS" create secret generic uske-minio \
+# The artifact repository's credentials (artifacts.yaml): created once, never committed.
+kubectl -n "$NS" get secret uske-artifacts >/dev/null 2>&1 || kubectl -n "$NS" create secret generic uske-artifacts \
   --from-literal=accesskey=uske --from-literal=secretkey="$(openssl rand -hex 16)"
 kubectl -n "$NS" create secret generic uske-harbor \
   --from-literal=HARBOR_HOST="$REGISTRY" --from-literal=SSL_CERT_FILE=/etc/registry-ca/bundle.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 5. uske, the registry (Zot, for the node's architecture) and MinIO, the artifact repository a
+# 5. uske, the registry (Zot, for the node's architecture) and an S3 gateway, the artifact repository a
 #    screening's children pass their work through (with the configmap `artifact-repositories`,
 #    as in Argo's quick-start). The transit where rebuilds are held is a prefix of that same
 #    registry: it stands in for a private Harbor project, and Zot does not close it. Nothing is
@@ -212,7 +212,7 @@ kubectl -n "$NS" create secret generic uske-harbor \
 arch="$(docker exec "$CLUSTER-control-plane" uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')"
 kubectl kustomize "$HERE" | sed "s/zot-linux-arm64/zot-linux-$arch/" | kubectl apply -n "$NS" -f -
 kubectl -n "$NS" rollout status deploy/registry --timeout=120s
-kubectl -n "$NS" rollout status deploy/minio --timeout=120s
+kubectl -n "$NS" rollout status deploy/artifacts --timeout=120s
 
 # knock's public key becomes Zot's only trusted cosign key: a green badge then means "signed at
 # admission by knock", nothing else (design, decision 13).

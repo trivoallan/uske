@@ -113,16 +113,25 @@
   rendu de `deploy/base` (scénario *Le rendu des manifestes*) : seul le template de fusion monte
   `uske-results`, aucun template de `uske-policy` ne déclare de volume persistant, les deux
   `parallelism` valent 1. Il est lancé par `make lint` après `argo lint`.
-- [x] 4.6 `deploy/kind` : `up.sh` installe MinIO et le configmap `artifact-repositories` (D10) ;
+- [x] 4.6 `deploy/kind` : `up.sh` installe une passerelle S3 et le configmap `artifact-repositories` (D10) ;
   `kustomization.yaml` réécrit les patches par indice pour les deux templates (le `checkout` par
   copie `hostPath`, le CA et la clé de `knock` sur `knock`, `knock-once` et `regis-analyze` de
   l'enfant). Attendu : `kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline
   /tmp/uske.yaml` réussit.
-- [ ] 4.7 Sur le banc : `deploy/kind/up.sh`, puis `kubectl -n uske create -f
+- [x] 4.7 Sur le banc : `deploy/kind/up.sh`, puis `kubectl -n uske create -f
   deploy/kind/screening.yaml`, puis `argo -n uske wait @latest`. Attendu : un Workflow enfant par
   fichier de `deploy/kind/policies/` (`kubectl -n uske get wf -l uske.io/policy`), une fusion, et
   des lignes qui portent toutes le `run` du parent (scénarios *Trois politiques*, *Les lignes d'un
   screening se reconnaissent*, *Deux politiques, une fusion*).
+  Fait le 2026-10-17 sur le cluster `kind` `uske` existant, screening `uske-screening-bprqq` :
+  9 politiques, 9 enfants `Succeeded`, une fusion (`{"a-4711-redis-7": 2, …, "kind-redistribution": 6}`),
+  `summary` à `{"policies": 9, "failed": [], "merge": "Succeeded"}`, marque `.pending-merge` levée,
+  et les 20 lignes écrites portent toutes `run: uske-screening-bprqq`. Le banc a révélé trois
+  défauts, corrigés : les artefacts d'entrée illisibles par `uske` non root (`mode`), MinIO sans
+  image publiée et une passerelle posix (VersityGW) qui sert un préfixe `x/` comme un objet (le
+  banc passe à RustFS), et un fichier `._*.yaml` de macOS qui faisait planter `list` au lieu d'être
+  signalé `skipped:`. `a-6100-pause-3` n'a écrit aucune ligne : sa copie dans le registre du banc a
+  échoué dans `up.sh` (erreur passagère du registre), sans rapport avec ce change.
 - [x] 4.8 Commit : `feat(deploy): un Workflow enfant par politique, sans volume partagé`.
 
 ## 5. Documentation et clôture

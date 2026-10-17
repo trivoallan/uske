@@ -118,7 +118,7 @@ l'Opérabilité *renonce à* : le cluster les garde séparées, et le verbe ne s
 - Déploiement : `deploy/base/workflowtemplate.yaml` se scinde en un parent et un enfant
   (`uske-policy`) ; `deploy/base/cronworkflow.yaml` vise le parent ; un `Role` qui permet au compte
   `uske` de créer et lire des Workflows ; un dépôt d'artefacts déclaré par l'overlay ;
-  `deploy/kind` garde 1 et 1 et installe MinIO. Un verbe `uske merge`.
+  `deploy/kind` garde 1 et 1 et installe une passerelle S3. Un verbe `uske merge`.
 - Documentation : `README.md` (la règle « ne lance jamais », les verbes, les deux plafonds et le
   dépôt d'artefacts), `docs/architecture/arc42.md` (*Solution Strategy*, *Deployment View*, `RISK-05`,
   `DEBT-07`), un ADR.

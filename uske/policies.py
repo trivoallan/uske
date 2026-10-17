@@ -31,7 +31,7 @@ def load(path: str | Path) -> Policy:
     path = Path(path)
     try:
         doc = yaml.safe_load(path.read_text())
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise PolicyError(f"{path}: {exc}") from exc
     if not isinstance(doc, dict) or doc.get("kind") != "MirrorPolicy":
         raise PolicyError(f"{path}: not a MirrorPolicy")

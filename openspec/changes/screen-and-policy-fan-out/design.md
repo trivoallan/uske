@@ -217,9 +217,9 @@ délai d'un `argo retry`. Argo ne sait pas faire supprimer par le parent des obj
 `ReadWriteOnce` par enfant. La répartition des jugements serait bornée par un nœud, et le
 planificateur Kubernetes ferait attendre des pods sans le dire.
 
-### D10 — Le banc garde 1 et 1, gagne un MinIO, et ses patches suivent
+### D10 — Le banc garde 1 et 1, gagne une passerelle S3, et ses patches suivent
 
-`deploy/kind/up.sh` installe MinIO et le configmap `artifact-repositories` qui le désigne, comme
+`deploy/kind/up.sh` installe une passerelle S3 (RustFS : MinIO ne publie plus d'images, et une passerelle posix répond pour un préfixe `x/` comme pour un objet) et le configmap `artifact-repositories` qui le désigne, comme
 le fait le démarrage rapide d'Argo. `deploy/kind` remplace le `checkout` du parent et de l'enfant
 par sa copie depuis `hostPath`, et monte le CA et la clé de `knock` dans les templates de l'enfant.
 Ses patches visent aujourd'hui des indices (`/spec/templates/3`) que la scission déplace. Ils sont
@@ -389,7 +389,7 @@ support, `DEBT-08`, hors de ce change.
 2. Livrer la scission du template et le `Role`, plafonds à 1. Le parent garde le nom
    `uske-screening` : le `CronWorkflow` ne change pas. Un screening en cours finit sur la
    définition qu'il a déjà lue.
-3. Lancer le banc : `deploy/kind/up.sh` (avec MinIO), puis un screening ; vérifier un enfant par
+3. Lancer le banc : `deploy/kind/up.sh` (avec sa passerelle S3), puis un screening ; vérifier un enfant par
    politique, une fusion, et des journaux identiques à ceux d'avant la scission.
 4. Après le spike, un overlay de production pose ses plafonds et son dépôt d'artefacts.
 

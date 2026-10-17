@@ -605,6 +605,16 @@ class Names(Fakes):
                     with self.assertRaises(policies.PolicyError):
                         policies.load(path)
 
+    def test_a_file_that_is_not_text_is_skipped(self):
+        """A macOS `._x.yaml` (AppleDouble) next to the policies is reported, not a crash."""
+        root = self.tmp / "d"
+        self.write_policy(root, "kept")
+        (root / "._kept.yaml").write_bytes(b"\x00\x05\x16\x07\xa3\xff")
+        found, errors = policies.load_dir(root)
+        self.assertEqual([p.name for p in found], ["kept"])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("._kept.yaml", errors[0])
+
     def test_paths_never_leave_work_or_results_even_for_an_unchecked_name(self):
         """Belt and braces: a Policy built without `load` cannot escape either."""
         canary = self.tmp / "x"
