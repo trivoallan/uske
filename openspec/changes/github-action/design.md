@@ -205,9 +205,10 @@ par digest ce qu'il sait épingler. Le risque est accepté.
   annulé avant de commencer ne place rien. Deux politiques de noms différents écrivent deux fichiers
   différents, si bien que leur rebase ne conflit pas.
 - **Deux premiers runs simultanés** créent chacun une racine orpheline. Le push de naissance du
-  second est refusé (ce n'est pas une avance rapide), et l'étape de naissance ne rejoue pas : le run
-  échoue avant le screening, donc avant tout placement. Le relancer suffit, puisqu'il trouve alors
-  la branche.
+  second est refusé : l'étape relit alors la branche distante et, si elle existe désormais, jette
+  sa racine locale et clone la branche ; sinon, elle échoue. Une matrice qui lance N politiques sur
+  un dépôt neuf converge donc dès le premier run (revue finale, 2026-10-17 ; la version d'avant,
+  qui échouait sans rejouer, rendait la recette de matrice du guide fausse au premier jour).
 
 Un push fait avec `GITHUB_TOKEN` ne déclenche pas d'autre workflow : il n'y a donc pas de boucle.
 Alternatives écartées : la branche par défaut (protégée), et un dépôt séparé (il faudrait un jeton
