@@ -71,7 +71,7 @@ interface.
 **Fichiers :** à créer, `tests/test_screen_workflow.py` et `.github/workflows/extra-screen.yml`
 (squelette, complété au groupe 3).
 
-- [ ] 2.1 Écrire le test, qui échoue tant que le workflow n'existe pas :
+- [x] 2.1 Écrire le test, qui échoue tant que le workflow n'existe pas :
   ```python
   """Le workflow réutilisable `extra-screen.yml` : ses scripts, rejoués contre un dépôt nu.
 
@@ -283,9 +283,9 @@ interface.
       def test_a_1x_version_moves_the_major(self) -> None:
           self.assertEqual(self.tag_for("1.2.0"), "tag=v1")
   ```
-- [ ] 2.2 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
+- [x] 2.2 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
   Attendu : échec à la collecte ou dans chaque `setUp`, `FileNotFoundError: … extra-screen.yml`.
-- [ ] 2.3 Les tests passent au groupe 3, une fois le workflow écrit. Commit, tests seuls :
+- [x] 2.3 Les tests passent au groupe 3, une fois le workflow écrit. Commit, tests seuls :
   `test: décrire le workflow GitHub de screening avant de l'écrire`.
 
 ## 3. Le workflow réutilisable
