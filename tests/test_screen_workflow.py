@@ -547,20 +547,6 @@ class Shape(unittest.TestCase):
             names.index("Remplir la base grype une fois par jour"), steps.index(save)
         )
 
-    def test_each_attempt_keeps_its_own_reports(self) -> None:
-        # Exigence « les rapports partent en archive attachée au run » : un job rejoué ne se
-        # heurte pas au nom de l'archive de la tentative précédente, ni ne l'efface.
-        upload = next(
-            s
-            for s in self.screen["steps"]
-            if s.get("uses", "").startswith("actions/upload-artifact@")
-        )
-        self.assertEqual(
-            upload["with"]["name"],
-            "uske-reports-${{ needs.name.outputs.name }}-${{ github.run_attempt }}",
-        )
-        self.assertNotIn("overwrite", upload["with"])
-
     def test_buildkit_listens_on_loopback_only(self) -> None:
         self.assertIn(
             "-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"]

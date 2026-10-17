@@ -268,8 +268,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          # Une archive par tentative : un job rejoué ne heurte ni n'efface la précédente.
-          name: uske-reports-${{ needs.name.outputs.name }}-${{ github.run_attempt }}
+          # Un job rejoué supprime l'archive de sa tentative précédente, quel que soit son nom
+          # (sonde du 2026-10-17) : un suffixe de tentative ne la garderait pas (RISK-13).
+          name: uske-reports-${{ needs.name.outputs.name }}
           path: ${{ runner.temp }}/reports.tar
           retention-days: ${{ inputs.report-retention-days }}
           if-no-files-found: ignore

@@ -239,13 +239,19 @@ Each journal line for a verdict or a placement has a `run` field, the URL of the
 To find the report for a line:
 
 1. Open the run from the `run` URL.
-2. Download the artifact `uske-reports-<policy name>-<attempt>`. It holds `reports.tar`. A re-run
-   job uploads one artifact per attempt; the line's report is in the attempt that wrote it.
+2. Download the artifact `uske-reports-<policy name>`. It holds `reports.tar`.
 3. Extract it. Each report sits at the path the journal line cites, relative to the journal.
 
 The artifact lives for `report-retention-days` days, 90 by default. GitHub caps it at 90 days on a
 public repository; a private repository can keep it longer, up to the limit its settings allow. After that the journal line still records the state, the playbook and the reason
 (see [journal states and reasons](../reference/reasons.md)); the full report is gone.
+
+## Start a new run instead of re-running a job
+
+Re-running the `screen` job deletes the reports artifact of the attempt before it. The journal
+lines that attempt pushed stay, and keep their state, playbook and reason, but their reports are
+gone. To screen again, start a new run, for example from `workflow_dispatch`: each run keeps its
+own artifact.
 
 ## Avoid parallel runs on one policy
 

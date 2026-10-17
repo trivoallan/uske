@@ -31,9 +31,11 @@ sans clé. La revue finale l'a jugé prêt, en laissant six points :
 - **Cache grype sauvé tôt** : `actions/cache/restore`, puis `actions/cache/save` juste après le
   remplissage, sur un manque de cache seulement. La base est sauvée avant le screening, donc même
   si le job échoue ensuite.
-- **Archive par tentative** : l'archive s'appelle `uske-reports-<nom>-<run_attempt>`, si le
-  rejeu sur le banc confirme le conflit. `overwrite: true` est écarté : il effacerait les rapports
-  de la tentative précédente, que citent déjà des lignes du journal (même `run`).
+- **Archive au rejeu** : vérifié par une sonde sur la PR (2026-10-17). Rejouer un job ne heurte
+  aucun nom, mais **supprime l'archive de la tentative précédente**, quel que soit son nom : un
+  suffixe `run_attempt` ne la garde pas. Le nom ne change donc pas. La perte des rapports cités par
+  la tentative rejouée est consignée (`RISK-13`), et le guide dit de lancer un nouveau run plutôt
+  que de rejouer un job qui a jugé. Garder les rapports hors de l'archive du run est une suite.
 - **Dépendances d'`uske`** : accepté et consigné. `uske` n'a qu'une dépendance, `pyyaml>=6.0.2`,
   sans dépendance propre ; l'épingler demanderait de reconstruire `uv.lock` côté appelant pour un
   seul paquet.
@@ -46,6 +48,5 @@ sans clé. La revue finale l'a jugé prêt, en laissant six points :
   `tests/test_screen_workflow.py`, `examples/github/playbooks/`.
 - Docs : `docs/how-to/screen-from-github.md`, `docs/reference/screen-workflow.md`,
   `docs/architecture/arc42.md` (sections 7 et 11).
-- Interface publique : le nom de l'archive change (le suffixe de tentative). Aucune entrée ne
-  change.
+- Interface publique : rien ne change, ni entrée ni nom d'archive.
 - Secrets du dépôt `uske` : deux secrets de banc, créés avec l'accord de Tristan.

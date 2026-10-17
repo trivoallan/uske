@@ -50,7 +50,7 @@ The workflow has no outputs. It produces:
 | Product | Where | Content |
 | --- | --- | --- |
 | Journal | Branch `journal-branch`, cloned under `$RUNNER_TEMP`, outside your checkout | `<metadata.name>.jsonl`. Each line carries `run`, the URL of the run. |
-| Reports | Artifact `uske-reports-<metadata.name>-<attempt>` | `reports.tar`, holding `reports/<name>/<digest>/…`. `<attempt>` is `github.run_attempt`: a re-run job uploads its own artifact and keeps the earlier ones. Kept `report-retention-days` days, at most 90 on a public repository. |
+| Reports | Artifact `uske-reports-<metadata.name>` | `reports.tar`, holding `reports/<name>/<digest>/…`. Re-running the job deletes the artifact of its earlier attempt (RISK-13). Kept `report-retention-days` days, at most 90 on a public repository. |
 
 ## Concurrency
 

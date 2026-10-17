@@ -14,12 +14,13 @@ commit n'ont pas de portée (SDR-0017). Chaque tâche : test d'abord dans
 
 ## Tâches
 
-- [ ] 1. Rejouer le job `screen` d'un run vert du banc, et noter si l'upload entre en conflit.
-      Rejeu du run 39025651106 (2026-10-17) : vert, mais sans preuve — aucune empreinte due, donc
-      aucun rapport ni archive aux deux tentatives. À éprouver par une sonde sur la PR.
+- [x] 1. Rejouer le job `screen` d'un run vert du banc, et noter si l'upload entre en conflit.
+      Rejeu du run 39025651106 : vert, mais sans preuve (aucune empreinte due, aucune archive).
+      Sonde sur la PR (runs 39026356045, 39026418538) : pas de conflit ; le rejeu supprime
+      l'archive de la tentative 1, nom fixe ou suffixé (`RISK-13`).
 - [x] 2. `RESULTS` sous `$RUNNER_TEMP/uske-results` ; l'étape finale lit `$RESULTS`.
 - [x] 3. `actions/cache/restore` et `actions/cache/save` (sur manque de cache), au même SHA.
-- [ ] 4. Archive `uske-reports-<nom>-<run_attempt>` si la tâche 1 confirme le conflit.
+- [x] 4. Pas de suffixe : aucun conflit, et il ne garderait rien. `RISK-13` et le guide.
 - [x] 5. Consigner l'absence d'épinglage des dépendances d'`uske` (arc42, section 11).
 - [x] 6. Retirer `examples/github/playbooks/admission/` ; test : seuls des fichiers de piste.
 - [ ] 7. Banc : entrée `signer`, secrets `BENCH_COSIGN_KEY` et `BENCH_COSIGN_PASSWORD` (accord de
