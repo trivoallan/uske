@@ -71,19 +71,19 @@
 
 ## 5. Page des raisons
 
-- [ ] 5.1 `git mv docs/reference/raisons.md docs/reference/reasons.md`. Dans
+- [x] 5.1 `git mv docs/reference/raisons.md docs/reference/reasons.md`. Dans
   `tests/test_reasons.py`, changer `PAGE` en `"reasons.md"` et le message en
   `regenerate: uv run python -m uske.outcomes > docs/reference/reasons.md`.
-- [ ] 5.2 Traduire en anglais les textes de `REASONS` et l'en-tête que produit
+- [x] 5.2 Traduire en anglais les textes de `REASONS` et l'en-tête que produit
   `outcomes.reference()` dans `uske/outcomes.py`, avec les termes du glossaire (tâche 3). Les codes
   et les noms de tiers (`Placement direct`, `Transformation requise puis placement`, `Quarantaine`)
   restent tels quels, et le texte de `regis/unknown-tier` dit que ce sont les noms écrits par les
   playbooks.
-- [ ] 5.3 `uv run python -m uske.outcomes > docs/reference/reasons.md`, puis
+- [x] 5.3 `uv run python -m uske.outcomes > docs/reference/reasons.md`, puis
   `uv run --with pyyaml python -m unittest tests.test_reasons -v`. Attendu : `OK`.
-- [ ] 5.4 Dans `README.md` (et toute autre page trouvée par `git grep -n raisons.md`), pointer vers
+- [x] 5.4 Dans `README.md` (et toute autre page trouvée par `git grep -n raisons.md`), pointer vers
   `docs/reference/reasons.md`. Attendu : `git grep -n raisons.md -- ':!openspec'` ne rend rien.
-- [ ] 5.5 Commit : `docs(reference): la page des raisons en anglais`.
+- [x] 5.5 Commit : `docs(reference): la page des raisons en anglais`.
 
 ## 6. Pages
 

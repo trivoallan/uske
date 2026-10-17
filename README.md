@@ -79,7 +79,7 @@ admission decision written down where it can be contested.
 Everything lives in [`docs/`](docs/):
 [operate uske](docs/how-to/operate.md) ·
 [how it works](docs/explanation/how-it-works.md) ·
-[journal states and reasons](docs/reference/raisons.md) ·
+[journal states and reasons](docs/reference/reasons.md) ·
 [architecture](docs/architecture/arc42.md) ·
 [decisions](docs/adr/).
 
