@@ -294,7 +294,7 @@ interface.
 ceux de `ci.yml` et `release.yml`. `upload-artifact` est nouveau : il est épinglé ici par SHA, et
 Renovate le suivra.
 
-- [ ] 3.1 Écrire le fichier :
+- [x] 3.1 Écrire le fichier :
   ```yaml
   # Workflow réutilisable : crible une politique d'un dépôt appelant par `uske screen`
   # (change github-action). Son nom et ses entrées sont une interface publique : les renommer
@@ -513,13 +513,13 @@ Renovate le suivra.
   ```
   La tâche 1 a retenu `-full` et montré que la base grype se télécharge à chaque jugement : le
   cache quotidien ci-dessus (étapes `grype-date`, `actions/cache` et « Remplir ») suit D2.
-- [ ] 3.2 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
+- [x] 3.2 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
   Attendu : `16 passed, 2 failed` ; les deux échecs sont ceux de `MovingTag`
   (`FileNotFoundError` sur `extra-major-tag.yml`), réparés au groupe 4.
-- [ ] 3.3 Lancer : `actionlint .github/workflows/extra-screen.yml`. Attendu : aucune sortie,
+- [x] 3.3 Lancer : `actionlint .github/workflows/extra-screen.yml`. Attendu : aucune sortie,
   code 0.
-- [ ] 3.4 Lancer : `make lint`. Attendu : code 0.
-- [ ] 3.5 Commit : `feat: cribler une politique depuis GitHub Actions par un workflow réutilisable`.
+- [x] 3.4 Lancer : `make lint`. Attendu : code 0.
+- [x] 3.5 Commit : `feat: cribler une politique depuis GitHub Actions par un workflow réutilisable`.
 
 ## 4. Version écrite par Release Please, et étiquette mobile
 

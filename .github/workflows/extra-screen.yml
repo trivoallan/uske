@@ -1,0 +1,214 @@
+# Workflow réutilisable : crible une politique d'un dépôt appelant par `uske screen`
+# (change github-action). Son nom et ses entrées sont une interface publique : les renommer
+# casse les appelants. Guide : docs/how-to/screen-from-github.md.
+name: uske screen
+
+on:
+  workflow_call:
+    inputs:
+      policy:
+        description: chemin de la politique dans le dépôt appelant
+        type: string
+        required: true
+      registries:
+        description: KNOCK_REGISTRIES, JSON sans identifiants
+        type: string
+        required: true
+      transit:
+        description: nom, dans registries, du registre de transit ; vide, rien n'est réparé
+        type: string
+        default: ""
+      playbooks:
+        description: répertoire des playbooks dans le dépôt appelant
+        type: string
+        default: playbooks
+      journal-branch:
+        description: branche du dépôt appelant où vit le journal
+        type: string
+        default: uske-journal
+      report-retention-days:
+        description: durée de vie de l'archive des rapports, en jours
+        type: number
+        default: 90
+      uske-ref:
+        description: réservé au banc de ce dépôt ; installe uske depuis ce commit
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  USKE_VERSION: 0.9.1 # x-release-please-version
+  # renovate: datasource=docker depName=ghcr.io/trivoallan/regis
+  REGIS_VERSION: 0.41.0
+  # renovate: datasource=docker depName=ghcr.io/trivoallan/knock
+  KNOCK_VERSION: 0.16.0
+  # renovate: datasource=docker depName=moby/buildkit
+  BUILDKIT_VERSION: v0.34.0
+
+jobs:
+  name:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.name.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - id: name
+        env:
+          POLICY: ${{ inputs.policy }}
+          USKE_REF: ${{ inputs.uske-ref }}
+        run: |
+          uv tool install -q "git+https://github.com/trivoallan/uske@${USKE_REF:-v$USKE_VERSION}"
+          name="$(uske list --policies "$(dirname -- "$POLICY")" | jq -r --arg f "$(basename -- "$POLICY")" \
+            '.[] | select(.path | split("/") | last == $f) | .name')"
+          [ -n "$name" ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+  screen:
+    needs: name
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    concurrency:
+      group: uske-screen-${{ needs.name.outputs.name }}
+      cancel-in-progress: false
+    env:
+      NAME: ${{ needs.name.outputs.name }}
+      JOURNAL_BRANCH: ${{ inputs.journal-branch }}
+      JOURNAL_REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RESULTS: ${{ github.workspace }}/results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: Installer uske
+        env:
+          USKE_REF: ${{ inputs.uske-ref }}
+        run: uv tool install -q "git+https://github.com/trivoallan/uske@${USKE_REF:-v$USKE_VERSION}"
+      - name: Poser l'identité git
+        run: |
+          git config --global user.name "uske"
+          git config --global user.email "uske@users.noreply.github.com"
+      - id: scripts
+        name: Écrire les scripts du journal
+        env:
+          BIRTH: |
+            #!/bin/sh
+            # Extrait la branche du journal sous $RESULTS, ou la fait naître orpheline.
+            # Un push refusé n'est pas rejoué : deux premiers runs simultanés, le second échoue
+            # ici, avant tout placement.
+            set -eu
+            auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+            if git -c "http.extraheader=$auth" ls-remote --exit-code --heads "$JOURNAL_REMOTE" "$JOURNAL_BRANCH" >/dev/null; then
+              git -c "http.extraheader=$auth" clone -q --single-branch --branch "$JOURNAL_BRANCH" "$JOURNAL_REMOTE" "$RESULTS"
+            else
+              rc=$?
+              [ "$rc" -eq 2 ] || exit "$rc"
+              git init -q -b "$JOURNAL_BRANCH" "$RESULTS"
+              printf 'reports/\n' > "$RESULTS/.gitignore"
+              git -C "$RESULTS" add .gitignore
+              git -C "$RESULTS" -c commit.gpgsign=false commit -q -m "journal : naissance de la branche"
+              git -C "$RESULTS" remote add origin "$JOURNAL_REMOTE"
+              git -C "$RESULTS" -c "http.extraheader=$auth" push -q origin "HEAD:$JOURNAL_BRANCH"
+            fi
+          HOOK: |
+            #!/bin/sh
+            # USKE_AFTER_RECORD : commite le journal de la politique et le pousse ; trois rebases
+            # au plus. Un échec arrête la politique, sans rien placer de plus (SDR-0021).
+            set -eu
+            auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+            g() { git -C "$USKE_RESULTS" -c commit.gpgsign=false -c "http.extraheader=$auth" "$@"; }
+            g add -- "$USKE_POLICY.jsonl"
+            g diff --cached --quiet || g commit -q -m "journal ($USKE_POLICY) : $USKE_STEP, $RUN_URL"
+            for attempt in 1 2 3; do
+              g push -q origin "HEAD:$JOURNAL_BRANCH" && exit 0
+              g pull -q --rebase origin "$JOURNAL_BRANCH" || { g rebase --abort 2>/dev/null || true; exit 1; }
+            done
+            g push -q origin "HEAD:$JOURNAL_BRANCH"
+        run: |
+          printf '%s' "$BIRTH" > "$RUNNER_TEMP/journal-birth.sh"
+          printf '%s' "$HOOK" > "$RUNNER_TEMP/after-record.sh"
+          chmod +x "$RUNNER_TEMP/journal-birth.sh" "$RUNNER_TEMP/after-record.sh"
+      - name: Extraire ou faire naître la branche du journal
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/journal-birth.sh"'
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: tools
+        name: Tirer les images et lancer BuildKit
+        run: |
+          docker pull -q "ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
+          docker pull -q "ghcr.io/trivoallan/knock:$KNOCK_VERSION"
+          docker run -d --name buildkitd --privileged -p 127.0.0.1:1234:1234 \
+            "moby/buildkit:$BUILDKIT_VERSION" --addr tcp://0.0.0.0:1234
+      - id: grype-date
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/grype-db
+          key: grype-db-${{ steps.grype-date.outputs.day }}
+      - name: Remplir la base grype une fois par jour
+        run: |
+          G="$RUNNER_TEMP/grype-db"
+          mkdir -p "$G"
+          [ -n "$(ls -A "$G")" ] || docker run --rm --user "$(id -u):$(id -g)" -v "$G:/grype-db" \
+            -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_CHECK_FOR_APP_UPDATE=false \
+            --entrypoint grype "ghcr.io/trivoallan/regis:$REGIS_VERSION-full" db update
+      - name: Composer les commandes du juge et du placeur
+        run: |
+          W="$GITHUB_WORKSPACE"; T="$RUNNER_TEMP/uske-work"; U="$(id -u):$(id -g)"
+          C="$HOME/.docker/config.json"
+          mkdir -p "$T"
+          common="docker run --rm --network host --user $U -v $W:$W -v $T:$T -w $W"
+          {
+            echo "USKE_REGIS_CMD=$common -v $C:/home/regis/.docker/config.json:ro -v $RUNNER_TEMP/grype-db:/grype-db -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_DB_AUTO_UPDATE=false -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
+            echo "USKE_KNOCK_CMD=$common -v $C:/tmp/.docker/config.json:ro -e KNOCK_REGISTRIES -e BUILDKIT_HOST=tcp://127.0.0.1:1234 ghcr.io/trivoallan/knock:$KNOCK_VERSION"
+            echo "USKE_AFTER_RECORD=$RUNNER_TEMP/after-record.sh"
+            echo "USKE_WORK=$T"
+          } >> "$GITHUB_ENV"
+      - name: Cribler
+        env:
+          POLICY: ${{ inputs.policy }}
+          PLAYBOOKS: ${{ inputs.playbooks }}
+          TRANSIT: ${{ inputs.transit }}
+          KNOCK_REGISTRIES: ${{ inputs.registries }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -- --policy "$POLICY" --results "$RESULTS" --work "$USKE_WORK" \
+            --playbooks "$PLAYBOOKS" --run "$RUN_URL"
+          [ -z "$TRANSIT" ] || set -- "$@" --transit "$TRANSIT"
+          uske screen "$@"
+      - id: final
+        name: Pousser le journal une dernière fois
+        if: always() && steps.scripts.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          USKE_POLICY: ${{ needs.name.outputs.name }}
+          USKE_RESULTS: ${{ github.workspace }}/results
+          USKE_STEP: final
+        run: |
+          [ -f "$USKE_RESULTS/$USKE_POLICY.jsonl" ] || exit 0
+          "$RUNNER_TEMP/after-record.sh"
+      - name: Archiver les rapports
+        if: always()
+        run: |
+          [ ! -d "$RESULTS/reports" ] || tar -C "$RESULTS" -cf "$RUNNER_TEMP/reports.tar" reports
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: uske-reports-${{ needs.name.outputs.name }}
+          path: ${{ runner.temp }}/reports.tar
+          retention-days: ${{ inputs.report-retention-days }}
+          if-no-files-found: ignore

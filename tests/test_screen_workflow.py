@@ -61,9 +61,14 @@ class Scripts(unittest.TestCase):
         }
 
     def run_script(self, name: str, results: Path, **extra: str) -> int:
-        env = {**self.env, "RESULTS": str(results), "USKE_RESULTS": str(results), **extra}
+        env = {
+            **self.env,
+            "RESULTS": str(results),
+            "USKE_RESULTS": str(results),
+            **extra,
+        }
         return subprocess.run(
-            [str(self.tmp / f"{name}.sh")], env=env, capture_output=True
+            [str(self.tmp / f"{name}.sh")], check=False, env=env, capture_output=True
         ).returncode
 
     def born(self, name: str) -> Path:
@@ -72,8 +77,14 @@ class Scripts(unittest.TestCase):
         return results
 
     def remote_files(self) -> list[str]:
-        return git("--git-dir", str(self.remote), "ls-tree", "-r", "--name-only",
-                   "uske-journal").split()
+        return git(
+            "--git-dir",
+            str(self.remote),
+            "ls-tree",
+            "-r",
+            "--name-only",
+            "uske-journal",
+        ).split()
 
     def record(self, results: Path, policy: str) -> int:
         with (results / f"{policy}.jsonl").open("a") as journal:
@@ -84,8 +95,9 @@ class Scripts(unittest.TestCase):
         results = self.born("r1")
         self.assertEqual(self.remote_files(), [".gitignore"])
         self.assertEqual((results / ".gitignore").read_text(), "reports/\n")
-        roots = git("--git-dir", str(self.remote), "rev-list", "--max-parents=0",
-                    "uske-journal").split()
+        roots = git(
+            "--git-dir", str(self.remote), "rev-list", "--max-parents=0", "uske-journal"
+        ).split()
         self.assertEqual(len(roots), 1)
 
     def test_an_existing_branch_is_read(self) -> None:
@@ -140,28 +152,40 @@ class Shape(unittest.TestCase):
 
     def test_inputs_never_reach_a_script_text(self) -> None:
         for s in self.all_steps():
-            scripts = [v for v in (s.get("env") or {}).values()
-                       if isinstance(v, str) and "\n" in v]
+            scripts = [
+                v
+                for v in (s.get("env") or {}).values()
+                if isinstance(v, str) and "\n" in v
+            ]
             for text in [s.get("run", ""), *scripts]:
                 self.assertNotIn("${{", text, s.get("name"))
 
     def test_the_tools_never_receive_the_token(self) -> None:
-        compose = next(s for s in self.all_steps()
-                       if s.get("name") == "Composer les commandes du juge et du placeur")
+        compose = next(
+            s
+            for s in self.all_steps()
+            if s.get("name") == "Composer les commandes du juge et du placeur"
+        )
         self.assertNotIn("GITHUB_TOKEN", compose["run"])
         self.assertNotIn("extraheader", compose["run"])
 
     def test_permissions_are_the_least(self) -> None:
         self.assertEqual(self.workflow["permissions"], {})
-        self.assertEqual(self.workflow["jobs"]["name"]["permissions"], {"contents": "read"})
-        self.assertEqual(self.screen["permissions"],
-                         {"contents": "write", "packages": "write"})
+        self.assertEqual(
+            self.workflow["jobs"]["name"]["permissions"], {"contents": "read"}
+        )
+        self.assertEqual(
+            self.screen["permissions"], {"contents": "write", "packages": "write"}
+        )
 
     def test_the_lock_is_the_policy_name(self) -> None:
-        self.assertEqual(self.screen["concurrency"], {
-            "group": "uske-screen-${{ needs.name.outputs.name }}",
-            "cancel-in-progress": False,
-        })
+        self.assertEqual(
+            self.screen["concurrency"],
+            {
+                "group": "uske-screen-${{ needs.name.outputs.name }}",
+                "cancel-in-progress": False,
+            },
+        )
 
     def test_no_checkout_keeps_the_token(self) -> None:
         for s in self.all_steps():
@@ -174,19 +198,31 @@ class Shape(unittest.TestCase):
         self.assertIn("after-record.sh", final["run"])
 
     def test_regis_reads_the_shared_grype_db(self) -> None:
-        compose = next(s for s in self.all_steps()
-                       if s.get("name") == "Composer les commandes du juge et du placeur")
-        for flag in ("GRYPE_DB_CACHE_DIR=/grype-db", "GRYPE_DB_AUTO_UPDATE=false",
-                     "GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h", "GRYPE_CHECK_FOR_APP_UPDATE=false"):
+        compose = next(
+            s
+            for s in self.all_steps()
+            if s.get("name") == "Composer les commandes du juge et du placeur"
+        )
+        for flag in (
+            "GRYPE_DB_CACHE_DIR=/grype-db",
+            "GRYPE_DB_AUTO_UPDATE=false",
+            "GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h",
+            "GRYPE_CHECK_FOR_APP_UPDATE=false",
+        ):
             self.assertIn(flag, compose["run"])
 
     def test_buildkit_listens_on_loopback_only(self) -> None:
-        self.assertIn("-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"])
+        self.assertIn(
+            "-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"]
+        )
 
     def test_each_image_version_is_followed_by_renovate(self) -> None:
         lines = SCREEN.read_text().splitlines()
-        versions = [i for i, line in enumerate(lines)
-                    if re.match(r"\s+(REGIS|KNOCK|BUILDKIT)_VERSION:", line)]
+        versions = [
+            i
+            for i, line in enumerate(lines)
+            if re.match(r"\s+(REGIS|KNOCK|BUILDKIT)_VERSION:", line)
+        ]
         self.assertEqual(len(versions), 3)
         for i in versions:
             self.assertRegex(lines[i - 1], r"# renovate: datasource=docker depName=\S+")
@@ -198,8 +234,11 @@ class MovingTag(unittest.TestCase):
     def tag_for(self, version: str) -> str:
         script = step(load(MAJOR_TAG), "tag", "name")["run"]
         with tempfile.NamedTemporaryFile("r") as out:
-            subprocess.run(["sh", "-c", script], check=True,
-                           env={**os.environ, "VERSION": version, "GITHUB_OUTPUT": out.name})
+            subprocess.run(
+                ["sh", "-c", script],
+                check=True,
+                env={**os.environ, "VERSION": version, "GITHUB_OUTPUT": out.name},
+            )
             return out.read().strip()
 
     def test_a_0x_version_moves_the_minor(self) -> None:
