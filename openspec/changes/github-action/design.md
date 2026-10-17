@@ -70,8 +70,10 @@ Entrées :
 | `playbooks` | `playbooks` | répertoire des playbooks dans le dépôt appelant |
 | `journal-branch` | `uske-journal` | branche où vit le journal |
 | `report-retention-days` | `90` | durée de vie de l'artefact des rapports |
+| `package-mirrors` | vide | `KNOCK_TRANSFORM_PACKAGE_MIRRORS` : JSON non secret des miroirs que nomme `rewritePackageSources` ; vide, une source à réparer finit en quarantaine (`uske/remediation-undeclared`) |
 | `registry-username` | vide (l'acteur du run) | utilisateur du registre, avec le secret ci-dessous |
 | secret `registry-token` | absent (`GITHUB_TOKEN`) | jeton du registre ; seul à atteindre le juge et le placeur |
+| secrets `cosign-key`, `cosign-password` | absents (signature sans clé) | clé de signature du placeur (D2bis) |
 
 Aucune entrée ne remplace une image : le trio est épinglé (D3). Les identifiants de registre ne
 passent pas par les entrées : `docker login` les écrit dans `config.json` (D2).
@@ -134,6 +136,23 @@ job screen   needs: name ; concurrency: uske-screen-<name>, cancel-in-progress: 
   `GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h` et `GRYPE_CHECK_FOR_APP_UPDATE=false`, comme dans le
   cluster. On télécharge ainsi au plus une fois par jour et par dépôt, au lieu d'une fois par
   empreinte.
+
+### D2bis — Le placeur signe : sans clé par défaut, par clé sur demande
+
+`uske` remet toujours au placeur une politique `admit: true`, et `knock` refuse de la planifier
+sans signataire (`KNOCK_ATTEST_SIGNER`) ; dans le cluster, le secret `uske-knock` le fournit. Le
+banc l'a montré (run 39018191729). Tranché par Tristan le 2026-10-17 :
+
+- **Par défaut, sans clé.** Le job `screen` demande `id-token: write`, et l'appelant doit l'accorder.
+  Le préfixe de `knock` reçoit `-e KNOCK_ATTEST_SIGNER=keyless` et, par leur seul nom,
+  `-e ACTIONS_ID_TOKEN_REQUEST_URL -e ACTIONS_ID_TOKEN_REQUEST_TOKEN`, d'où `cosign` tire l'identité
+  OIDC du run. Les signatures vont à Fulcio et Rekor publics : la démonstration reste sans secret.
+- **Par clé, si l'appelant fournit `cosign-key`** (et `cosign-password`). Une étape écrit la clé
+  dans `$RUNNER_TEMP/cosign.key` (mode 600), montée en lecture seule dans le seul conteneur de
+  `knock` ; le préfixe porte `-e KNOCK_ATTEST_SIGNER=key -e KNOCK_ATTEST_KEY_REF=<chemin monté>
+  -e COSIGN_PASSWORD`. Pour qui ne peut pas inscrire ses noms d'images dans un journal public.
+
+`package-mirrors` suit le même chemin, par nom seul : `-e KNOCK_TRANSFORM_PACKAGE_MIRRORS`.
 
 ### D3 — Un trio épinglé par version d'`uske`, suivi par Renovate sans toucher au socle
 
@@ -237,6 +256,8 @@ tient lieu.
   compromis pourrait écrire dans le dépôt appelant. Accepté pour la démonstration ; le guide
   demande un jeton de registre dédié, limité aux paquets, pour tout autre usage (revue de tâche des
   groupes 2-3, tranché par Tristan le 2026-10-17).
+- [La signature sans clé inscrit le nom de chaque image placée dans Rekor public] → C'est le prix
+  d'une démonstration sans secret ; le secret `cosign-key` l'évite (D2bis).
 - [Une étiquette d'image est republiée sous le même numéro] → Le risque est accepté (D3).
 - [Le nom `extra-screen.yml` et ses entrées deviennent une interface] → Retirer ou renommer une
   entrée est un changement cassant, noté dans le CHANGELOG.

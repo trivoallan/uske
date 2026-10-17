@@ -746,7 +746,7 @@ Renovate le suivra.
   propre ligne de verdict. Si aucune candidate ne ressort, revenir à la personne avant de continuer.
 - [x] 5.10 Chemin piégé. Lancer :
   `gh workflow run extra-screen-example.yml -f policy='x.yaml"; echo PWNED; "'`. Attendu : le job
-  `name` échoue, `PWNED` n'apparaît pas dans `gh run view <id> --log`, et le job `screen` ne tourne
+  `name` échoue, aucune ligne de `gh run view <id> --log` n'est `PWNED` seul (le mot ne figure que dans l'écho de l'entrée), et le job `screen` ne tourne
   pas.
 - [ ] 5.11 Commit des corrections que le banc a demandées, avec un message qui nomme le scénario.
 

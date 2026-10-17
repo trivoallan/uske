@@ -6,7 +6,8 @@ Le workflow réutilisable `.github/workflows/extra-screen.yml` SHALL se déclenc
 `workflow_call` et prendre deux entrées requises : `policy`, le chemin d'une politique dans le
 dépôt appelant, et `registries`, la liste des registres que reçoit le placeur
 (`KNOCK_REGISTRIES`, sans identifiants). Il SHALL prendre aussi `transit`, `playbooks` (défaut
-`playbooks`), `journal-branch` (défaut `uske-journal`) et `report-retention-days` (défaut `90`).
+`playbooks`), `journal-branch` (défaut `uske-journal`), `report-retention-days` (défaut `90`) et
+`package-mirrors` (défaut vide), que le placeur reçoit comme `KNOCK_TRANSFORM_PACKAGE_MIRRORS`.
 Il SHALL cribler cette seule politique par `uske screen --policy`, en passant à `--run` l'URL du
 run GitHub Actions, à `--work` un répertoire monté dans les conteneurs du juge et du placeur, et à
 `--playbooks` et `--transit` les entrées du même nom. Il MUST NOT recopier les étapes d'un
@@ -47,16 +48,39 @@ remplace l'une de ces images.
 - **THEN** les deux runs lancent les mêmes versions de `regis`, `knock` et BuildKit, et la même
   version d'`uske`
 
+### Requirement: Le placeur signe ce qu'il place
+
+Le workflow SHALL configurer la signature du placeur. Sans le secret facultatif `cosign-key`, il
+SHALL signer sans clé (`KNOCK_ATTEST_SIGNER=keyless`), avec l'identité OIDC du run : le job demande
+`id-token: write`, et seules les deux variables qui permettent de demander ce jeton atteignent le
+conteneur du placeur, par leur nom. Avec `cosign-key` (et `cosign-password`), il SHALL signer par
+clé (`KNOCK_ATTEST_SIGNER=key`) : la clé est écrite dans un fichier lisible du seul runner, monté
+en lecture seule dans le seul conteneur du placeur.
+
+#### Scenario: Sans clé
+
+- **GIVEN** un appel sans le secret `cosign-key`
+- **WHEN** le placeur place une image
+- **THEN** l'image est signée par l'identité OIDC du workflow appelé, et la signature est inscrite
+  au journal de transparence public
+
+#### Scenario: Avec une clé
+
+- **GIVEN** un appel qui fournit `cosign-key` et `cosign-password`
+- **WHEN** le placeur place une image
+- **THEN** l'image est signée par cette clé, et le conteneur du juge ne voit pas la clé
+
 ### Requirement: La reconstruction est disponible sur un runner hébergé
 
 Le workflow SHALL lancer un démon BuildKit joignable par le placeur, publié sur la seule boucle
 locale, de sorte qu'une politique qui demande une reconstruction ou une remédiation se conduise sur
-un runner hébergé par GitHub, sans autre déclaration de l'appelant que l'entrée `transit`.
+un runner hébergé par GitHub, sans autre déclaration de l'appelant que les entrées `transit` et
+`package-mirrors`.
 
 #### Scenario: Une source à réparer
 
-- **GIVEN** une politique dont le plan déclare une opération reconstruite, une entrée `transit`, et
-  `ubuntu-latest`
+- **GIVEN** une politique qui déclare une remédiation `rewritePackageSources`, une entrée `transit`,
+  une entrée `package-mirrors` qui nomme son miroir, et `ubuntu-latest`
 - **WHEN** le workflow la crible
 - **THEN** le placeur construit l'image par le démon lancé, et l'image retenue est jugée par sa
   propre empreinte avant toute promotion
@@ -180,7 +204,8 @@ SHALL échouer quand elle sort autrement.
 
 ### Requirement: Permissions au plus juste, jeton du dépôt hors des conteneurs, entrées hors des scripts
 
-Le workflow SHALL déclarer les seules permissions `contents: write` et `packages: write`. Il SHALL
+Le workflow SHALL déclarer les seules permissions `contents: write`, `packages: write` et
+`id-token: write`. Il SHALL
 accepter un secret facultatif `registry-token`, et une entrée `registry-username` (vide par défaut,
 ce qui vaut l'acteur du run). Le registre SHALL être authentifié par ce secret quand l'appelant le
 fournit, sinon par `GITHUB_TOKEN`. Seule cette authentification de registre atteint le juge et le
