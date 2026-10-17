@@ -101,7 +101,7 @@ base altérée produirait de faux verdicts sains sur toute la flotte.
   `kustomization.yaml`.
 - `deploy/kind` : le cron `grype-db` y est suspendu, comme celui des screenings. `up.sh` fait un
   premier remplissage, qui se relance à la main après une pause du banc de plus de 48 h.
-- Dépôt d'artefacts : deux clés de plus, `grype-db/current.tar.zst` (~531 Mo) et
+- Dépôt d'artefacts : deux clés de plus, `grype-db/current.tar.zst` (~530 Mo) et
   `grype-db/current.json`, remplacées à chaque nouvelle base.
 - Stockage éphémère de chaque pod `regis-analyze` : ~3,8 Go (archive puis base décompressée).
 - Dépendance externe : `grype.anchore.io` n'est plus sollicité que par le rafraîchissement.
@@ -125,7 +125,7 @@ portent sur une même base connue. Le régime allégé reste ce que D-05 en fait
   la base.
 - Revue d'ingénierie du 2026-10-17 (`/plan-eng-review`, D3 à D10) : chaîne réelle du refus (D3) ;
   mesure du hachage au démarrage (D5) ; vérification toutes les 6 h (D6) ; vérification de version
-  de grype coupée (D8) ; cron suspendu sur le banc (D9) ; alerte notée dans `TODOS.md` (D10).
+  de grype coupée (D8) ; cron suspendu sur le banc (D9) ; alerte notée hors du dépôt (D10).
   D4 (générations sur le volume) et D7 (taille du volume) tombent avec le volume.
 - À l'application, le 2026-10-17 : #53, mergé entre-temps, rend le volume partagé contraire à
   SDR-0021 ; réponse reçue : distribuer la base par le dépôt d'artefacts. Mesures du jour :

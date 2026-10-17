@@ -56,7 +56,7 @@ ensuite. Distribuer la base **déjà importée** évite de la refaire dans chaqu
   le documente seulement.
 - Réseau fermé et miroir interne de la base.
 - Modifier regis, le format du journal ou le régime allégé (D-05).
-- Alerter quand le rafraîchissement échoue : noté dans `TODOS.md` (revue, D10).
+- Alerter quand le rafraîchissement échoue : noté hors du dépôt (revue, D10).
 
 ## Decisions
 
@@ -65,7 +65,7 @@ ensuite. Distribuer la base **déjà importée** évite de la refaire dans chaqu
 Le rafraîchissement dépose deux objets, à des clés fixes hors de `runs/` :
 
 ```
-grype-db/current.tar.zst   <- la base importée, emballée (tar zstd), ~531 Mo
+grype-db/current.tar.zst   <- la base importée, emballée (tar zstd), ~530 Mo
 grype-db/current.json      <- {"built": ..., "checksum": ...} de la base publiée qu'elle contient
 ```
 
@@ -140,7 +140,7 @@ PY
 fi
 ```
 
-Le téléchargement de ~500 Mo est fait par l'init container : `regis-analyze` a sa propre
+Le téléchargement de ~530 Mo est fait par l'init container : `regis-analyze` a sa propre
 `retryStrategy` (`retryPolicy: Always`, même limite et même attente), car `OnFailure` ne rejoue
 pas un échec d'init.
 
@@ -175,10 +175,12 @@ banc prêt. Après une pause du banc de plus de 48 h, on relance ce remplissage 
 
 - [Chaque pod `regis-analyze` occupe ~3,8 Go de stockage éphémère, l'archive puis la base] → les
   deux plafonds de `uske-screening` bornent le nombre de pods simultanés. L'overlay de production
-  doit vérifier que ses nœuds ont ce disque par pod en parallèle. Le volume est un `emptyDir`
-  borné à 6 Gi ; l'archive y est supprimée dès qu'elle est déballée (c'est possible parce qu'elle
-  est sur ce volume).
-- [Chaque évaluation lit ~531 Mo du dépôt d'artefacts, puis déballe 3,25 Go (13 s mesurées sur un
+  doit vérifier que ses nœuds ont ce disque par pod en parallèle. La requête de 5 Gi couvre la
+  base, pour le placement ; le `sizeLimit` de 6 Gi de l'`emptyDir` la borne ; l'archive y est
+  supprimée dès qu'elle est déballée (c'est possible parce qu'elle est sur ce volume). L'espace
+  de travail de l'image analysée n'est pas plafonné, comme avant : une limite du conteneur le
+  plafonnerait aussi, et une image de plusieurs Go serait évincée (échec technique).
+- [Chaque évaluation lit ~530 Mo du dépôt d'artefacts, puis déballe 3,25 Go (13 s mesurées sur un
   poste)] → c'est le prix de SDR-0021. Le gain reste net : ~20 s au lieu de ~140 s.
 - [Une base altérée dans le dépôt d'artefacts produit de faux verdicts sains dans toute la flotte]
   → seul le `WorkflowTemplate` `grype-db` écrit ces clés. Les identifiants du dépôt d'artefacts
@@ -186,7 +188,7 @@ banc prêt. Après une pause du banc de plus de 48 h, on relance ce remplissage 
   chaque démarrage, et la somme figure dans chaque rapport. Voir `review.md`.
 - [Le cron tombe en panne] → environ sept vérifications passent avant la limite. Au-delà de 48 h,
   le régime complet passe en *inconclusive* : le screening ne place plus rien et le dit. La panne
-  se voit dans Argo (exécution en échec). Aucune alerte n'est prévue (`TODOS.md`, revue D10). Pour
+  se voit dans Argo (exécution en échec). Aucune alerte n'est prévue (noté hors du dépôt, revue D10). Pour
   un opérateur, l'indication d'une règle *incomplete* (« le prochain screening la rejuge »,
   `uske/outcomes.py`) trompe dans ce cas : la doc d'exploitation nomme le `CronWorkflow` `grype-db`
   comme première chose à regarder.

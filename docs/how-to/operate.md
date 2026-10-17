@@ -71,10 +71,10 @@ export USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A && git -C "$USKE_RESULTS
 Without a database, `regis` still exits 0, but the `cve-critical` rule stays incomplete and a
 full-regime decision is `inconclusive` (see
 [Refreshing the vulnerability database](#refreshing-the-vulnerability-database)). Mount a `grype`
-cache in the `regis` container and set four variables:
+cache in the `regis` container (`~/.cache/grype/db` is grype's default cache, filled by any local `grype db update`) and set four variables:
 
 ```bash
-export USKE_REGIS_CMD="docker run --rm -v $PWD:$PWD -v $HOME/.cache/grype:/grype-db \
+export USKE_REGIS_CMD="docker run --rm -v $PWD:$PWD -v $HOME/.cache/grype/db:/grype-db \
   -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_DB_AUTO_UPDATE=false \
   -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false \
   ghcr.io/trivoallan/regis:VERSION"
@@ -217,8 +217,7 @@ and an absent or unreadable one. `regis` still exits 0, with an error in `result
   `argo -n <ns> submit --from cronwf/grype-db`.
 - **When the full regime goes `inconclusive` on `cve-critical` across the board**, look at the
   `grype-db` runs first (`argo -n <ns> list`), and at when the database was built. Anchore not
-  publishing for more than 48 hours has the same effect, by design. No alert exists yet
-  (`TODOS.md`).
+  publishing for more than 48 hours has the same effect, by design. No alert exists yet.
 - **The artifact repository's bucket must exist before the first refresh.** An optional input in
   a missing bucket is an error, not an absent artifact. The bench's `up.sh` creates it.
 

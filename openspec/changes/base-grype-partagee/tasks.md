@@ -16,7 +16,7 @@ La documentation d'uske est en anglais (SDR-0022) ; les artefacts du change rest
 | `docs/how-to/operate.md` | guide | l'opératrice qui déploie, exploite le banc ou lance un screening en CI | modifiée : refreshing the vulnerability database (the `grype-db` CronWorkflow every 6 h, the two artifact keys, a manual refresh after a regis upgrade, `grype-db` as the first thing to check when the full regime goes *inconclusive* on `cve-critical`, the 48 h bound and its effect per regime) ; the bench (cron suspended, refill after a pause of more than 48 h) ; *Screen locally* (what the caller gives the regis container: a mounted grype cache, the four variables, a daily cache key in CI) |
 | `docs/architecture/arc42.md` | explication | la mainteneuse et l'agent qui lit l'architecture | modifiée : *Deployment View*, *Infrastructure Level 1* (the `grype-db` WorkflowTemplate and CronWorkflow, the two keys in the artifact repository, in the diagram and the text) |
 | `deploy/base/grype-db.yaml` (commentaire d'en-tête) | — | qui lit le manifeste | créée : what is distributed and why the imported database, why the regis image, the two keys |
-| `TODOS.md` | — | la mainteneuse | modifiée pendant la revue (D10) : l'alerte avant 48 h |
+| `TODOS.md` | — | la mainteneuse | fichier local non suivi, hors du change (D10) : l'alerte avant 48 h |
 
 `README.md` et `CLAUDE.md` ne sont pas touchés : le README renvoie déjà à `docs/how-to/operate.md`
 pour *Screen locally*, et les commandes ne changent pas.
@@ -43,7 +43,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   Attendu : un objet `active` avec `built` et `checksum`. Le script de 2.2 s'appuie sur ces champs.
 - [x] 1.2 Télécharger, valider et emballer, en chronométrant :
   `docker run --rm -v gdbs:/out -e GRYPE_DB_CACHE_DIR=/tmp/db -e GRYPE_CHECK_FOR_APP_UPDATE=false --entrypoint sh <image> -c 'grype db update && grype db status && cd /tmp/db && time python3 -c "import tarfile; t=tarfile.open(\"/out/current.tar.zst\", \"w:zst\"); t.add(\"6\"); t.close()"'`.
-  Attendu : `Status: valid`, et une archive de l'ordre de 500 Mo dans le volume `gdbs`. Noter la
+  Attendu : `Status: valid`, et une archive de l'ordre de 530 Mo dans le volume `gdbs`. Noter la
   durée et la taille.
 - [x] 1.3 Déballer dans un conteneur neuf, puis scanner, en chronométrant :
   `docker run --rm -v gdbs:/in:ro -e GRYPE_DB_CACHE_DIR=/tmp/grype-db -e GRYPE_DB_AUTO_UPDATE=false -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false --entrypoint sh <image> -c 'time python3 -c "import tarfile; tarfile.open(\"/in/current.tar.zst\", \"r:zst\").extractall(\"/tmp/grype-db\", filter=\"data\")" && time grype alpine:3.20 -o json | jq -c .descriptor.db.status'`.
@@ -105,6 +105,11 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   `grype db status` arrête le script avant toute sortie : Argo ne téverse rien, et les clés en
   place ne changent pas. Scénarios : *Le rafraîchissement planifié distribue une nouvelle base*,
   *Aucune base nouvelle n'est publiée*, *Un téléchargement interrompu*.
+  Fait le 2026-10-17 autrement que prévu (voir `deploy/base/grype-db.yaml`) : le script emballe
+  dans un répertoire de préparation sous `${WORK:-/tmp}`, puis déplace l'archive et ensuite le
+  pointeur dans `out/` ; un pointeur illisible compte pour absent ; l'emballage est au niveau 1 ;
+  l'étape a une échéance de 1800 s, `podGC` vaut `OnPodSuccess`, le conteneur demande 5 Gi de
+  stockage éphémère, et l'entrée `pointer` est en mode 0444.
 - [x] 2.3 Ajouter `- grype-db.yaml` aux `resources` de `deploy/base/kustomization.yaml`.
   `make test` attendu : `tests/test_grype_db.py` vert. `make lint` attendu : sortie 0.
 - [x] 2.4 Commit : `feat: rafraîchir toutes les 6 h une base grype distribuée par les artefacts`.
@@ -136,6 +141,9 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   `wf=$(kubectl -n $NS create -f $HERE/grype-db.yaml -o name)` puis
   `kubectl -n $NS wait --for=jsonpath='{.status.phase}'=Succeeded "$wf" --timeout=15m`.
   Attendu sur un banc neuf : `condition met`. Un ancien Workflow en échec ne bloque pas l'attente.
+  Fait le 2026-10-17 autrement que prévu : `up.sh` crée d'abord le bucket depuis l'intérieur de
+  RustFS, puis sonde la phase du Workflow toutes les 10 s, 15 minutes au plus, et s'arrête sur
+  `Failed` ou `Error`, au lieu de `kubectl wait` (qui n'attend qu'une condition).
 - [x] 4.2 Sur le banc, lancer un screening (`kubectl -n uske create -f deploy/kind/screening.yaml`),
   puis vérifier qu'un rapport porte la base distribuée :
   `jq '.results.cve.source.checksum' <rapport json d'une évaluation>`. Attendu : la somme de
@@ -172,7 +180,13 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
 
 ## 5. Validation
 
-- [ ] 5.1 `openspec validate base-grype-partagee --type change --strict`. Attendu :
+- [x] 5.1 `openspec validate base-grype-partagee --type change --strict`. Attendu :
   `Change 'base-grype-partagee' is valid`.
-- [ ] 5.2 Vérifier le critère d'achèvement de `review.md` : le finding 5 est tranché (1.5), et
+- [x] 5.2 Vérifier le critère d'achèvement de `review.md` : le finding 5 est tranché (1.5), et
   les findings 3, 4 et 6 sont traités (4.4, `design.md` *Risks*, 4.5).
+  Les findings 3, 4, 5 et 6 sont traités : 3 en 4.4 (`operate.md`), 4 dans *Risks* de `design.md`,
+  5 en 1.3 et 1.5 (*Open Questions*), 6 en 4.5 (`operate.md`, *Screen locally*).
+  Trois scénarios reposent sur une preuve indirecte : « Une base de 30 h » (spike 1.3, une base de
+  23 h scannée sous la limite de 48 h) ; « Une évaluation pendant un rafraîchissement » (D1 : un
+  objet S3 est remplacé en un seul PUT) ; « Aucune base distribuée » (spike 1.4 et les tests de
+  `regis-analyze` ; sur le banc, seul le cas du bucket absent a été vu).

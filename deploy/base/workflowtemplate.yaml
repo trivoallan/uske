@@ -846,7 +846,7 @@ spec:
             s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html"}
 
     - name: regis-analyze
-      # Always: the 500 MB artifact is fetched by the init container, and OnFailure does not
+      # Always: the ~530 MB artifact is fetched by the init container, and OnFailure does not
       # retry a failed fetch (only the main container's failure). Same values as *child-retry, only retryPolicy differs.
       retryStrategy:
         limit: "2"
@@ -866,7 +866,7 @@ spec:
             s3: {key: grype-db/current.tar.zst}
       # This pod's only volume, an emptyDir (SDR-0021 forbids a persistent one). An input artifact
       # outside a volume is a subPath mount of the init container's disk: it cannot be deleted
-      # (EBUSY). Here the archive (~500 MB) is deleted once unpacked; the database takes 3.25 GB.
+      # (EBUSY). Here the archive (~530 MB) is deleted once unpacked; the database takes 3.25 GB.
       volumes:
         - {name: grype, emptyDir: {sizeLimit: 6Gi}}
       container:
@@ -903,9 +903,11 @@ spec:
           - {name: GRYPE_CHECK_FOR_APP_UPDATE, value: "false"}
         envFrom:
           - secretRef: {name: uske-harbor}
-        resources:  # the volume counts here: archive, database, and regis's own needs
+        # The request covers the database for scheduling; the volume's sizeLimit bounds it. No
+        # limit: it would also cap the scratch space regis, syft, grype and the others need for
+        # the image they judge, and a multi-GB image would be evicted (a technical failure).
+        resources:
           requests: {ephemeral-storage: 5Gi}
-          limits: {ephemeral-storage: 6Gi}
       outputs:
         artifacts:
           - {name: report, path: /tmp/report, optional: true, mode: 511, recurseMode: true}

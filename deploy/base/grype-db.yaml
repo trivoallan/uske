@@ -35,7 +35,7 @@ spec:
       container:
         image: regis
         command: [sh, -c]
-        # The bulk is the imported database, 3.25 GB; the ~500 MB archive in staging and Argo's
+        # The bulk is the imported database, 3.25 GB; the ~530 MB archive in staging and Argo's
         # upload copy of it come on top, ~4.5 GB at the peak: leave room.
         resources:
           requests: {ephemeral-storage: 5Gi}

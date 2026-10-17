@@ -1,12 +1,14 @@
 """The `grype-db` refresh: what the manifest promises, read from `deploy/base/grype-db.yaml`.
 
 Each test names the scenario of `specs/shared-vulnerability-db/spec.md` (change
-`base-grype-partagee`) it makes true. The script itself is checked for its order, not run:
-grype is not in this image.
+`base-grype-partagee`) it makes true. `GrypeDb` reads the manifest; `Script` runs the refresh
+script against the fake grype in `tests/fakes/`, and `RegisAnalyze` does the same for the
+judging step. The tests that pack or unpack a real zstd archive need Python 3.14.
 """
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import shutil
@@ -60,6 +62,10 @@ class GrypeDb(unittest.TestCase):
         self.assertEqual(pointer["s3"], {"key": POINTER})
         outputs = {a["s3"]["key"]: a for a in self.template["outputs"]["artifacts"]}
         self.assertEqual(set(outputs), {ARCHIVE, POINTER})
+        self.assertEqual(
+            [a["name"] for a in self.template["outputs"]["artifacts"]],
+            ["archive", "pointer"],
+        )
         for key, artifact in outputs.items():
             with self.subTest(key=key):
                 self.assertTrue(artifact["optional"])
@@ -107,22 +113,48 @@ LISTING = [
 ]
 
 
-def _python3_has_zstd() -> bool:
-    """The script runs the `python3` on PATH, which may not be the interpreter of the tests."""
+def _has_zstd(python: str) -> bool:
     probe = (
         "import tarfile, io; tarfile.open(fileobj=io.BytesIO(), mode='w:zst').close()"
     )
-    return (
-        subprocess.run(
-            ["python3", "-c", probe], capture_output=True, check=False
-        ).returncode
-        == 0
-    )
+    try:
+        return (
+            subprocess.run(
+                [python, "-c", probe], capture_output=True, check=False
+            ).returncode
+            == 0
+        )
+    except OSError:
+        return False
 
 
-needs_zstd = unittest.skipUnless(
-    _python3_has_zstd(), "tarfile 'w:zst' needs Python 3.14"
+def _zstd_python() -> str | None:
+    """The interpreter the scripts run: the `python3` on PATH if it has zstd (3.14), else a uv one."""
+    if _has_zstd("python3"):
+        return "python3"
+    try:
+        found = subprocess.run(
+            ["uv", "python", "find", "3.14"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+    except OSError:
+        return None
+    return found if found and _has_zstd(found) else None
+
+
+PYTHON = _zstd_python()
+SHIM = (
+    ""  # a directory that makes `python3` resolve to PYTHON in the scripts under test
 )
+if PYTHON and PYTHON != "python3":
+    SHIM = tempfile.mkdtemp()
+    atexit.register(shutil.rmtree, SHIM, ignore_errors=True)
+    os.symlink(PYTHON, os.path.join(SHIM, "python3"))
+PATH = ":".join(p for p in (str(FAKES), SHIM, os.environ["PATH"]) if p)
+
+needs_zstd = unittest.skipUnless(PYTHON, "tarfile 'w:zst' needs Python 3.14")
 
 
 class Script(unittest.TestCase):
@@ -141,7 +173,7 @@ class Script(unittest.TestCase):
             (work / "in" / "current.json").write_text(pointer)
         environ = {
             **os.environ,
-            "PATH": f"{FAKES}:{os.environ['PATH']}",
+            "PATH": PATH,
             "WORK": str(work),
             "FAKE_LIST": json.dumps(LISTING),
             "FAKE_CALLS": str(work / "calls"),
@@ -163,10 +195,10 @@ class Script(unittest.TestCase):
             sorted(p.name for p in out.iterdir()), ["current.json", "current.tar.zst"]
         )
         self.assertEqual(json.loads((out / "current.json").read_text()), NEW)
-        # read with the python3 that packed it, which is not always the tests' interpreter
+        # read with the interpreter that packed it, which is not always the tests' own
         listing = subprocess.run(
             [
-                "python3",
+                PYTHON or "python3",
                 "-c",
                 (
                     "import sys, tarfile; "
@@ -292,7 +324,8 @@ class RegisAnalyze(unittest.TestCase):
     def test_the_storage_is_sized_for_the_database_and_no_volume_is_added(self) -> None:
         resources = self.container["resources"]
         self.assertEqual(resources["requests"]["ephemeral-storage"], "5Gi")
-        self.assertEqual(resources["limits"]["ephemeral-storage"], "6Gi")
+        # no limit: it would also cap the scratch space of the image being judged
+        self.assertNotIn("ephemeral-storage", resources.get("limits", {}))
         self.assertEqual(
             self.template["volumes"],
             [{"name": "grype", "emptyDir": {"sizeLimit": "6Gi"}}],
@@ -332,7 +365,7 @@ class RegisAnalyze(unittest.TestCase):
         )
         env = {
             **os.environ,
-            "PATH": f"{FAKES}:{os.environ['PATH']}",
+            "PATH": PATH,
             "FAKE_CALLS": str(root / "calls"),
             "FAKE_ENV": str(root / "env.json"),
             **{e["name"]: e["value"] for e in self.container["env"]},
@@ -352,7 +385,7 @@ class RegisAnalyze(unittest.TestCase):
         self.addCleanup(lambda: packed.unlink(missing_ok=True))
         subprocess.run(
             [
-                "python3",
+                PYTHON or "python3",
                 "-c",
                 (
                     "import sys, tarfile; t = tarfile.open(sys.argv[1], 'w:zst'); "
