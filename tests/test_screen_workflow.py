@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,6 +42,7 @@ class Scripts(unittest.TestCase):
 
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.remote = self.tmp / "remote.git"
         git("init", "-q", "--bare", str(self.remote))
         env = step(load(SCREEN), "screen", "scripts")["env"]
@@ -50,6 +52,8 @@ class Scripts(unittest.TestCase):
             path.chmod(0o755)
         self.env = {
             **os.environ,
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
             "GITHUB_TOKEN": "token",
             "JOURNAL_BRANCH": "uske-journal",
             "JOURNAL_REMOTE": str(self.remote),
@@ -126,12 +130,22 @@ class Scripts(unittest.TestCase):
         self.assertNotEqual(self.record(results, "x"), 0)
 
     def test_no_token_on_disk(self) -> None:
-        self.record(self.born("r1"), "x")
-        for name in ("r1", "r2"):
-            results = self.tmp / name if name == "r1" else self.born(name)
+        first = self.born("r1")
+        self.record(first, "x")
+        second = self.born("r2")
+        for results in (first, second):
             config = (results / ".git" / "config").read_text()
             self.assertNotIn("extraheader", config)
             self.assertNotIn("token", config)
+
+    def test_the_hook_replays_on_rebase_three_times_at_most(self) -> None:
+        results = self.born("r1")
+        counter = self.tmp / "pushes"
+        hook = self.remote / "hooks" / "pre-receive"
+        hook.write_text(f"#!/bin/sh\necho x >> {counter}\nexit 1\n")
+        hook.chmod(0o755)
+        self.assertNotEqual(self.record(results, "x"), 0)
+        self.assertEqual(len(counter.read_text().splitlines()), 4)
 
     def test_a_refused_birth_is_not_retried(self) -> None:
         hook = self.remote / "hooks" / "pre-receive"
@@ -160,7 +174,28 @@ class Shape(unittest.TestCase):
             for text in [s.get("run", ""), *scripts]:
                 self.assertNotIn("${{", text, s.get("name"))
 
-    def test_the_tools_never_receive_the_token(self) -> None:
+    def test_the_registry_login_takes_the_optional_token_and_user(self) -> None:
+        login = next(
+            s
+            for s in self.all_steps()
+            if s.get("uses", "").startswith("docker/login-action@")
+        )
+        self.assertEqual(
+            login["with"]["password"], "${{ secrets.registry-token || github.token }}"
+        )
+        self.assertEqual(
+            login["with"]["username"],
+            "${{ inputs.registry-username || github.actor }}",
+        )
+
+    def test_the_registry_token_is_an_optional_secret(self) -> None:
+        # PyYAML lit la clé `on` comme le booléen True.
+        call = self.workflow[True]["workflow_call"]
+        self.assertIs(call["secrets"]["registry-token"]["required"], False)
+        self.assertEqual(call["inputs"]["registry-username"]["type"], "string")
+        self.assertEqual(call["inputs"]["registry-username"]["default"], "")
+
+    def test_the_tools_never_receive_the_git_token(self) -> None:
         compose = next(
             s
             for s in self.all_steps()

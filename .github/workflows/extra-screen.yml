@@ -18,6 +18,10 @@ on:
         description: nom, dans registries, du registre de transit ; vide, rien n'est réparé
         type: string
         default: ""
+      registry-username:
+        description: utilisateur du registre ; vide, l'acteur du run
+        type: string
+        default: ""
       playbooks:
         description: répertoire des playbooks dans le dépôt appelant
         type: string
@@ -34,6 +38,10 @@ on:
         description: réservé au banc de ce dépôt ; installe uske depuis ce commit
         type: string
         default: ""
+    secrets:
+      registry-token:
+        description: jeton du registre ; absent, GITHUB_TOKEN
+        required: false
 
 permissions: {}
 
@@ -64,9 +72,17 @@ jobs:
           USKE_REF: ${{ inputs.uske-ref }}
         run: |
           uv tool install -q "git+https://github.com/trivoallan/uske@${USKE_REF:-v$USKE_VERSION}"
-          name="$(uske list --policies "$(dirname -- "$POLICY")" | jq -r --arg f "$(basename -- "$POLICY")" \
-            '.[] | select(.path | split("/") | last == $f) | .name')"
-          [ -n "$name" ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
+          want="$(realpath -- "$POLICY")"
+          name=""
+          count=0
+          while IFS="$(printf '\t')" read -r path listed; do
+            [ "$(realpath -- "$path")" = "$want" ] || continue
+            name="$listed"
+            count=$((count + 1))
+          done <<EOF
+          $(uske list --policies "$(dirname -- "$POLICY")" | jq -r '.[] | "\(.path)\t\(.name)"')
+          EOF
+          [ "$count" -eq 1 ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
   screen:
@@ -79,7 +95,6 @@ jobs:
       group: uske-screen-${{ needs.name.outputs.name }}
       cancel-in-progress: false
     env:
-      NAME: ${{ needs.name.outputs.name }}
       JOURNAL_BRANCH: ${{ inputs.journal-branch }}
       JOURNAL_REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -115,7 +130,7 @@ jobs:
               git init -q -b "$JOURNAL_BRANCH" "$RESULTS"
               printf 'reports/\n' > "$RESULTS/.gitignore"
               git -C "$RESULTS" add .gitignore
-              git -C "$RESULTS" -c commit.gpgsign=false commit -q -m "journal : naissance de la branche"
+              git -C "$RESULTS" commit -q -m "journal : naissance de la branche"
               git -C "$RESULTS" remote add origin "$JOURNAL_REMOTE"
               git -C "$RESULTS" -c "http.extraheader=$auth" push -q origin "HEAD:$JOURNAL_BRANCH"
             fi
@@ -125,7 +140,7 @@ jobs:
             # au plus. Un échec arrête la politique, sans rien placer de plus (SDR-0021).
             set -eu
             auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
-            g() { git -C "$USKE_RESULTS" -c commit.gpgsign=false -c "http.extraheader=$auth" "$@"; }
+            g() { git -C "$USKE_RESULTS" -c "http.extraheader=$auth" "$@"; }
             g add -- "$USKE_POLICY.jsonl"
             g diff --cached --quiet || g commit -q -m "journal ($USKE_POLICY) : $USKE_STEP, $RUN_URL"
             for attempt in 1 2 3; do
@@ -144,8 +159,8 @@ jobs:
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+          username: ${{ inputs.registry-username || github.actor }}
+          password: ${{ secrets.registry-token || github.token }}
       - id: tools
         name: Tirer les images et lancer BuildKit
         run: |

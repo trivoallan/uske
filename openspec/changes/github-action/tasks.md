@@ -83,6 +83,7 @@ interface.
 
   import os
   import re
+  import shutil
   import subprocess
   import tempfile
   import unittest
@@ -116,6 +117,7 @@ interface.
 
       def setUp(self) -> None:
           self.tmp = Path(tempfile.mkdtemp())
+          self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
           self.remote = self.tmp / "remote.git"
           git("init", "-q", "--bare", str(self.remote))
           env = step(load(SCREEN), "screen", "scripts")["env"]
@@ -125,6 +127,8 @@ interface.
               path.chmod(0o755)
           self.env = {
               **os.environ,
+              "GIT_CONFIG_GLOBAL": os.devnull,
+              "GIT_CONFIG_NOSYSTEM": "1",
               "GITHUB_TOKEN": "token",
               "JOURNAL_BRANCH": "uske-journal",
               "JOURNAL_REMOTE": str(self.remote),
@@ -136,9 +140,14 @@ interface.
           }
 
       def run_script(self, name: str, results: Path, **extra: str) -> int:
-          env = {**self.env, "RESULTS": str(results), "USKE_RESULTS": str(results), **extra}
+          env = {
+              **self.env,
+              "RESULTS": str(results),
+              "USKE_RESULTS": str(results),
+              **extra,
+          }
           return subprocess.run(
-              [str(self.tmp / f"{name}.sh")], env=env, capture_output=True
+              [str(self.tmp / f"{name}.sh")], check=False, env=env, capture_output=True
           ).returncode
 
       def born(self, name: str) -> Path:
@@ -147,8 +156,14 @@ interface.
           return results
 
       def remote_files(self) -> list[str]:
-          return git("--git-dir", str(self.remote), "ls-tree", "-r", "--name-only",
-                     "uske-journal").split()
+          return git(
+              "--git-dir",
+              str(self.remote),
+              "ls-tree",
+              "-r",
+              "--name-only",
+              "uske-journal",
+          ).split()
 
       def record(self, results: Path, policy: str) -> int:
           with (results / f"{policy}.jsonl").open("a") as journal:
@@ -159,8 +174,9 @@ interface.
           results = self.born("r1")
           self.assertEqual(self.remote_files(), [".gitignore"])
           self.assertEqual((results / ".gitignore").read_text(), "reports/\n")
-          roots = git("--git-dir", str(self.remote), "rev-list", "--max-parents=0",
-                      "uske-journal").split()
+          roots = git(
+              "--git-dir", str(self.remote), "rev-list", "--max-parents=0", "uske-journal"
+          ).split()
           self.assertEqual(len(roots), 1)
 
       def test_an_existing_branch_is_read(self) -> None:
@@ -189,12 +205,22 @@ interface.
           self.assertNotEqual(self.record(results, "x"), 0)
 
       def test_no_token_on_disk(self) -> None:
-          self.record(self.born("r1"), "x")
-          for name in ("r1", "r2"):
-              results = self.tmp / name if name == "r1" else self.born(name)
+          first = self.born("r1")
+          self.record(first, "x")
+          second = self.born("r2")
+          for results in (first, second):
               config = (results / ".git" / "config").read_text()
               self.assertNotIn("extraheader", config)
               self.assertNotIn("token", config)
+
+      def test_the_hook_replays_on_rebase_three_times_at_most(self) -> None:
+          results = self.born("r1")
+          counter = self.tmp / "pushes"
+          hook = self.remote / "hooks" / "pre-receive"
+          hook.write_text(f"#!/bin/sh\necho x >> {counter}\nexit 1\n")
+          hook.chmod(0o755)
+          self.assertNotEqual(self.record(results, "x"), 0)
+          self.assertEqual(len(counter.read_text().splitlines()), 4)
 
       def test_a_refused_birth_is_not_retried(self) -> None:
           hook = self.remote / "hooks" / "pre-receive"
@@ -215,28 +241,61 @@ interface.
 
       def test_inputs_never_reach_a_script_text(self) -> None:
           for s in self.all_steps():
-              scripts = [v for v in (s.get("env") or {}).values()
-                         if isinstance(v, str) and "\n" in v]
+              scripts = [
+                  v
+                  for v in (s.get("env") or {}).values()
+                  if isinstance(v, str) and "\n" in v
+              ]
               for text in [s.get("run", ""), *scripts]:
                   self.assertNotIn("${{", text, s.get("name"))
 
-      def test_the_tools_never_receive_the_token(self) -> None:
-          compose = next(s for s in self.all_steps()
-                         if s.get("name") == "Composer les commandes du juge et du placeur")
+      def test_the_registry_login_takes_the_optional_token_and_user(self) -> None:
+          login = next(
+              s
+              for s in self.all_steps()
+              if s.get("uses", "").startswith("docker/login-action@")
+          )
+          self.assertEqual(
+              login["with"]["password"], "${{ secrets.registry-token || github.token }}"
+          )
+          self.assertEqual(
+              login["with"]["username"],
+              "${{ inputs.registry-username || github.actor }}",
+          )
+
+      def test_the_registry_token_is_an_optional_secret(self) -> None:
+          # PyYAML lit la clé `on` comme le booléen True.
+          call = self.workflow[True]["workflow_call"]
+          self.assertIs(call["secrets"]["registry-token"]["required"], False)
+          self.assertEqual(call["inputs"]["registry-username"]["type"], "string")
+          self.assertEqual(call["inputs"]["registry-username"]["default"], "")
+
+      def test_the_tools_never_receive_the_git_token(self) -> None:
+          compose = next(
+              s
+              for s in self.all_steps()
+              if s.get("name") == "Composer les commandes du juge et du placeur"
+          )
           self.assertNotIn("GITHUB_TOKEN", compose["run"])
           self.assertNotIn("extraheader", compose["run"])
 
       def test_permissions_are_the_least(self) -> None:
           self.assertEqual(self.workflow["permissions"], {})
-          self.assertEqual(self.workflow["jobs"]["name"]["permissions"], {"contents": "read"})
-          self.assertEqual(self.screen["permissions"],
-                           {"contents": "write", "packages": "write"})
+          self.assertEqual(
+              self.workflow["jobs"]["name"]["permissions"], {"contents": "read"}
+          )
+          self.assertEqual(
+              self.screen["permissions"], {"contents": "write", "packages": "write"}
+          )
 
       def test_the_lock_is_the_policy_name(self) -> None:
-          self.assertEqual(self.screen["concurrency"], {
-              "group": "uske-screen-${{ needs.name.outputs.name }}",
-              "cancel-in-progress": False,
-          })
+          self.assertEqual(
+              self.screen["concurrency"],
+              {
+                  "group": "uske-screen-${{ needs.name.outputs.name }}",
+                  "cancel-in-progress": False,
+              },
+          )
 
       def test_no_checkout_keeps_the_token(self) -> None:
           for s in self.all_steps():
@@ -249,19 +308,31 @@ interface.
           self.assertIn("after-record.sh", final["run"])
 
       def test_regis_reads_the_shared_grype_db(self) -> None:
-          compose = next(s for s in self.all_steps()
-                         if s.get("name") == "Composer les commandes du juge et du placeur")
-          for flag in ("GRYPE_DB_CACHE_DIR=/grype-db", "GRYPE_DB_AUTO_UPDATE=false",
-                       "GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h", "GRYPE_CHECK_FOR_APP_UPDATE=false"):
+          compose = next(
+              s
+              for s in self.all_steps()
+              if s.get("name") == "Composer les commandes du juge et du placeur"
+          )
+          for flag in (
+              "GRYPE_DB_CACHE_DIR=/grype-db",
+              "GRYPE_DB_AUTO_UPDATE=false",
+              "GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h",
+              "GRYPE_CHECK_FOR_APP_UPDATE=false",
+          ):
               self.assertIn(flag, compose["run"])
 
       def test_buildkit_listens_on_loopback_only(self) -> None:
-          self.assertIn("-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"])
+          self.assertIn(
+              "-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"]
+          )
 
       def test_each_image_version_is_followed_by_renovate(self) -> None:
           lines = SCREEN.read_text().splitlines()
-          versions = [i for i, line in enumerate(lines)
-                      if re.match(r"\s+(REGIS|KNOCK|BUILDKIT)_VERSION:", line)]
+          versions = [
+              i
+              for i, line in enumerate(lines)
+              if re.match(r"\s+(REGIS|KNOCK|BUILDKIT)_VERSION:", line)
+          ]
           self.assertEqual(len(versions), 3)
           for i in versions:
               self.assertRegex(lines[i - 1], r"# renovate: datasource=docker depName=\S+")
@@ -273,8 +344,11 @@ interface.
       def tag_for(self, version: str) -> str:
           script = step(load(MAJOR_TAG), "tag", "name")["run"]
           with tempfile.NamedTemporaryFile("r") as out:
-              subprocess.run(["sh", "-c", script], check=True,
-                             env={**os.environ, "VERSION": version, "GITHUB_OUTPUT": out.name})
+              subprocess.run(
+                  ["sh", "-c", script],
+                  check=True,
+                  env={**os.environ, "VERSION": version, "GITHUB_OUTPUT": out.name},
+              )
               return out.read().strip()
 
       def test_a_0x_version_moves_the_minor(self) -> None:
@@ -316,6 +390,10 @@ Renovate le suivra.
           description: nom, dans registries, du registre de transit ; vide, rien n'est réparé
           type: string
           default: ""
+        registry-username:
+          description: utilisateur du registre ; vide, l'acteur du run
+          type: string
+          default: ""
         playbooks:
           description: répertoire des playbooks dans le dépôt appelant
           type: string
@@ -332,6 +410,10 @@ Renovate le suivra.
           description: réservé au banc de ce dépôt ; installe uske depuis ce commit
           type: string
           default: ""
+      secrets:
+        registry-token:
+          description: jeton du registre ; absent, GITHUB_TOKEN
+          required: false
 
   permissions: {}
 
@@ -362,9 +444,17 @@ Renovate le suivra.
             USKE_REF: ${{ inputs.uske-ref }}
           run: |
             uv tool install -q "git+https://github.com/trivoallan/uske@${USKE_REF:-v$USKE_VERSION}"
-            name="$(uske list --policies "$(dirname -- "$POLICY")" | jq -r --arg f "$(basename -- "$POLICY")" \
-              '.[] | select(.path | split("/") | last == $f) | .name')"
-            [ -n "$name" ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
+            want="$(realpath -- "$POLICY")"
+            name=""
+            count=0
+            while IFS="$(printf '\t')" read -r path listed; do
+              [ "$(realpath -- "$path")" = "$want" ] || continue
+              name="$listed"
+              count=$((count + 1))
+            done <<EOF
+            $(uske list --policies "$(dirname -- "$POLICY")" | jq -r '.[] | "\(.path)\t\(.name)"')
+            EOF
+            [ "$count" -eq 1 ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
             echo "name=$name" >> "$GITHUB_OUTPUT"
 
     screen:
@@ -377,7 +467,6 @@ Renovate le suivra.
         group: uske-screen-${{ needs.name.outputs.name }}
         cancel-in-progress: false
       env:
-        NAME: ${{ needs.name.outputs.name }}
         JOURNAL_BRANCH: ${{ inputs.journal-branch }}
         JOURNAL_REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -442,8 +531,8 @@ Renovate le suivra.
         - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
           with:
             registry: ghcr.io
-            username: ${{ github.actor }}
-            password: ${{ github.token }}
+            username: ${{ inputs.registry-username || github.actor }}
+            password: ${{ secrets.registry-token || github.token }}
         - id: tools
           name: Tirer les images et lancer BuildKit
           run: |
