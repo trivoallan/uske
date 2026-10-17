@@ -248,6 +248,13 @@ interface.
           self.assertIn("always()", final["if"])
           self.assertIn("after-record.sh", final["run"])
 
+      def test_regis_reads_the_shared_grype_db(self) -> None:
+          compose = next(s for s in self.all_steps()
+                         if s.get("name") == "Composer les commandes du juge et du placeur")
+          for flag in ("GRYPE_DB_CACHE_DIR=/grype-db", "GRYPE_DB_AUTO_UPDATE=false",
+                       "GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h", "GRYPE_CHECK_FOR_APP_UPDATE=false"):
+              self.assertIn(flag, compose["run"])
+
       def test_buildkit_listens_on_loopback_only(self) -> None:
           self.assertIn("-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"])
 
@@ -444,6 +451,19 @@ Renovate le suivra.
             docker pull -q "ghcr.io/trivoallan/knock:$KNOCK_VERSION"
             docker run -d --name buildkitd --privileged -p 127.0.0.1:1234:1234 \
               "moby/buildkit:$BUILDKIT_VERSION" --addr tcp://0.0.0.0:1234
+        - id: grype-date
+          run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+        - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+            path: ${{ runner.temp }}/grype-db
+            key: grype-db-${{ steps.grype-date.outputs.day }}
+        - name: Remplir la base grype une fois par jour
+          run: |
+            G="$RUNNER_TEMP/grype-db"
+            mkdir -p "$G"
+            [ -n "$(ls -A "$G")" ] || docker run --rm --user "$(id -u):$(id -g)" -v "$G:/grype-db" \
+              -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_CHECK_FOR_APP_UPDATE=false \
+              --entrypoint grype "ghcr.io/trivoallan/regis:$REGIS_VERSION-full" db update
         - name: Composer les commandes du juge et du placeur
           run: |
             W="$GITHUB_WORKSPACE"; T="$RUNNER_TEMP/uske-work"; U="$(id -u):$(id -g)"
@@ -451,7 +471,7 @@ Renovate le suivra.
             mkdir -p "$T"
             common="docker run --rm --network host --user $U -v $W:$W -v $T:$T -w $W"
             {
-              echo "USKE_REGIS_CMD=$common -v $C:/home/regis/.docker/config.json:ro ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
+              echo "USKE_REGIS_CMD=$common -v $C:/home/regis/.docker/config.json:ro -v $RUNNER_TEMP/grype-db:/grype-db -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_DB_AUTO_UPDATE=false -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
               echo "USKE_KNOCK_CMD=$common -v $C:/tmp/.docker/config.json:ro -e KNOCK_REGISTRIES -e BUILDKIT_HOST=tcp://127.0.0.1:1234 ghcr.io/trivoallan/knock:$KNOCK_VERSION"
               echo "USKE_AFTER_RECORD=$RUNNER_TEMP/after-record.sh"
               echo "USKE_WORK=$T"
@@ -491,11 +511,10 @@ Renovate le suivra.
             retention-days: ${{ inputs.report-retention-days }}
             if-no-files-found: ignore
   ```
-  Si la tâche 1.4 a retenu slim avec un cache, remplacer `-full` dans les étapes `tools` et
-  « Composer », et ajouter au préfixe de `regis` le montage `-v $RUNNER_TEMP/grype-db:<chemin de
-  la base dans l'image>`, en lisant ce chemin dans `regis/Dockerfile`.
+  La tâche 1 a retenu `-full` et montré que la base grype se télécharge à chaque jugement : le
+  cache quotidien ci-dessus (étapes `grype-date`, `actions/cache` et « Remplir ») suit D2.
 - [ ] 3.2 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
-  Attendu : `15 passed, 2 failed` ; les deux échecs sont ceux de `MovingTag`
+  Attendu : `16 passed, 2 failed` ; les deux échecs sont ceux de `MovingTag`
   (`FileNotFoundError` sur `extra-major-tag.yml`), réparés au groupe 4.
 - [ ] 3.3 Lancer : `actionlint .github/workflows/extra-screen.yml`. Attendu : aucune sortie,
   code 0.
@@ -547,7 +566,7 @@ Renovate le suivra.
             git -c "http.extraheader=$auth" push -f origin "refs/tags/$TAG"
   ```
 - [ ] 4.3 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
-  Attendu : `17 passed`.
+  Attendu : `18 passed`.
 - [ ] 4.4 Lancer : `actionlint .github/workflows/extra-major-tag.yml`. Attendu : aucune sortie.
 - [ ] 4.5 Commit : `feat: suivre chaque version par une étiquette mobile du workflow GitHub`.
 

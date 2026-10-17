@@ -120,10 +120,18 @@ job screen   needs: name ; concurrency: uske-screen-<name>, cancel-in-progress: 
   Mesure (regis 0.41.0, `docker run --rm`, linux/arm64 sous Docker Desktop, images déjà tirées,
   `alpine:3.22`, playbook `version`) : slim 167 s puis 217 s, `-full` 195 s puis 213 s.
   `-full` n'est pas plus lent que slim au second run : le choix `-full` est retenu.
-  L'écart entre les deux variantes est dans le bruit. Dans les deux, grype télécharge sa base à
-  chaque run (de 160 à 210 s sur ces mesures) : aucune des deux images ne l'embarque. La tâche 3.1
-  doit donc monter un cache `$RUNNER_TEMP/grype-db` sur le répertoire de cache de grype dans le
-  conteneur, à lire (non vérifié : `/home/regis/.cache/grype`, ou `GRYPE_DB_CACHE_DIR`).
+  L'écart entre les deux variantes est dans le bruit : dans les deux, grype télécharge sa base à
+  chaque run (de 160 à 210 s), car aucune image ne l'embarque. `-full` reste retenu, parce que slim
+  charge aussi ses scanners au premier usage.
+- **Une base grype par jour, partagée par les jugements du run** (mesure de la tâche 1). Le motif
+  est celui de `docs/how-to/operate.md` (*Screen locally*) : un répertoire de l'hôte,
+  `$RUNNER_TEMP/grype-db`, est gardé par `actions/cache` sous la clé `grype-db-<jour UTC>`. S'il
+  est vide, une étape le remplit une fois par `grype db update` (le binaire de l'image de `regis`,
+  `/usr/local/bin/grype`). Le préfixe de `regis` le monte sur `/grype-db`, avec
+  `GRYPE_DB_CACHE_DIR=/grype-db`, `GRYPE_DB_AUTO_UPDATE=false`,
+  `GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h` et `GRYPE_CHECK_FOR_APP_UPDATE=false`, comme dans le
+  cluster. On télécharge ainsi au plus une fois par jour et par dépôt, au lieu d'une fois par
+  empreinte.
 
 ### D3 — Un trio épinglé par version d'`uske`, suivi par Renovate sans toucher au socle
 
