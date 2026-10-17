@@ -231,7 +231,9 @@ spec:
 
     # The only writer of the journals: every child's `lines` archives, a policy's in the order its
     # children were created, appended by the rule of `uske record`; then the snapshot's mark goes.
-    # Replayed by `argo retry`, it appends nothing (D12).
+    # Replayed by `argo retry`, it appends nothing (D12). A line written to the journal since the
+    # snapshot, by hand, wins: the child's lines on its digest are refused, and the merge fails
+    # and keeps the mark (D12).
     - name: merge
       retryStrategy: *retry
       synchronization:
@@ -740,7 +742,8 @@ spec:
           - >-
             python -m uske {{inputs.parameters.args}} &&
             python -m uske export --policy {{workflow.parameters.path}} --results /work/results
-            --snapshot-lines {{workflow.parameters.snapshot-lines}} --out /tmp/lines.tgz >&2
+            --snapshot-lines {{workflow.parameters.snapshot-lines}} --run "{{workflow.parameters.run}}"
+            --out /tmp/lines.tgz >&2
         workingDir: /app
       outputs:
         artifacts:
@@ -783,7 +786,8 @@ spec:
             fi &&
             python -m uske {{inputs.parameters.args}} &&
             python -m uske export --policy {{workflow.parameters.path}} --results /work/results
-            --snapshot-lines {{workflow.parameters.snapshot-lines}} --out /tmp/lines.tgz >&2
+            --snapshot-lines {{workflow.parameters.snapshot-lines}} --run "{{workflow.parameters.run}}"
+            --out /tmp/lines.tgz >&2
         workingDir: /app
       outputs:
         artifacts:

@@ -380,7 +380,11 @@ def cmd_export(args) -> None:
     policy = _policy(args.policy)
     try:
         count, warnings = merge.export(
-            policy.name, Path(args.results), args.snapshot_lines, Path(args.out)
+            policy.name,
+            Path(args.results),
+            args.snapshot_lines,
+            Path(args.out),
+            args.run_id,
         )
     except (merge.ArchiveError, OSError, ValueError) as exc:
         raise Failure(str(exc)) from exc
@@ -408,24 +412,40 @@ def cmd_merge(args) -> None:
             merge.check_run(args.pending)
     except merge.ArchiveError as exc:
         raise Failure(str(exc)) from exc
-    merged, failed = {}, []
+    merged, failed, conflicted = {}, [], []
     # one bad archive never keeps the other policies out of the journal; within a policy, the
-    # archives after it wait, or their lines would make its own stale on the replay
+    # archives after it wait, or their lines would make its own stale on the replay. A conflict is
+    # no such failure: the archive's other lines merged, so the next archive of its policy goes on.
     for policy, files in found:
         for n, archive in enumerate(files):
             name = f"{policy}/{archive.name}"
             try:
-                written, stale = merge.merge_one(policy, archive, Path(args.results))
+                written, stale, conflicts = merge.merge_one(
+                    policy, archive, Path(args.results)
+                )
             except merge.ArchiveError as exc:
                 print(f"error: {name}: {exc}", file=sys.stderr)
                 failed += [f"{policy}/{a.name}" for a in files[n:]]
                 break
-            for message in stale:
+            for message in stale + conflicts:
                 print(f"{policy}: {message}", file=sys.stderr)
+            if conflicts and policy not in conflicted:
+                conflicted.append(policy)
             merged[policy] = merged.get(policy, 0) + written
     _json(merged)
+    problems = []
     if failed:
-        raise Failure(f"not merged: {', '.join(failed)}")
+        problems.append(f"not merged: {', '.join(failed)}")
+    if conflicted:
+        mark = f"{Path(args.results) / merge.PENDING}/{args.pending or '<run>'}"
+        problems.append(
+            f"conflict in {', '.join(conflicted)}: a line written to the journal since the "
+            "snapshot wins over the child's lines on its digest, which were not merged. Check "
+            "each digest named above (the child may have placed it), then remove the mark "
+            f"{mark} by hand: `argo retry` would refuse the same lines again"
+        )
+    if problems:
+        raise Failure("; ".join(problems))
     if args.pending:
         try:
             merge.merged(Path(args.results), args.pending)
@@ -767,6 +787,12 @@ def parser() -> argparse.ArgumentParser:
         help="how many lines the journal had in the parent's snapshot",
     )
     s.add_argument("--out", required=True, help="the archive to write, <policy>.tgz")
+    s.add_argument(
+        "--run",
+        dest="run_id",
+        required=True,
+        help="the screening: the merge does not count its own lines in the journal as conflicts",
+    )
     s.set_defaults(run=cmd_export)
 
     s = sub.add_parser(
@@ -790,7 +816,9 @@ def parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser(
         "merge",
-        help="append the children's archives to the journals; replaying it appends nothing",
+        help="append the children's archives to the journals; replaying it appends nothing. "
+        "A child's line on a digest the journal gained a line on since the snapshot is refused, "
+        "and the merge fails",
     )
     s.add_argument("--results", required=True, help="where the journals are")
     s.add_argument(

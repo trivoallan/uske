@@ -21,6 +21,8 @@ STANDARD = FIXTURES / "standard.yaml"  # metadata.name: fixture-standard
 POLICY = "fixture-standard"
 
 D1, D2, D3 = ("sha256:" + c * 64 for c in "123")
+RUN = "uske-screening-1"
+NO_META: dict = {}  # `archive(..., meta=NO_META)`: an archive from an older `uske export`
 
 
 def line(digest: str, ts: str, state: str = "admitted", **extra: str) -> dict:
@@ -47,7 +49,17 @@ def write_journal(path: Path, lines: list[dict]) -> None:
     path.write_text("".join(json.dumps(x) + "\n" for x in lines))
 
 
-def archive(path: Path, members: dict[str, bytes], links: dict[str, str] | None = None):
+def archive(
+    path: Path,
+    members: dict[str, bytes],
+    links: dict[str, str] | None = None,
+    meta: dict | None = None,
+):
+    """A child's archive; `meta` defaults to a snapshot of 0 lines taken by `RUN`."""
+    if meta is None:
+        meta = {"snapshot_lines": 0, "run": RUN}
+    if meta is not NO_META:
+        members = {"meta.json": json.dumps(meta).encode(), **members}
     path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(path, "w:gz") as tar:
         for name, data in members.items():
@@ -101,25 +113,14 @@ class Merge(Dirs):
 
     def test_replaying_the_merge_writes_nothing(self) -> None:
         """Scenario: Rejouer la fusion."""
-        a = [line(D1, "2026-10-17T04:00:00Z"), line(D2, "2026-10-17T04:00:01Z")]
+        a = [
+            line(D1, "2026-10-17T04:00:00Z", run=RUN),
+            line(D2, "2026-10-17T04:00:01Z", run=RUN),
+        ]
         archive(self.out / "alpha" / "1-child.tgz", {"lines.jsonl": jsonl(a)})
         self.assertEqual(self.merge()[:2], (0, {"alpha": 2}))
         self.assertEqual(self.merge()[:2], (0, {"alpha": 0}))
         self.assertEqual(self.journal("alpha"), a)
-
-    def test_a_line_written_by_hand_during_the_screening(self) -> None:
-        """Scenario: Une ligne écrite à la main pendant le screening."""
-        reopened = line(D1, "2026-10-17T05:00:00Z", "inconclusive", reason="reopened")
-        write_journal(results.path_for(self.results, "alpha"), [reopened])
-        child = [
-            line(D1, "2026-10-17T04:00:00Z", "quarantine"),
-            line(D2, "2026-10-17T04:00:01Z"),
-        ]
-        archive(self.out / "alpha" / "1-child.tgz", {"lines.jsonl": jsonl(child)})
-        code, out, err = self.merge()
-        self.assertEqual((code, out), (0, {"alpha": 1}))
-        self.assertEqual(self.journal("alpha"), [reopened, child[1]])
-        self.assertIn(f"stale: {D1} 2026-10-17T04:00:00Z", err)
 
     def test_an_existing_report_is_not_overwritten(self) -> None:
         report = f"reports/alpha/{D1}/run-1.html"
@@ -233,6 +234,19 @@ class Merge(Dirs):
         self.assertEqual((code, out), (1, {}))
         self.assertIn("error: alpha/1-child.tgz: ", err)
 
+    def test_a_read_only_journal_is_an_archive_error(self) -> None:
+        path = results.path_for(self.results, "alpha")
+        path.write_text("")
+        path.chmod(0o444)  # readable, so the conflict check passes; append cannot write
+        self.addCleanup(path.chmod, 0o644)
+        archive(
+            self.out / "alpha" / "1-child.tgz",
+            {"lines.jsonl": jsonl([line(D1, "2026-10-17T04:00:00Z", run=RUN)])},
+        )
+        code, out, err = self.merge()
+        self.assertEqual((code, out), (1, {}))
+        self.assertIn("error: alpha/1-child.tgz: ", err)
+
     def test_a_symlinked_reports_directory_is_not_followed_out(self) -> None:
         elsewhere = self.root / "elsewhere"
         elsewhere.mkdir()
@@ -253,6 +267,10 @@ class Merge(Dirs):
             info = tarfile.TarInfo("reports/alpha")
             info.type = tarfile.DIRTYPE
             tar.addfile(info)
+            meta = json.dumps({"snapshot_lines": 0, "run": RUN}).encode()
+            info = tarfile.TarInfo("meta.json")
+            info.size = len(meta)
+            tar.addfile(info, io.BytesIO(meta))
             data = jsonl([line(D1, "2026-10-17T04:00:00Z")])
             info = tarfile.TarInfo("lines.jsonl")
             info.size = len(data)
@@ -273,6 +291,7 @@ class Export(Dirs):
             "--results", str(self.child),
             "--snapshot-lines", str(snapshot),
             "--out", str(out or self.out / POLICY / "1-child.tgz"),
+            "--run", RUN,
         )  # fmt: skip
 
     def test_export_then_merge(self) -> None:
@@ -313,7 +332,12 @@ class Export(Dirs):
         self.assertIn(f"reports/{POLICY}/../x.md: not under reports/{POLICY}/", err)
         with tarfile.open(self.out / POLICY / "1-child.tgz") as tar:
             self.assertEqual(
-                sorted(tar.getnames()), sorted(["lines.jsonl", absolute, relative])
+                sorted(tar.getnames()),
+                sorted(["meta.json", "lines.jsonl", absolute, relative]),
+            )
+            self.assertEqual(
+                json.loads(tar.extractfile("meta.json").read()),
+                {"snapshot_lines": 1, "run": RUN},
             )
 
         self.assertEqual(self.merge()[:2], (0, {POLICY: 6}))
@@ -340,6 +364,10 @@ class Export(Dirs):
         self.assertEqual(code, 1)
         self.assertIn("--snapshot-lines must be 0 or more", err)
 
+    def test_an_empty_run_fails(self) -> None:
+        with self.assertRaisesRegex(merge.ArchiveError, "--run must name"):
+            merge.export(POLICY, self.child, 0, self.out / "x.tgz", "")
+
     def test_an_unreadable_journal_fails(self) -> None:
         self.journal_path.parent.mkdir(parents=True)
         self.journal_path.write_text("{not json\n")
@@ -357,12 +385,10 @@ class Children(Dirs):
     """review I3 and M1: one archive per child, merged in the children's creation order."""
 
     def test_a_re_created_child_adds_an_archive(self) -> None:
-        first = [
-            line(D1, "2026-10-17T04:00:00Z", "admitted", placed="sha256:" + "a" * 64)
-        ]
+        first = [line(D1, "2026-10-17T04:00:00Z", placed="sha256:" + "a" * 64, run=RUN)]
         second = [
-            line(D2, "2026-10-17T04:10:00Z"),
-            line(D1, "2026-10-17T04:10:01Z", "quarantine"),
+            line(D2, "2026-10-17T04:10:00Z", run=RUN),
+            line(D1, "2026-10-17T04:10:01Z", "quarantine", run=RUN),
         ]
         archive(
             self.out / "alpha" / "20261017T040000Z-alpha-x1.tgz",
@@ -406,6 +432,154 @@ class Children(Dirs):
             [("beta", ["1-z.tgz"])],
         )
         self.assertEqual(self.merge()[:2], (0, {"beta": 1}))
+
+
+class Conflicts(Dirs):
+    """review I1: a line written to the journal after the snapshot wins over the child's."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.before = [
+            line(D1, "2026-10-16T00:00:00Z"),
+            line(D2, "2026-10-16T00:00:01Z"),
+        ]
+        self.path = results.path_for(self.results, "alpha")
+        write_journal(self.path, self.before)  # the snapshot: two lines
+        self.meta = {"snapshot_lines": 2, "run": RUN}
+
+    def add(self, *lines: dict) -> None:
+        with self.path.open("a") as out:
+            out.write("".join(json.dumps(x) + "\n" for x in lines))
+
+    def test_a_verdict_written_by_hand_during_the_screening_wins(self) -> None:
+        """Scenario: Un verdict écrit à la main pendant le screening l'emporte."""
+        hand = line(D1, "2026-10-17T03:00:00Z", "quarantine", reason="arbitrated")
+        self.add(hand)
+        child = [
+            line(D1, "2026-10-17T04:00:00Z", "admitted", run=RUN),
+            line(
+                D1,
+                "2026-10-17T04:00:01Z",
+                "admitted",
+                run=RUN,
+                placed="sha256:" + "a" * 64,
+            ),
+            line(D3, "2026-10-17T04:00:02Z", run=RUN),
+        ]
+        archive(
+            self.out / "alpha" / "1-x.tgz",
+            {"lines.jsonl": jsonl(child)},
+            meta=self.meta,
+        )
+        code, out, err = self.merge()
+        self.assertEqual((code, out), (1, {"alpha": 1}))
+        self.assertEqual(self.journal("alpha"), [*self.before, hand, child[2]])
+        self.assertEqual(results.last_states(self.journal("alpha"))[D1], "quarantine")
+        self.assertEqual(err.count(f"alpha: conflict: {D1}: "), 2)
+        self.assertIn(
+            "the journal has quarantine (arbitrated) of 2026-10-17T03:00:00Z", err
+        )
+        self.assertIn("written by hand after the snapshot", err)
+        self.assertIn("error: conflict in alpha", err)
+        self.assertIn("remove the mark", err)
+        self.assertNotIn(D3, err)
+
+    def test_the_screenings_own_lines_are_no_conflict(self) -> None:
+        """A re-created child's archive follows the first one's, merged moments before."""
+        first = [line(D1, "2026-10-17T04:00:00Z", "quarantine", run=RUN)]
+        second = [line(D1, "2026-10-17T04:10:00Z", "admitted", run=RUN)]
+        archive(
+            self.out / "alpha" / "1-x.tgz",
+            {"lines.jsonl": jsonl(first)},
+            meta=self.meta,
+        )
+        archive(
+            self.out / "alpha" / "2-y.tgz",
+            {"lines.jsonl": jsonl(second)},
+            meta=self.meta,
+        )
+        code, out, err = self.merge()
+        self.assertEqual((code, out, err), (0, {"alpha": 2}, ""))
+        self.assertEqual(self.journal("alpha"), [*self.before, *first, *second])
+
+    def test_another_runs_line_is_a_conflict(self) -> None:
+        theirs = line(D1, "2026-10-17T03:00:00Z", "inconclusive", run="uske-other")
+        self.add(theirs)
+        child = [line(D1, "2026-10-17T04:00:00Z", "quarantine", run=RUN)]
+        archive(
+            self.out / "alpha" / "1-x.tgz",
+            {"lines.jsonl": jsonl(child)},
+            meta=self.meta,
+        )
+        code, out, err = self.merge()
+        self.assertEqual((code, out), (1, {"alpha": 0}))
+        self.assertIn("written by run uske-other after the snapshot", err)
+
+    def test_a_hand_line_on_another_digest_does_not_block(self) -> None:
+        hand = line(D2, "2026-10-17T03:00:00Z", "inconclusive", reason="uske/reopened")
+        self.add(hand)
+        child = [line(D1, "2026-10-17T04:00:00Z", "quarantine", run=RUN)]
+        archive(
+            self.out / "alpha" / "1-x.tgz",
+            {"lines.jsonl": jsonl(child)},
+            meta=self.meta,
+        )
+        code, out, err = self.merge()
+        self.assertEqual((code, out, err), (0, {"alpha": 1}, ""))
+        self.assertEqual(self.journal("alpha"), [*self.before, hand, *child])
+
+    def test_a_conflict_keeps_the_mark(self) -> None:
+        mark = self.results / merge.PENDING / RUN
+        mark.parent.mkdir()
+        mark.write_text("2026-10-17T00:00:00Z\n")
+        self.add(line(D1, "2026-10-17T03:00:00Z", "quarantine"))
+        child = [line(D1, "2026-10-17T04:00:00Z", run=RUN)]
+        archive(
+            self.out / "alpha" / "1-x.tgz",
+            {"lines.jsonl": jsonl(child)},
+            meta=self.meta,
+        )
+        args = ("merge", "--results", str(self.results), "--from", str(self.out))
+        code, _, err = run_cli(*args, "--pending", RUN)
+        self.assertEqual(code, 1)
+        self.assertIn(
+            f"remove the mark {self.results / merge.PENDING}/{RUN} by hand", err
+        )
+        self.assertEqual(merge.pending(self.results), [RUN])
+        # a replay refuses the same lines again: the mark goes only by hand
+        self.assertEqual(run_cli(*args, "--pending", RUN)[0], 1)
+        self.assertEqual(merge.pending(self.results), [RUN])
+
+    def test_an_archive_without_meta_is_refused(self) -> None:
+        child = jsonl([line(D3, "2026-10-17T04:00:00Z", run=RUN)])
+        archive(self.out / "alpha" / "1-x.tgz", {"lines.jsonl": child}, meta=NO_META)
+        archive(self.out / "beta" / "1-x.tgz", {"lines.jsonl": child})
+        code, out, err = self.merge()
+        self.assertEqual((code, out), (1, {"beta": 1}))
+        self.assertIn("error: alpha/1-x.tgz: no meta.json: written by an older", err)
+        self.assertEqual(self.journal("alpha"), self.before)
+
+    def test_a_bad_meta_is_refused(self) -> None:
+        child = jsonl([line(D3, "2026-10-17T04:00:00Z", run=RUN)])
+        for n, meta in enumerate(
+            ({"snapshot_lines": -1, "run": RUN}, {"snapshot_lines": "2", "run": RUN},
+             {"snapshot_lines": 2, "run": ""}, {"snapshot_lines": True, "run": RUN})
+        ):  # fmt: skip
+            archive(self.out / f"p{n}" / "1-x.tgz", {"lines.jsonl": child}, meta=meta)
+        code, out, err = self.merge()
+        self.assertEqual((code, out), (1, {}))
+        self.assertEqual(
+            err.count("meta.json: needs snapshot_lines (0 or more) and run"), 4
+        )
+
+    def test_a_journal_shorter_than_the_snapshot_is_refused(self) -> None:
+        child = jsonl([line(D3, "2026-10-17T04:00:00Z", run=RUN)])
+        meta = {"snapshot_lines": 5, "run": RUN}
+        archive(self.out / "alpha" / "1-x.tgz", {"lines.jsonl": child}, meta=meta)
+        code, out, err = self.merge()
+        self.assertEqual((code, out), (1, {}))
+        self.assertIn("the journal has 2 lines, fewer than the snapshot's 5", err)
+        self.assertEqual(self.journal("alpha"), self.before)
 
 
 class Pending(Dirs):
@@ -474,7 +648,7 @@ class Pending(Dirs):
         self.assertEqual(merge.pending(self.results), ["uske-1"])
         archive(
             self.out / "alpha" / "1-x.tgz",
-            {"lines.jsonl": jsonl([line(D3, "2026-10-17T04:00:00Z")])},
+            {"lines.jsonl": jsonl([line(D3, "2026-10-17T04:00:00Z", run=RUN)])},
         )
         self.assertEqual(run_cli(*args, "--pending", "uske-1")[:2], (0, {"alpha": 1}))
         self.assertEqual(merge.pending(self.results), [])

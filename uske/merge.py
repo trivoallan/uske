@@ -7,6 +7,11 @@ snapshot, with the reports those lines cite; `merge` appends each archive to the
 `results.append`, the same forward-only rule as `uske record` (D9, D12), then clears the mark. An
 archive is checked whole before anything is written: a member or a policy name never leads outside
 the results directory.
+
+A line written to the real journal after the snapshot, by hand or by another screening, wins: the
+child's lines on that digest are refused, named, and the merge fails (D12). The child never saw that
+line, and its own lines, newer by `ts`, would otherwise silently revert it. The placement may have
+happened already: the merge makes the conflict visible, it cannot undo it.
 """
 
 from __future__ import annotations
@@ -23,6 +28,8 @@ from pathlib import Path, PurePosixPath
 from uske import policies, results
 
 LINES = "lines.jsonl"
+# the snapshot's line count and the screening's run, written by `export`, read by `merge`
+META = "meta.json"
 REPORTS = "reports"
 SUFFIX = ".tgz"
 # beside the journals, never a `*.jsonl`: snapshot, merge and `decisions` read only those
@@ -52,12 +59,20 @@ def _report_member(cited: str, results_dir: Path, policy: str) -> tuple[Path, st
     return results_dir / member, member.as_posix()
 
 
+def _member(tar: tarfile.TarFile, name: str, data: bytes) -> None:
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    tar.addfile(info, io.BytesIO(data))
+
+
 def export(
-    policy: str, results_dir: Path, snapshot_lines: int, out: Path
+    policy: str, results_dir: Path, snapshot_lines: int, out: Path, run: str
 ) -> tuple[int, list[str]]:
     """Write the archive of the lines past the snapshot and their reports: (lines, warnings)."""
     if snapshot_lines < 0:
         raise ArchiveError(f"--snapshot-lines must be 0 or more, got {snapshot_lines}")
+    if not run:
+        raise ArchiveError("--run must name the screening")
     lines = results.read(results.path_for(results_dir, policy))
     if len(lines) < snapshot_lines:
         raise ArchiveError(
@@ -81,11 +96,10 @@ def export(
             warnings.append(f"skipped: {line['report']}: no such report")
     body = "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in new)
     out.parent.mkdir(parents=True, exist_ok=True)
+    meta = {"snapshot_lines": snapshot_lines, "run": run}
     with tarfile.open(out, "w:gz", dereference=True) as tar:
-        data = body.encode()
-        info = tarfile.TarInfo(LINES)
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
+        _member(tar, META, (json.dumps(meta) + "\n").encode())
+        _member(tar, LINES, body.encode())
         for member, source in sorted(reports.items()):
             tar.add(source, arcname=member, recursive=False)
     return len(new), warnings
@@ -103,10 +117,23 @@ def _checked_line(value: object) -> dict:
     return value
 
 
-def _read(archive: Path, policy: str) -> tuple[list[dict], dict[str, bytes]]:
-    """The archive's lines and reports (member name -> content), every member checked first."""
+def _checked_meta(value: object) -> dict:
+    if (
+        not isinstance(value, dict)
+        or type(value.get("snapshot_lines")) is not int
+        or value["snapshot_lines"] < 0
+        or not isinstance(value.get("run"), str)
+        or not value["run"]
+    ):
+        raise ArchiveError(f"{META}: needs snapshot_lines (0 or more) and run")
+    return value
+
+
+def _read(archive: Path, policy: str) -> tuple[list[dict], dict[str, bytes], dict]:
+    """The archive's lines, reports (member name -> content) and meta, every member checked first."""
     lines: list[dict] = []
     reports: dict[str, bytes] = {}
+    meta: dict | None = None
     try:
         with tarfile.open(archive, "r:gz") as tar:
             for info in tar.getmembers():
@@ -123,13 +150,46 @@ def _read(archive: Path, policy: str) -> tuple[list[dict], dict[str, bytes]]:
                     text = tar.extractfile(info).read().decode()  # type: ignore[union-attr]
                     rows = [r.removesuffix("\r") for r in text.split("\n")]
                     lines = [_checked_line(json.loads(r)) for r in rows if r.strip()]
+                elif name.as_posix() == META:
+                    data = tar.extractfile(info).read()  # type: ignore[union-attr]
+                    meta = _checked_meta(json.loads(data))
                 elif name.is_relative_to(PurePosixPath(REPORTS, policy)):
                     reports[name.as_posix()] = tar.extractfile(info).read()  # type: ignore[union-attr]
                 else:
                     raise ArchiveError(f"refused member {info.name!r}")
     except (OSError, tarfile.TarError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ArchiveError(str(exc)) from exc
-    return lines, reports
+    if meta is None:
+        raise ArchiveError(
+            f"no {META}: written by an older `uske export`, it does not say which journal lines "
+            "came after the snapshot; re-run the child to export it again"
+        )
+    return lines, reports, meta
+
+
+def _since_snapshot(journal: list[dict], meta: dict) -> dict[str, dict]:
+    """digest -> the last journal line past the snapshot that this screening did not write."""
+    count = meta["snapshot_lines"]
+    if len(journal) < count:
+        raise ArchiveError(
+            f"the journal has {len(journal)} lines, fewer than the snapshot's {count}: "
+            "the snapshot is not its prefix"
+        )
+    return {
+        line["digest"]: line
+        for line in journal[count:]
+        if line.get("run") != meta["run"]
+    }
+
+
+def _conflict(line: dict, theirs: dict) -> str:
+    reason = f" ({theirs['reason']})" if theirs.get("reason") else ""
+    who = f"run {theirs['run']}" if theirs.get("run") else "hand"
+    return (
+        f"conflict: {line['digest']}: the child's {line['state']} line of {line['ts']} is not "
+        f"merged: the journal has {theirs['state']}{reason} of {theirs['ts']}, written by "
+        f"{who} after the snapshot"
+    )
 
 
 def _keep(content: bytes, dest: Path) -> None:
@@ -152,11 +212,28 @@ def _check_policy(policy: str) -> None:
         )
 
 
-def merge_one(policy: str, archive: Path, results_dir: Path) -> tuple[int, list[str]]:
-    """Merge one archive of `policy`: (lines written, stale messages)."""
+def merge_one(
+    policy: str, archive: Path, results_dir: Path
+) -> tuple[int, list[str], list[str]]:
+    """Merge one archive of `policy`: (lines written, stale messages, conflict messages).
+
+    A child's line on a digest that the journal gained a line on since the snapshot, not written by
+    this screening, is refused: that line stays the digest's last state.
+    """
     _check_policy(policy)
-    lines, reports = _read(archive, policy)
+    lines, reports, meta = _read(archive, policy)
+    journal = results.path_for(results_dir, policy)
     root = results_dir.resolve()
+    try:
+        theirs = _since_snapshot(results.read(journal), meta)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError) as exc:
+        raise ArchiveError(f"{journal.name}: {exc}") from exc
+    kept = [line for line in lines if line["digest"] not in theirs]
+    conflicts = [
+        _conflict(line, theirs[line["digest"]])
+        for line in lines
+        if line["digest"] in theirs
+    ]
     try:
         # reports first: a line is never in the journal before the report it cites
         for member, content in sorted(reports.items()):
@@ -164,10 +241,10 @@ def merge_one(policy: str, archive: Path, results_dir: Path) -> tuple[int, list[
             if not dest.resolve().is_relative_to(root / REPORTS):
                 raise ArchiveError(f"refused member {member!r}: outside {REPORTS}/")
             _keep(content, dest)
-        written, stale = results.append(results.path_for(results_dir, policy), lines)
+        written, stale = results.append(journal, kept)
     except OSError as exc:
         raise ArchiveError(str(exc)) from exc
-    return written, stale
+    return written, stale, conflicts
 
 
 def archives(source: Path) -> list[tuple[str, list[Path]]]:
