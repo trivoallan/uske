@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -278,6 +279,51 @@ class Shape(unittest.TestCase):
         regis = self.prefix("USKE_REGIS_CMD")
         for word in ("ACTIONS_ID_TOKEN", "cosign", "COSIGN", "KNOCK_ATTEST", "$signer"):
             self.assertNotIn(word, regis)
+
+    def composed(self, cosign_key: str) -> dict[str, list[str]]:
+        """Les préfixes tels qu'`uske` les lit : écrits dans GITHUB_ENV par bash, puis shlex."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "env"
+            subprocess.run(
+                ["bash", "-e", "-c", self.compose()],
+                check=True,
+                env={
+                    **os.environ,
+                    "COSIGN_KEY": cosign_key,
+                    "GITHUB_WORKSPACE": tmp,
+                    "RUNNER_TEMP": tmp,
+                    "GITHUB_ENV": str(out),
+                    "HOME": tmp,
+                    "REGIS_VERSION": "r",
+                    "KNOCK_VERSION": "k",
+                },
+            )
+            pairs = (line.split("=", 1) for line in out.read_text().splitlines())
+            return {k: shlex.split(v) for k, v in pairs if k.endswith("_CMD")}
+
+    def test_keyless_promotion_verifies_the_called_workflow(self) -> None:
+        # Scénario « une image réparée promue sans clé » : les antislashs survivent.
+        knock = self.composed("")["USKE_KNOCK_CMD"]
+        for flag in (
+            "KNOCK_ATTEST_SIGNER=keyless",
+            "KNOCK_ATTEST_VERIFY_OIDC_ISSUER=https://token.actions.githubusercontent.com",
+            (
+                r"KNOCK_ATTEST_VERIFY_IDENTITY=^https://github\.com/trivoallan/uske/"
+                r"\.github/workflows/extra-screen\.yml@"
+            ),
+            "ACTIONS_ID_TOKEN_REQUEST_URL",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        ):
+            self.assertEqual(knock[knock.index(flag) - 1], "-e")
+
+    def test_key_mode_does_not_verify_an_identity(self) -> None:
+        cmds = self.composed("KEY")
+        knock = cmds["USKE_KNOCK_CMD"]
+        self.assertIn("KNOCK_ATTEST_SIGNER=key", knock)
+        self.assertFalse([a for a in knock if a.startswith("KNOCK_ATTEST_VERIFY")])
+        self.assertFalse([a for a in knock if a.startswith("ACTIONS_ID_TOKEN")])
+        for arg in cmds["USKE_REGIS_CMD"]:
+            self.assertNotIn("cosign", arg)
 
     def test_the_lock_is_the_policy_name(self) -> None:
         self.assertEqual(

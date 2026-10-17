@@ -200,7 +200,10 @@ jobs:
           C="$HOME/.docker/config.json"
           mkdir -p "$T"
           # Le placeur signe (D2bis) : sans clé par l'OIDC du run, ou par la clé fournie.
+          # Sans clé, la promotion vérifie l'identité du workflow appelé, quel que soit son ref.
           signer="-e KNOCK_ATTEST_SIGNER=keyless -e ACTIONS_ID_TOKEN_REQUEST_URL -e ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+          signer="$signer -e KNOCK_ATTEST_VERIFY_OIDC_ISSUER=https://token.actions.githubusercontent.com"
+          signer="$signer -e 'KNOCK_ATTEST_VERIFY_IDENTITY=^https://github\.com/trivoallan/uske/\.github/workflows/extra-screen\.yml@'"
           if [ -n "$COSIGN_KEY" ]; then
             K="$RUNNER_TEMP/cosign.key"
             (umask 077; printf '%s\n' "$COSIGN_KEY" > "$K")
