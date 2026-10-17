@@ -14,3 +14,20 @@ la licence Apache 2.0, comme le dit la section 5 de [LICENSE](LICENSE). Aucun CL
 
 Les conventions et l'architecture du dépôt sont dans [CLAUDE.md](CLAUDE.md) et
 [`docs/architecture/arc42.md`](docs/architecture/arc42.md).
+
+## Test
+
+```bash
+make test       # pytest, branch coverage, fails under 90 %
+make lint       # ruff, then the manifests rendered by kustomize and checked by argo lint
+make security   # pip-audit, fails from HIGH
+make image      # build the image and run it once
+```
+
+The CI's build steps call these targets and nothing else; it also installs the tools
+(`make ci-tools`) and runs three repository checks of its own: no tracked nanopm data, actions
+pinned by SHA, and a self-test of the settings script. `make lint` needs `kubectl` and `argo`
+on the `PATH`.
+
+[`tests/fixtures/repo`](tests/fixtures/repo) is a frozen copy of a policy repository — playbooks, one
+policy and its refusal journal — so the tests do not depend on a checkout next door.
