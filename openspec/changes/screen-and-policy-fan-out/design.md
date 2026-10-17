@@ -274,11 +274,42 @@ décision existe, durable, dans le dépôt d'artefacts. Une fusion échouée fai
 `argo retry` la rejoue. `Forbid` ne suffit pas à retenir le screening suivant : un parent en
 échec est fini, et le `CronWorkflow` lance le suivant. Aussi l'instantané pose-t-il, sous le
 mutex `uske-journal`, la marque `<uske-results>/.pending-merge/<run>`, que `uske merge
---pending <run>` efface une fois toutes les archives versées. Un instantané qui trouve la marque
+--pending <run>` efface une fois toutes les archives versées, sans erreur ni conflit. Un instantané qui trouve la marque
 d'un autre run échoue (code 1), en nommant ce run et `argo retry <run>` : le screening suivant ne
 juge jamais sur un journal dont la fusion a échoué. La marque n'est pas un `*.jsonl` : ni
 l'instantané, ni la fusion, ni `uske decisions` ne la lisent comme un journal. La fusion d'un
 enfant relancé seul ne l'efface pas : elle n'a versé qu'une politique.
+
+Une ligne ajoutée au vrai journal après l'instantané — une quarantaine arbitrée, une réouverture
+`uske/reopened` — échappe à l'enfant, qui juge sur sa copie : il peut placer l'empreinte, et ses
+lignes, plus récentes, passeraient `results.append` et feraient revenir sans bruit le journal sur
+la décision humaine. La fusion la fait donc l'emporter. `uske export --run <run>` écrit dans
+l'archive `meta.json` : `snapshot_lines` et `run`. Pour chaque archive, dans l'ordre, la fusion
+relit le journal et prend ses lignes au-delà des `snapshot_lines` premières lignes non vides
+(comptées comme `results.read`), sauf celles dont le `run` est celui de l'archive : les lignes
+d'une archive précédente du même screening, un enfant recréé, versées l'instant d'avant. Une
+ligne sans `run` (écrite à la main) ou d'un autre `run` sur l'empreinte D refuse toutes les
+lignes de l'archive sur D. Chaque ligne refusée est dite sur la sortie d'erreur, avec la
+politique, D, l'état, la raison et la date de la ligne qui l'emporte ; les autres lignes sont
+versées, les rapports copiés (ils disent ce qu'a fait l'enfant), les archives suivantes de la
+politique traitées. Une archive sans `meta.json` (format antérieur) ou dont le journal compte
+moins de lignes que l'instantané est refusée comme une archive illisible.
+
+Un conflit fait échouer la fusion (code 1) et **garde la marque** : le screening suivant reste
+bloqué jusqu'à ce qu'une personne regarde. La règle est d'une ligne : la marque ne part que sur
+une fusion sans erreur ni conflit. Rejouer la fusion (`argo retry`) refuse les mêmes lignes — la
+ligne écrite à la main est toujours après l'instantané — et n'efface donc jamais la marque :
+après avoir vérifié chaque empreinte nommée (l'enfant a pu la placer), l'opératrice supprime la
+marque à la main (`docs/how-to/operate.md`). C'est un contrôle *fail-visible*, pas *fail-closed* :
+le placement a pu avoir lieu avant la fusion ; elle ne le défait pas, elle empêche que le journal
+le dise décidé et le fait voir.
+
+*Écartée :* laisser `results.append` trancher par la date. La ligne de l'enfant, écrite plus
+tard, est plus récente : elle gagnerait.
+
+*Écartée :* effacer la marque quand seules des lignes en conflit restent. Le screening suivant
+jugerait sur un journal juste, mais une image placée contre une quarantaine passerait sans
+qu'une personne l'ait vue.
 
 *Écartée :* que l'instantané attende la fusion manquante. Le parent qui la doit peut ne jamais
 revenir ; un échec qui le nomme se voit, une attente non.
@@ -331,9 +362,11 @@ support, `DEBT-08`, hors de ce change.
   relancer un screening entier.
 - [Un nom de politique sert aussi de valeur de label, bornée à 63 caractères] → `policies.load`
   borne le nom à 63.
-- [Une ligne écrite à la main entre l'instantané et la fusion rend périmée une ligne de l'enfant]
-  → `results.append` ne l'écrit pas et le dit ; c'est la règle « le journal n'avance que vers
-  l'avant ».
+- [Une ligne écrite à la main entre l'instantané et la fusion échappe à l'enfant, qui peut placer
+  l'empreinte qu'elle met en quarantaine] → la fusion refuse les lignes de l'enfant sur cette
+  empreinte, les nomme, échoue et garde la marque (D12) : la ligne écrite à la main reste le
+  dernier état. *Fail-visible*, pas *fail-closed* : le placement a pu avoir lieu, une personne
+  le vérifie avant d'effacer la marque.
 - [L'artefact `work` circule à chaque étape : un dépôt de politiques lourd coûte autant de
   transferts] → l'extraction est `--depth 1` ; le spike mesure.
 - [`concurrencyPolicy: Forbid` saute un screening quand le précédent dure plus de 5 minutes] →

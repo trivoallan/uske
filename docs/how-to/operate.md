@@ -123,7 +123,7 @@ replaying it appends nothing. Until it has run, the journal on the volume lags b
 placed; the decisions are in the artifact repository.
 
 The snapshot leaves a mark, `.pending-merge/<run>`, beside the journals, and the merge clears it
-once every archive is in. A screening whose snapshot finds another run's mark **fails** at once,
+once every archive is in, with no error and no conflict. A screening whose snapshot finds another run's mark **fails** at once,
 naming that run: its children may have placed images whose lines are not in the journal yet, and
 judging on that journal would judge them again. Every five minutes the next screening fails the
 same way, until the merge succeeds.
@@ -135,6 +135,19 @@ same way, until the merge succeeds.
 - **A parent that is gone** (deleted, or stopped before its merge) leaves its mark. Its children's
   archives are still under `runs/<run>/out/`; to give their lines up, remove the mark from a pod
   that mounts the volume: `rm /results/.pending-merge/<run>`.
+- **A conflict**: someone wrote a line to a policy's journal after the snapshot (an arbitrated
+  `quarantine`, a `uske/reopened`), on a digest the child also wrote lines on. That line wins:
+  the merge does not write the child's lines on that digest, names each one on stderr
+  (`<policy>: conflict: <digest>: …`, with the state, reason and date of the line that won),
+  merges every other line, then fails and **keeps the mark**. The check makes the conflict
+  visible; it does not undo it: the child may have placed the image before the merge. For each
+  digest named, look at the registry and act on the hand-written decision (remove the placed
+  tag if it should not be there). Then remove the mark by hand, `rm
+  /results/.pending-merge/<run>`, from a pod that mounts the volume. Do not `argo retry` the
+  parent to clear it: the hand-written line is still after the snapshot, so a replay refuses the
+  same lines and fails again. The next screening judges on the journal as it now stands.
+  An archive without `meta.json` (written by an older `uske export`) is refused like an unreadable
+  one.
 - **One policy alone**: resubmit its child with `merge=true`, and it merges its policy's lines at
   the end, under the same lock: `argo -n uske resubmit <child> -p merge=true`. It does not clear
   the parent's mark. Do it while the parent's snapshot is still in the artifact repository;

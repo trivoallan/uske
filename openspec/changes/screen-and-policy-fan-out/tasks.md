@@ -138,7 +138,7 @@
 
 La revue de `feat/screen-and-policy-fan-out` a relevé un finding critique (C1), cinq importants
 (I2 à I6) et cinq mineurs (M1 à M5). I1 (un instantané périmé face à une ligne écrite à la main)
-attend une décision et n'est pas traité ici.
+est traité par la tâche 6.8, sur décision : la fusion échoue bruyamment.
 
 - [x] 6.1 C1 : le jeton du dépôt n'est jamais écrit sur un disque. `checkout` (parent et enfant)
   le passe en en-tête HTTP à la seule commande `git` ; l'enfant supprime `.git` par
@@ -155,3 +155,8 @@ attend une décision et n'est pas traité ici.
 - [x] 6.7 M1 à M4 : `merge.archives` ne garde que les fichiers réguliers ; « sous-domaine DNS-1123,
   63 caractères au plus » partout ; `knock` 0.16.0 ; la source saine close par
   `uske/remediation-refused` sur un tag réparé (D11).
+- [x] 6.8 I1 : `uske export --run` écrit `meta.json` (`snapshot_lines`, `run`) ; `uske merge`
+  refuse les lignes d'un enfant sur une empreinte qui a gagné, depuis l'instantané, une ligne d'un
+  autre `run` ou sans `run`, les nomme, verse le reste, échoue et garde la marque ; une archive
+  sans `meta.json` est refusée (D12, review 13). Scénario *Un verdict écrit à la main pendant le
+  screening l'emporte*.

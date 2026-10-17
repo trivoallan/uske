@@ -29,6 +29,7 @@ suit leurs grilles, à la main, sur `proposal.md`, les deux deltas et `design.md
 | 10 | Contrôle · fail-closed | Un tag réparé que le correctif amont suivant replace sans ordre perd sa réparation sans bruit (un non-root redevient root). | haute | Exigence ajoutée à `rebuild-gate` ; tâche 3.1. Sans transit, l'opération est retirée plutôt que placée nue. |
 | 11 | Contrôle · fail-closed | Avec la fusion à la fin, le journal du volume retarde sur les placements ; si la décision n'était pas durable avant, une image serait placée sans trace. | haute | Exigence *Une décision est durable avant le placement qu'elle permet* : l'artefact `lines` est téléversé avant `place` (tâche 4.3). |
 | 12 | Contrôle · intégrité | La fusion lit des archives : un membre `../../x` ou un nom de politique hors DNS-1123 écrirait hors de `uske-results`. | haute | Refusés, avec tests (tâche 4.1). |
+| 13 | Contrôle · fail-open | I1 (revue du code) : un enfant juge sur un instantané pris parfois des heures avant lui. Une ligne écrite à la main au vrai journal après l'instantané (quarantaine arbitrée, réouverture) lui échappe ; ses lignes sur la même empreinte, plus récentes, passent `results.append` et défont la décision humaine sans bruit. | haute | La fusion refuse les lignes de l'enfant sur une empreinte qui a gagné, depuis l'instantané, une ligne d'un autre `run` ou sans `run`, les nomme, échoue et garde la marque (D12, tâche 6.8). *Fail-visible* : le placement a pu avoir lieu, la fusion ne le défait pas. |
 
 ## Critère d'achèvement
 

@@ -99,6 +99,15 @@ fusionner les lignes de sa politique quand son paramètre `merge` vaut `true` ; 
 à `false`. Chaque enfant SHALL rendre ses lignes dans un artefact qui lui est propre : un enfant
 recréé ou resoumis MUST NOT écraser les lignes d'un autre enfant.
 
+Une ligne ajoutée au journal d'une politique après l'instantané, et qu'aucun enfant de ce
+screening n'a écrite (sans `run`, ou d'un autre `run`), SHALL l'emporter : la fusion MUST NOT
+écrire les lignes de l'enfant sur la même empreinte, SHALL nommer sur sa sortie d'erreur chacune
+d'elles avec la politique, l'empreinte, l'état, la raison et la date de la ligne qui l'emporte,
+SHALL verser les autres lignes, puis MUST échouer en gardant la marque de fusion en souffrance.
+L'enfant a pu placer l'image : la fusion rend le conflit visible, elle ne le défait pas. Chaque
+archive SHALL dire le nombre de lignes de l'instantané et le `run` du screening ; une archive qui
+ne les dit pas MUST être refusée.
+
 #### Scenario: Deux politiques, une fusion
 
 - **GIVEN** un screening de deux politiques, dont chaque enfant a ajouté deux lignes
@@ -111,13 +120,27 @@ recréé ou resoumis MUST NOT écraser les lignes d'un autre enfant.
 - **WHEN** l'étape de fusion est rejouée par `argo retry`
 - **THEN** aucune ligne n'est ajoutée
 
-#### Scenario: Une ligne écrite à la main pendant le screening
+#### Scenario: Un verdict écrit à la main pendant le screening l'emporte
 
-- **GIVEN** une ligne de réouverture ajoutée au journal d'une politique après l'instantané, et plus
-  récente qu'une ligne de l'enfant sur la même empreinte
+- **GIVEN** une ligne `quarantine` écrite à la main sur l'empreinte D au journal d'une politique
+  après l'instantané, et un enfant qui a écrit des lignes sur D et sur une autre empreinte
 - **WHEN** la fusion tourne
-- **THEN** la ligne de l'enfant n'est pas écrite, et la fusion la signale comme périmée sur sa
-  sortie d'erreur
+- **THEN** les lignes de l'enfant sur D ne sont pas écrites, celles sur l'autre empreinte le sont,
+  la fusion nomme D et échoue, et le dernier état de D au journal est la ligne écrite à la main
+
+#### Scenario: Les lignes du même screening ne sont pas un conflit
+
+- **GIVEN** deux enfants de la politique P dans un même screening, dont le premier a déjà été
+  fusionné
+- **WHEN** la fusion verse l'archive du second
+- **THEN** les lignes du premier, qui portent le `run` du screening, ne bloquent aucune ligne du
+  second
+
+#### Scenario: Une archive sans instantané est refusée
+
+- **GIVEN** une archive qui ne dit ni le nombre de lignes de l'instantané ni le `run`
+- **WHEN** la fusion tourne
+- **THEN** l'archive est refusée en le disant, et les autres politiques sont fusionnées
 
 #### Scenario: Un enfant recréé ne fait pas perdre les lignes du premier
 
