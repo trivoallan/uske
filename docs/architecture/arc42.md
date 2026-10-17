@@ -224,7 +224,7 @@ se lit comme un refus.
 | Langage | Python ≥ 3.12 | L'un des trois que la méthode recommande ; celui de `regis` et `knock`, donc un seul outillage pour les trois dépôts | [`SDR-0004`](../adr/SDR-0004-languages.md) |
 | Enchaînement | Argo Workflows : un `CronWorkflow`, une sous-commande par étape | Le rejeu, les reprises et la trace de chaque étape viennent de l'outil, pas de `uske` | **aucun ADR** — `DEBT-07` |
 | Intégration | `regis` et `knock` à leurs propres étapes du workflow, par fichiers ; Harbor et Dependency-Track par HTTP, en bibliothèque standard | Ne partager ni code ni image avec les outils enchaînés ; une seule dépendance d'exécution (`pyyaml`) | *Architecture Constraints* |
-| Persistance | Un fichier JSON Lines par politique, en ajout seul, sur un volume | Un fichier se lit, se copie et se conteste sans serveur ; l'ajout seul se vérifie dans son historique | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md) ; le support lui-même : **aucun ADR** — `DEBT-08` |
+| Persistance | Un fichier JSON Lines par politique, en ajout seul, sur un volume | Un fichier se lit, se copie et se conteste sans serveur ; l'ajout seul se vérifie dans son historique | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md) ; le support lui-même : [`SDR-0019`](../adr/SDR-0019-journal-signe.md) (`proposed`) |
 | Structure du code | Hexagonale : le domaine sans entrée-sortie | Un agent modifie et teste une règle sans environnement qui tourne | [`SDR-0003`](../adr/SDR-0003-architecture.md) — non tenu, `DEBT-01` |
 | Validation | `pydantic` aux frontières, JSON Schema pour les fichiers | Un champ absent devient une erreur nommée, pas un défaut silencieux | [`SDR-0005`](../adr/SDR-0005-validation.md) — non tenu, `DEBT-02` |
 
@@ -576,12 +576,12 @@ format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie 
 ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
 nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
 
-Quatorze ADR à ce jour, tous statués, dont deux dépassés par `SDR-0017` ; douze sont donc en
-vigueur. Onze sont hérités de la méthode — voir *Architecture Constraints* : dix questions
-qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment on y répond. Trois sont
-propres à `uske` : `SDR-0016`, `SDR-0017` et `SDR-0018`. Une nouvelle décision s'écrit
-quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
-ou contraint les changes suivants.
+Quinze ADR à ce jour : quatorze statués, dont deux dépassés par `SDR-0017`, donc douze en
+vigueur, et un `proposed`, `SDR-0019`. Onze sont hérités de la méthode — voir *Architecture
+Constraints* : dix questions qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment
+on y répond. Quatre sont propres à `uske` : `SDR-0016`, `SDR-0017`, `SDR-0018` et `SDR-0019`.
+Une nouvelle décision s'écrit quand un choix est cher à défaire, touche plusieurs blocs, arbitre
+entre deux objectifs qualité ou contraint les changes suivants.
 
 **La numérotation est celle de la méthode, trous compris.** Elle saute de `SDR-0011` à
 `SDR-0016`. **`SDR-0012` n'existe pas en amont non plus** — vérifié le 2026-09-20 dans les
@@ -621,6 +621,7 @@ dépasse `SDR-0006` et `SDR-0010`.
 | [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
 | [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
 | [SDR-0018](../adr/SDR-0018-journal-run.md) | Une ligne du journal nomme le criblage qui l'a écrite (clé `run`) | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui — `classify --run` reçoit `{{workflow.name}}` du `WorkflowTemplate` |
+| [SDR-0019](../adr/SDR-0019-journal-signe.md) | Le journal reste sur son volume, et chaque screening le scelle d'un point de contrôle signé | proposed | 2026-10-17 | Contestabilité, contre Minceur | sans objet — en attente de l'équipe PKI |
 
 ## Écarts ouverts
 
@@ -668,7 +669,7 @@ Minceur, au nom de la Sûreté. Le rang des objectifs tranche — c'est à cela 
 
 | ID | Priorité | Risque | Probabilité × impact | Ce qui le réduit |
 |----|----------|--------|----------------------|------------------|
-| RISK-01 | **haute** | Le journal vit sur un volume, sans historique : une écriture directe sur le volume réécrit une ligne, et rien ne le voit. L'objectif de Contestabilité promet « aucune ligne modifiée » sans moyen de le prouver hors de `uske`. | possible × fort | Rien encore. Une copie datée du journal hors du volume rendrait QS-04 vérifiable ; le support est à décider (`DEBT-08`) |
+| RISK-01 | **haute** | Le journal vit sur un volume, sans historique : une écriture directe sur le volume réécrit une ligne, et rien ne le voit. L'objectif de Contestabilité promet « aucune ligne modifiée » sans moyen de le prouver hors de `uske`. | possible × fort | Rien encore. [`SDR-0019`](../adr/SDR-0019-journal-signe.md) (`proposed`) propose un point de contrôle signé par politique à chaque screening, vérifiable par préfixe ; la fenêtre d'un screening reste hors de la preuve |
 | RISK-04 | **haute** | Un transit que les consommateurs peuvent tirer expose une image reconstruite **avant** son jugement. `knock` refuse seulement un transit qui est aussi une destination. | possible × fort | Le registre ferme le transit aux consommateurs (README, *Rebuilds and repairs*) ; `uske` ne le vérifie pas |
 | RISK-02 | moyenne | `uske` n'est déployé nulle part : QS-03 n'a jamais été mesuré, et le rythme de 5 minutes n'a pas été confronté à un vrai registre. | certain × moyen | Le premier overlay de production, puis une mesure de QS-03 sur un refus réel |
 | RISK-03 | moyenne | Avec un `knock` antérieur à 0.13.0, rien n'est réparé, et rien ne dit pourquoi. | faible × moyen | L'overlay épingle `knock` par empreinte ; le banc tient 0.16.0 |
@@ -690,7 +691,7 @@ viennent d'une revue.
 | DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | — la chaîne | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. L'outil de release installé — il dépend de DEBT-03 |
 | DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | — la chaîne | revue du 2026-09-20 | Le contrôle ajouté à la cible `lint` du `Makefile`, ou dit manuel dans un ADR qui dépasse [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
 | DEBT-07 | Argo Workflows enchaîne les étapes, et rien ne dit pourquoi : c'est lui qui rend un rejeu possible, et le quitter réécrirait tout `deploy/` | *Workflow* | revue du 2026-10-17, en écrivant *Solution Strategy* | Un ADR qui statue le planificateur, options écartées comprises |
-| DEBT-08 | Le journal est un fichier JSON Lines par politique sur un volume, et rien ne dit pourquoi : `SDR-0016` fixe son vocabulaire, pas son support ; l'objectif de Contestabilité repose sur ce support (RISK-01) | *Journal* | revue du 2026-10-17, en écrivant *Solution Strategy* | Un ADR qui statue le support du journal, options écartées comprises |
+| DEBT-08 | Le journal est un fichier JSON Lines par politique sur un volume, et rien ne dit pourquoi : `SDR-0016` fixe son vocabulaire, pas son support ; l'objectif de Contestabilité repose sur ce support (RISK-01) | *Journal* | revue du 2026-10-17, en écrivant *Solution Strategy* | Un ADR qui statue le support du journal, options écartées comprises — [`SDR-0019`](../adr/SDR-0019-journal-signe.md), `proposed` : se referme quand il est `accepted` |
 | DEBT-09 | `README.md` est en anglais d'abord, contre la règle du français par défaut | — la documentation | [`SDR-0002`](../adr/SDR-0002-localization.md) | Le README réécrit en français, ou l'écart accepté dans un ADR |
 
 **Deux motifs reviennent, et ce sont eux qu'il faut surveiller.** Le premier : une
