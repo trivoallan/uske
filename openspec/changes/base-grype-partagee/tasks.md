@@ -111,7 +111,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
 
 ## 3. Les évaluations jugent avec la base distribuée
 
-- [ ] 3.1 Test d'abord, dans `tests/test_grype_db.py` : le template `regis-analyze` de
+- [x] 3.1 Test d'abord, dans `tests/test_grype_db.py` : le template `regis-analyze` de
   `deploy/base/workflowtemplate.yaml` reçoit un artefact d'entrée `grype-db` facultatif à la clé
   `grype-db/current.tar.zst`, en `/tmp/grype-db.tar.zst`, sans archivage Argo ; son script
   déballe l'archive (`r:zst`, `filter="data"`) et la supprime avant `regis analyze` ; il ne monte
@@ -120,11 +120,11 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   `GRYPE_CHECK_FOR_APP_UPDATE=false` (D8). Scénarios : *Une évaluation ne télécharge pas de base*,
   *Deux évaluations entre deux rafraîchissements jugent avec la même base*, *Aucune base
   distribuée*. `make test` attendu : échec sur l'absence de l'artefact.
-- [ ] 3.2 Dans `deploy/base/workflowtemplate.yaml`, template `regis-analyze` : ajouter l'artefact
+- [x] 3.2 Dans `deploy/base/workflowtemplate.yaml`, template `regis-analyze` : ajouter l'artefact
   d'entrée, faire précéder `regis analyze` du déballage de D4 (`design.md`), et ajouter un `env`
   avec les quatre variables, à côté de son `envFrom`.
-- [ ] 3.3 `make test` attendu : vert. `make lint` attendu : sortie 0.
-- [ ] 3.4 Commit : `feat: juger avec la base grype distribuée, sans appel à Anchore`.
+- [x] 3.3 `make test` attendu : vert. `make lint` attendu : sortie 0.
+- [x] 3.4 Commit : `feat: juger avec la base grype distribuée, sans appel à Anchore`.
 
 ## 4. Le banc kind et la documentation
 

@@ -132,7 +132,9 @@ class Manifests(unittest.TestCase):
         """review I3, M5: per-child archives; no policy named `out` or `done` meets another key."""
         name = "{{workflow.parameters.name}}"
         found = keys(self.base["uske-policy"]) + keys(self.base["uske-screening"])
-        for key in found:
+        # the one key outside `runs/`: the database the refresh distributes, read by every step
+        shared = "grype-db/current.tar.zst"
+        for key in (k for k in found if k != shared):
             with self.subTest(key=key):
                 self.assertTrue(key.startswith("runs/{{workflow."), key)
                 if name in key:

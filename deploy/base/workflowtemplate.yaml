@@ -851,19 +851,41 @@ spec:
         parameters: [{name: target}, {name: playbook}]
         artifacts:
           - *work-in  # the playbook, in the checkout
+          - name: grype-db  # the vulnerability database the refresh distributes (grype-db.yaml)
+            path: /tmp/grype-db.tar.zst
+            optional: true  # absent before the first refresh: regis then records the cve check in error
+            archive: {none: {}}
+            s3: {key: grype-db/current.tar.zst}
       container:
         image: regis
         command: [sh, -c]
-        # The directory exists even when regis fails: classify then records it inconclusive.
+        # The report directory exists even when regis fails: classify then records it inconclusive.
+        # The archive (~500 MB) is unpacked into /tmp/grype-db (3.25 GB) and deleted; no volume
+        # (SDR-0021), so the pod's ephemeral storage is sized for both plus regis's own needs.
+        # An archive that does not unpack leaves no partial database: regis runs all the same,
+        # and its cve check fails with "database does not exist" instead of the step stopping.
         args:
-          - >-
-            mkdir -p /tmp/report &&
-            regis analyze "{{inputs.parameters.target}}"
-            --playbook "{{inputs.parameters.playbook}}"
-            ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"}
-            -D /tmp/report -o "report.{format}" --html
+          - |
+            mkdir -p /tmp/report
+            if [ -f /tmp/grype-db.tar.zst ]; then
+              python3 -c "import tarfile; tarfile.open('/tmp/grype-db.tar.zst', 'r:zst').extractall('/tmp/grype-db', filter='data')" \
+                || { echo "grype-db: the database could not be unpacked" >&2; rm -rf /tmp/grype-db; }
+              rm -f /tmp/grype-db.tar.zst
+            fi
+            regis analyze "{{inputs.parameters.target}}" \
+              --playbook "{{inputs.parameters.playbook}}" \
+              ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"} \
+              -D /tmp/report -o "report.{format}" --html
+        env:  # judge with the distributed database only: no call to Anchore (D8)
+          - {name: GRYPE_DB_CACHE_DIR, value: /tmp/grype-db}
+          - {name: GRYPE_DB_AUTO_UPDATE, value: "false"}
+          - {name: GRYPE_DB_MAX_ALLOWED_BUILT_AGE, value: 48h}
+          - {name: GRYPE_CHECK_FOR_APP_UPDATE, value: "false"}
         envFrom:
           - secretRef: {name: uske-harbor}
+        resources:
+          requests: {ephemeral-storage: 5Gi}
+          limits: {ephemeral-storage: 6Gi}
       outputs:
         artifacts:
           - {name: report, path: /tmp/report, optional: true, mode: 511, recurseMode: true}

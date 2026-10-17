@@ -19,6 +19,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "deploy" / "base" / "grype-db.yaml"
+SCREENING = ROOT / "deploy" / "base" / "workflowtemplate.yaml"
 FAKES = Path(__file__).resolve().parent / "fakes"
 POINTER = "grype-db/current.json"
 ARCHIVE = "grype-db/current.tar.zst"
@@ -240,6 +241,137 @@ class Script(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("no active database", proc.stderr)
         self.assertEqual(list((work / "out").iterdir()), [])
+
+
+def _regis_analyze() -> dict:
+    for doc in yaml.safe_load_all(SCREENING.read_text()):
+        for template in (doc or {}).get("spec", {}).get("templates", []):
+            if template["name"] == "regis-analyze":
+                return template
+    raise AssertionError("no regis-analyze template")
+
+
+class RegisAnalyze(unittest.TestCase):
+    """The judging step reads the distributed database and never fetches one."""
+
+    template = _regis_analyze()
+    container = template["container"]
+    script = container["args"][0]
+
+    def test_the_database_comes_in_as_an_optional_artifact(self) -> None:
+        """*Aucune base distribuée*: the step starts without it."""
+        (db,) = [
+            a
+            for a in self.template["inputs"]["artifacts"]
+            if a.get("name") == "grype-db"
+        ]
+        self.assertEqual(db["path"], "/tmp/grype-db.tar.zst")
+        self.assertTrue(db["optional"])
+        self.assertEqual(db["archive"], {"none": {}})
+        self.assertEqual(db["s3"], {"key": ARCHIVE})
+
+    def test_no_download_and_a_database_at_most_two_days_old(self) -> None:
+        """*Une évaluation ne télécharge pas de base*."""
+        env = {e["name"]: e["value"] for e in self.container["env"]}
+        self.assertEqual(
+            env,
+            {
+                "GRYPE_DB_CACHE_DIR": "/tmp/grype-db",
+                "GRYPE_DB_AUTO_UPDATE": "false",
+                "GRYPE_DB_MAX_ALLOWED_BUILT_AGE": "48h",
+                "GRYPE_CHECK_FOR_APP_UPDATE": "false",
+            },
+        )
+        self.assertEqual(
+            self.container["envFrom"], [{"secretRef": {"name": "uske-harbor"}}]
+        )
+
+    def test_the_storage_is_sized_for_the_database_and_no_volume_is_added(self) -> None:
+        resources = self.container["resources"]
+        self.assertEqual(resources["requests"]["ephemeral-storage"], "5Gi")
+        self.assertEqual(resources["limits"]["ephemeral-storage"], "6Gi")
+        self.assertNotIn("volumes", self.template)
+        self.assertNotIn("volumeMounts", self.container)
+
+    def test_the_archive_is_unpacked_with_the_safe_filter_before_regis(self) -> None:
+        self.assertIn("r:zst", self.script)
+        self.assertIn("filter='data'", self.script)
+        self.assertLess(self.script.index("r:zst"), self.script.index("regis analyze"))
+
+    def run_step(self, archive: bytes | None):
+        """The script with `/tmp` redirected to a temp dir, regis being the fake."""
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(root, ignore_errors=True))
+        if archive is not None:
+            (root / "grype-db.tar.zst").write_bytes(archive)
+        script = (
+            self.script.replace("/tmp/", f"{root}/")
+            .replace("{{inputs.parameters.target}}", "reg.test/app@sha256:aa")
+            .replace("{{inputs.parameters.playbook}}", "playbook.yaml")
+        )
+        env = {
+            **os.environ,
+            "PATH": f"{FAKES}:{os.environ['PATH']}",
+            "FAKE_CALLS": str(root / "calls"),
+            "FAKE_ENV": str(root / "env.json"),
+            **{e["name"]: e["value"] for e in self.container["env"]},
+        }
+        proc = subprocess.run(
+            ["sh", "-c", script], check=False, env=env, capture_output=True, text=True
+        )
+        return proc, root
+
+    def assertRegisRan(self, proc, root: Path) -> None:
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue((root / "report" / "report.json").exists())
+        self.assertIn("regis analyze", (root / "calls").read_text().replace("'", ""))
+
+    def test_without_an_archive_regis_still_runs(self) -> None:
+        """*Aucune base distribuée*: regis reports the missing database itself."""
+        proc, root = self.run_step(None)
+        self.assertRegisRan(proc, root)
+        self.assertFalse((root / "grype-db").exists())
+
+    def test_a_corrupt_archive_is_removed_and_regis_still_runs(self) -> None:
+        proc, root = self.run_step(b"not a zstd archive")
+        self.assertRegisRan(proc, root)
+        self.assertFalse((root / "grype-db").exists())
+        self.assertFalse((root / "grype-db.tar.zst").exists())
+        self.assertIn("could not be unpacked", proc.stderr)
+
+    @needs_zstd
+    def test_a_valid_archive_is_unpacked_then_deleted_before_regis(self) -> None:
+        """*Deux évaluations entre deux rafraîchissements jugent avec la même base*."""
+        src = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(src, ignore_errors=True))
+        (src / "6").mkdir()
+        (src / "6" / "vulnerability.db").write_text("db")
+        packed = src.parent / f"{src.name}.tar.zst"
+        self.addCleanup(lambda: packed.unlink(missing_ok=True))
+        subprocess.run(
+            [
+                "python3",
+                "-c",
+                (
+                    "import sys, tarfile; t = tarfile.open(sys.argv[1], 'w:zst'); "
+                    "t.add(sys.argv[2] + '/6', arcname='6'); t.close()"
+                ),
+                str(packed),
+                str(src),
+            ],
+            check=True,
+        )
+        proc, root = self.run_step(packed.read_bytes())
+        self.assertRegisRan(proc, root)
+        self.assertEqual(
+            (root / "grype-db" / "6" / "vulnerability.db").read_text(), "db"
+        )
+        self.assertFalse((root / "grype-db.tar.zst").exists())
+        seen = json.loads((root / "env.json").read_text())
+        self.assertEqual(seen["GRYPE_DB_AUTO_UPDATE"], "false")
+        self.assertEqual(seen["GRYPE_DB_MAX_ALLOWED_BUILT_AGE"], "48h")
+        self.assertEqual(seen["GRYPE_CHECK_FOR_APP_UPDATE"], "false")
+        self.assertEqual(seen["GRYPE_DB_CACHE_DIR"], "/tmp/grype-db")
 
 
 if __name__ == "__main__":

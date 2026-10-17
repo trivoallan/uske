@@ -5,6 +5,7 @@
 
 FAKE_VERDICTS, a JSON object, maps a digest (or "*") to a report name: `direct`, `quarantine`,
 `repairable`, or `fail` (no report, exit 3). Default: `direct`. Each call is logged to FAKE_CALLS.
+FAKE_ENV, when set, receives the GRYPE_* variables the call was given, as a JSON object.
 """
 
 import json
@@ -21,6 +22,9 @@ def main(argv: list[str]) -> int:
     if os.environ.get("FAKE_CALLS"):
         with open(os.environ["FAKE_CALLS"], "a") as log:
             log.write(shlex.join(["regis", *argv]) + "\n")
+    if os.environ.get("FAKE_ENV"):
+        grype = {k: v for k, v in os.environ.items() if k.startswith("GRYPE_")}
+        Path(os.environ["FAKE_ENV"]).write_text(json.dumps(grype))
     if not argv or argv[0] != "analyze":
         return 2
     target = argv[1]
