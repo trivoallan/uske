@@ -1,0 +1,13 @@
+apiVersion: knock.io/v1alpha1
+kind: MirrorPolicy
+metadata:
+  name: example-alpine
+  labels:
+    admission-track: standard
+spec:
+  artifactType: image
+  source: {registry: docker.io, repository: library/alpine}
+  imports:
+    - name: v3
+      tags: {includeRegex: "^3\\.22\\.[0-9]+$"}
+      destinations: [{registry: ghcr, project: trivoallan, repository: uske-example/alpine}]

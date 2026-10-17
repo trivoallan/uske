@@ -661,7 +661,7 @@ Renovate le suivra.
 
 ## 5. Le banc : un appelant d'exemple, rejoué sur GitHub
 
-- [ ] 5.1 Créer `examples/github/policies/alpine.yaml` :
+- [x] 5.1 Créer `examples/github/policies/alpine.yaml` :
   ```yaml
   apiVersion: knock.io/v1alpha1
   kind: MirrorPolicy
@@ -677,10 +677,10 @@ Renovate le suivra.
         tags: {includeRegex: "^3\\.22\\.[0-9]+$"}
         destinations: [{registry: ghcr, project: trivoallan, repository: uske-example/alpine}]
   ```
-- [ ] 5.2 Copier les playbooks : `cp -R tests/fixtures/repo/playbooks examples/github/playbooks`.
+- [x] 5.2 Copier les playbooks : `cp -R tests/fixtures/repo/playbooks examples/github/playbooks`.
   Vérifier : `uske resolve --policy examples/github/policies/alpine.yaml --playbooks examples/github/playbooks`
   doit imprimer un chemin qui finit par `playbook.yaml`.
-- [ ] 5.3 Créer `.github/workflows/extra-screen-example.yml` :
+- [x] 5.3 Créer `.github/workflows/extra-screen-example.yml` :
   ```yaml
   # Banc du workflow réutilisable (change github-action, D7) : appelle extra-screen.yml par son
   # chemin, sur le code de la PR. Les PR venues d'un fork sont exclues : leur jeton ne peut pas pousser.
@@ -715,9 +715,9 @@ Renovate le suivra.
         journal-branch: uske-journal-example
         uske-ref: ${{ github.event.pull_request.head.sha || github.sha }}
   ```
-- [ ] 5.4 Lancer : `actionlint .github/workflows/extra-screen-example.yml`. Attendu : aucune
+- [x] 5.4 Lancer : `actionlint .github/workflows/extra-screen-example.yml`. Attendu : aucune
   sortie.
-- [ ] 5.5 Commit : `test: éprouver le workflow GitHub sur une politique d'exemple`, puis pousser
+- [x] 5.5 Commit : `test: éprouver le workflow GitHub sur une politique d'exemple`, puis pousser
   la branche et ouvrir la PR, qui déclenche le banc.
 - [ ] 5.6 Premier run, appel minimal et branche du journal. Lancer :
   `gh run watch "$(gh run list -w extra-screen-example -L1 --json databaseId -q '.[0].databaseId')" --exit-status`.
