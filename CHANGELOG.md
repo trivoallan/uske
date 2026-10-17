@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.11.0](https://github.com/trivoallan/uske/compare/v0.10.0...v0.11.0) (2026-10-17)
+
+
+### Features
+
+* cribler une politique depuis GitHub Actions par un workflow réutilisable ([#59](https://github.com/trivoallan/uske/issues/59)) ([731c9e5](https://github.com/trivoallan/uske/commit/731c9e519f9cd732c7a078cf877fdaab137e24ea))
+
+
+### Bug Fixes
+
+* tenir le workflow réutilisable aux suites de sa revue finale ([#64](https://github.com/trivoallan/uske/issues/64)) ([7e01369](https://github.com/trivoallan/uske/commit/7e01369af42612dd2f97692737040a60c0b23fba))
+
+
+### Documentation
+
+* archiver report-per-judgment ([#63](https://github.com/trivoallan/uske/issues/63)) ([dfd81d2](https://github.com/trivoallan/uske/commit/dfd81d272a53ba3abdd12fe01012590376ea2e4e))
+* cocher la suite de report-per-judgment, faite après la 0.9.1 ([#61](https://github.com/trivoallan/uske/issues/61)) ([ad3a90f](https://github.com/trivoallan/uske/commit/ad3a90f5b54408a7157b35548e989240caef976a))
+
 ## [0.10.0](https://github.com/trivoallan/uske/compare/v0.9.1...v0.10.0) (2026-10-17)
 
 
