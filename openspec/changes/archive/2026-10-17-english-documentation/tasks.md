@@ -110,7 +110,7 @@
   `docs/reference/reasons.md`, puis explique ce que fait `uske` et ce que veut dire
   `uske/remediation-undeclared`. Corriger ce qu'il comprend de travers.
 - [x] 7.5 `openspec validate english-documentation --type change --strict`. Attendu : valide.
-- [ ] 7.6 Dans la merge request, signaler l'ordre de fusion avec `feat/screen-and-policy-fan-out`.
+- [x] 7.6 Dans la merge request, signaler l'ordre de fusion avec `feat/screen-and-policy-fan-out`.
   Si elle fusionne en premier, traduire au rebase ce qu'elle a ajouté (pages, entrées de
   `REASONS`).
 - [x] 7.7 Commit : `docs(openspec): cocher la vérification du change`.
