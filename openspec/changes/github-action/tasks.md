@@ -891,21 +891,21 @@ Renovate le suivra.
 
 ## 6. Documentation
 
-- [ ] 6.1 `docs/how-to/screen-from-github.md` (guide, en anglais) : l'appel minimal en un job ;
+- [x] 6.1 `docs/how-to/screen-from-github.md` (guide, en anglais) : l'appel minimal en un job ;
   `registries`, `transit` et `playbooks` ; la branche du journal et la protection ; ce que l'on lit
   dans l'archive des rapports et pendant combien de temps ; l'écart du runner auto-hébergé (Docker,
   BuildKit sans root, Harbor interne). Proposer `doc-coauthoring` pour son seul test lectoral, et
   attendre l'aval.
-- [ ] 6.2 `docs/reference/screen-workflow.md` (référence) : la table des entrées de D1, les
+- [x] 6.2 `docs/reference/screen-workflow.md` (référence) : la table des entrées de D1, les
   permissions, le verrou par `metadata.name` (au plus un run en attente), le nom de l'archive, les
   étiquettes mobiles `v0.N` puis `v1`.
-- [ ] 6.3 `docs/architecture/arc42.md` : section 7, sous « Infrastructure Level 1 », le runner
+- [x] 6.3 `docs/architecture/arc42.md` : section 7, sous « Infrastructure Level 1 », le runner
   GitHub comme second environnement ; section 11, une ligne à `RISK-01` et à `DEBT-08` (la branche
   git rend l'ajout seul vérifiable, à l'échelle d'un dépôt). Proposer `arc42-section-07`,
   `arc42-section-11` puis `arc42-review`, et attendre l'aval.
-- [ ] 6.4 `README.md` : un lien « Screen from GitHub Actions » à côté de « Screen locally ».
-- [ ] 6.5 Lancer : `make lint`. Attendu : code 0, liens compris.
-- [ ] 6.6 Commit : `docs: expliquer comment cribler depuis GitHub Actions`.
+- [x] 6.4 `README.md` : un lien « Screen from GitHub Actions » à côté de « Screen locally ».
+- [x] 6.5 Lancer : `make lint`. Attendu : code 0, liens compris.
+- [x] 6.6 Commit : `docs: expliquer comment cribler depuis GitHub Actions`.
 
 ## 7. ADR
 

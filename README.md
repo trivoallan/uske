@@ -80,7 +80,8 @@ uv run uske screen --policies policies/ --playbooks playbooks/ --results results
 It is the only `uske` command that runs regis and knock itself: from `PATH`, or through the
 prefixes in `USKE_REGIS_CMD` and `USKE_KNOCK_CMD` (a `docker run …`). `USKE_AFTER_RECORD` runs after
 each journal write, before the next placement: commit the journal there. See
-[Screen locally](docs/how-to/operate.md#screen-locally).
+[Screen locally](docs/how-to/operate.md#screen-locally). To run it from a policy repository on GitHub,
+see [Screen from GitHub Actions](docs/how-to/screen-from-github.md).
 
 ## Is it for you?
 
@@ -93,6 +94,7 @@ admission decision written down where it can be contested.
 
 Everything lives in [`docs/`](docs/):
 [operate uske](docs/how-to/operate.md) ·
+[screen from GitHub Actions](docs/how-to/screen-from-github.md) ·
 [how it works](docs/explanation/how-it-works.md) ·
 [journal states and reasons](docs/reference/reasons.md) ·
 [architecture](docs/architecture/arc42.md) ·
