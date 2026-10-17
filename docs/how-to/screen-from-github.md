@@ -215,7 +215,7 @@ Keep `id-token: write` in the caller even then.
 ## Read the journal
 
 The workflow keeps the journal on the branch `uske-journal` of your repository. Set `journal-branch`
-to use another name. You do not create it: the first run creates the branch as an orphan, with no shared history. Each
+to use another name. The workflow clones it outside your checkout, so your repository may hold a `results/` directory of its own. You do not create it: the first run creates the branch as an orphan, with no shared history. Each
 step then adds a commit, and the workflow pushes it before the next placement.
 
 The branch is append-only, so do not protect it in a way that blocks the workflow: no required pull
@@ -245,6 +245,13 @@ To find the report for a line:
 The artifact lives for `report-retention-days` days, 90 by default. GitHub caps it at 90 days on a
 public repository; a private repository can keep it longer, up to the limit its settings allow. After that the journal line still records the state, the playbook and the reason
 (see [journal states and reasons](../reference/reasons.md)); the full report is gone.
+
+## Start a new run instead of re-running a job
+
+Re-running the `screen` job deletes the reports artifact of the attempt before it. The journal
+lines that attempt pushed stay, and keep their state, playbook and reason, but their reports are
+gone. To screen again, start a new run, for example from `workflow_dispatch`: each run keeps its
+own artifact.
 
 ## Avoid parallel runs on one policy
 

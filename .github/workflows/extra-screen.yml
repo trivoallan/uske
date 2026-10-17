@@ -113,7 +113,6 @@ jobs:
       JOURNAL_BRANCH: ${{ inputs.journal-branch }}
       JOURNAL_REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      RESULTS: ${{ github.workspace }}/results
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -174,6 +173,8 @@ jobs:
           printf '%s' "$BIRTH" > "$RUNNER_TEMP/journal-birth.sh"
           printf '%s' "$HOOK" > "$RUNNER_TEMP/after-record.sh"
           chmod +x "$RUNNER_TEMP/journal-birth.sh" "$RUNNER_TEMP/after-record.sh"
+          # Hors de l'espace de travail : un dépôt appelant peut suivre son propre `results/`.
+          echo "RESULTS=$RUNNER_TEMP/uske-results" >> "$GITHUB_ENV"
       - name: Extraire ou faire naître la branche du journal
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -194,7 +195,8 @@ jobs:
             "moby/buildkit:$BUILDKIT_VERSION" --addr tcp://0.0.0.0:1234
       - id: grype-date
         run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - id: grype-restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/grype-db
           key: grype-db-${{ steps.grype-date.outputs.day }}
@@ -205,6 +207,12 @@ jobs:
           [ -n "$(ls -A "$G")" ] || docker run --rm --user "$(id -u):$(id -g)" -v "$G:/grype-db" \
             -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_CHECK_FOR_APP_UPDATE=false \
             --entrypoint grype "ghcr.io/trivoallan/regis:$REGIS_VERSION-full" db update
+      # Sauvée avant le screening : un screening qui échoue ne perd pas la base téléchargée.
+      - if: steps.grype-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/grype-db
+          key: grype-db-${{ steps.grype-date.outputs.day }}
       - name: Composer les commandes du juge et du placeur
         env:
           COSIGN_KEY: ${{ secrets.cosign-key }}
@@ -249,11 +257,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           USKE_POLICY: ${{ needs.name.outputs.name }}
-          USKE_RESULTS: ${{ github.workspace }}/results
           USKE_STEP: final
         run: |
-          [ -f "$USKE_RESULTS/$USKE_POLICY.jsonl" ] || exit 0
-          "$RUNNER_TEMP/after-record.sh"
+          [ -f "$RESULTS/$USKE_POLICY.jsonl" ] || exit 0
+          USKE_RESULTS="$RESULTS" "$RUNNER_TEMP/after-record.sh"
       - name: Archiver les rapports
         if: always()
         run: |
@@ -261,6 +268,8 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
+          # Un job rejoué supprime l'archive de sa tentative précédente, quel que soit son nom
+          # (sonde du 2026-10-17) : un suffixe de tentative ne la garderait pas (RISK-13).
           name: uske-reports-${{ needs.name.outputs.name }}
           path: ${{ runner.temp }}/reports.tar
           retention-days: ${{ inputs.report-retention-days }}
