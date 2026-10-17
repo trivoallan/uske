@@ -1,9 +1,19 @@
-# One screening: every policy, one after the other; for each, knock plans, regis judges the plan's
-# digests, and knock applies only the approved operations (D-30, knock's gate). A source refused on
-# rules its regime lists as repairable is handed back with a remediation order: knock repairs that
-# digest, holds it in a transit registry, where it is judged by its own digest and promoted only if
-# it is sound (change `split-knock-policy-transform-remediate`). A transform-only rebuild is placed
-# directly. The transit is passed to knock only when the plan carries an order.
+# One screening is a parent, `uske-screening`, and one child Workflow per policy, `uske-policy`
+# (change `screen-and-policy-fan-out`, D7 to D12). The parent fixes the commit, the epoch and the
+# `run` written on every line, snapshots the journals, creates the children and waits for them,
+# then merges their lines into the journals in one pod.
+#
+# In a child, knock plans, regis judges the plan's digests, and knock applies only the approved
+# operations (D-30, knock's gate). A source refused on rules its regime lists as repairable is
+# handed back with a remediation order: knock repairs that digest, holds it in a transit registry,
+# where it is judged by its own digest and promoted only if it is sound (change
+# `split-knock-policy-transform-remediate`). A transform-only rebuild is placed directly.
+#
+# The children share no volume: a child's work travels from step to step as the artifact `work`,
+# in the namespace's artifact repository, and it judges on a copy of its policy's journal. Only
+# the merge mounts `uske-results` to write it (the parent's snapshot reads it), so the storage
+# stays ReadWriteOnce. Two ceilings, set by the overlay: the parent's `parallelism` (policies at
+# a time) and the child's (steps at a time, so judgements).
 # Change `socle-amorce-orchestrateur`, design decisions 3 and 6 to 10.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -12,8 +22,8 @@ metadata:
 spec:
   serviceAccountName: uske
   entrypoint: screening
-  # ponytail: one step at a time, the per-run volume is ReadWriteOnce; widen with RWX storage
-  parallelism: 1
+  parallelism: 1  # ceiling: policies at a time
+  artifactRepositoryRef: {configMap: artifact-repositories, key: default-v1}
   arguments:
     parameters:
       - name: repository  # host/path of this repository, set by the overlay
@@ -27,6 +37,7 @@ spec:
       # so a later screening never reuses an earlier upgrade layer.
       - name: epoch
         value: "{{workflow.creationTimestamp.Y}}{{workflow.creationTimestamp.m}}{{workflow.creationTimestamp.d}}T{{workflow.creationTimestamp.H}}{{workflow.creationTimestamp.M}}{{workflow.creationTimestamp.S}}Z"
+  # The parent's checkout and list only, one after the other; no child mounts it.
   volumeClaimTemplates:
     - metadata:
         name: work
@@ -35,13 +46,10 @@ spec:
         resources:
           requests:
             storage: 1Gi
-  volumes:
-    - name: results
-      persistentVolumeClaim:
-        claimName: uske-results
 
   templates:
     - name: screening
+      failFast: false  # one failed child never keeps the next ones from being created
       steps:
         - - name: checkout
             template: checkout
@@ -51,208 +59,46 @@ spec:
               parameters:
                 - name: args
                   value: list --policies /work/repo/{{workflow.parameters.policies}}
+        - - name: snapshot
+            template: snapshot
+            arguments:
+              parameters:
+                - {name: policies, value: "{{steps.list.outputs.result}}"}
         - - name: policy
             template: policy
-            withParam: "{{steps.list.outputs.result}}"
-            arguments:
-              parameters:
-                - name: name
-                  value: "{{item.name}}"
-                - name: path
-                  value: "{{item.path}}"
-
-    - name: policy
-      inputs:
-        parameters:
-          - name: name
-          - name: path
-      synchronization:
-        mutexes:
-          - name: "policy-{{inputs.parameters.name}}"
-      steps:
-        - - name: prepare
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    prepare --policy {{inputs.parameters.path}}
-                    --out /work/policies/{{inputs.parameters.name}}/policy.yaml
-        - - name: plan  # knock's gate, step 1: place nothing, write every operation (D-30)
-            template: knock
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    reconcile /work/policies/{{inputs.parameters.name}}
-                    --plan-out /work/plans/{{inputs.parameters.name}}.json
-        - - name: pending
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    pending --policy {{inputs.parameters.path}}
-                    --plan /work/plans/{{inputs.parameters.name}}.json --results /results
-          - name: resolve
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: resolve --policy {{inputs.parameters.path}} --playbooks /work/repo/{{workflow.parameters.playbooks}}
-        - - name: evaluate
-            template: evaluate
-            withParam: "{{steps.pending.outputs.result}}"
-            when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') != nil}}"
-            arguments:
-              parameters:
-                - {name: policy, value: "{{inputs.parameters.name}}"}
-                - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
-                - {name: ref, value: "{{item.ref}}"}
-                - {name: digest, value: "{{item.digest}}"}
-                - {name: target, value: "{{item.target}}"}
-                - {name: key, value: "{{item.key}}"}
-                - {name: track, value: "{{=jsonpath(steps.resolve.outputs.result, '$.track') ?? ''}}"}
-          - name: unevaluated  # unknown regime: never sent to regis (D-21)
-            template: classify
-            withParam: "{{steps.pending.outputs.result}}"
-            when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') == nil}}"
-            arguments:
-              parameters:
-                - name: args
-                  value: classify --ref {{item.ref}} --digest {{item.digest}} --run "{{workflow.name}}"
-                - {name: out, value: "/work/lines/{{inputs.parameters.name}}/{{item.key}}.json"}
-        - - name: record
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    record --policy {{inputs.parameters.path}} --results /results
-                    --lines /work/lines/{{inputs.parameters.name}}
-        - - name: approve
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    approve --policy {{inputs.parameters.path}} --results /results
-                    --plan /work/plans/{{inputs.parameters.name}}.json
-                    --out /work/plans/{{inputs.parameters.name}}.approved.json
-                    --transit "{{workflow.parameters.transit}}"
-                    --epoch {{workflow.parameters.epoch}}
-                    --lines-out /work/approve-lines/{{inputs.parameters.name}}.json
-                    --run "{{workflow.name}}"
-        - - name: record-approve  # a source to repair without a transit: judged again next time
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    record --policy {{inputs.parameters.path}} --results /results
-                    --lines /work/approve-lines/{{inputs.parameters.name}}.json
-        - - name: place  # knock's gate, step 2, no order: copies and transform-only rebuilds placed
-            template: knock-once
-            when: >-
-              {{=jsonpath(steps.approve.outputs.result, '$.approved') > 0 &&
-              jsonpath(steps.approve.outputs.result, '$.ordered') == 0}}
-            continueOn:  # what was placed must still be recorded
+            withParam: "{{steps.snapshot.outputs.result}}"
+            continueOn:  # the other policies go on; summary names this one
               failed: true
               error: true
             arguments:
               parameters:
-                - name: args
-                  value: >-
-                    reconcile /work/policies/{{inputs.parameters.name}}
-                    --apply-plan /work/plans/{{inputs.parameters.name}}.approved.json
-                    --applied-out /work/applied/{{inputs.parameters.name}}.json
-          - name: place-staged  # with orders: the remediated images are held in the transit
-            template: knock-once
-            when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
-            continueOn:  # one failed build must not withhold the images that were held
-              failed: true
-              error: true
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    reconcile /work/policies/{{inputs.parameters.name}}
-                    --apply-plan /work/plans/{{inputs.parameters.name}}.approved.json
-                    --stage-to {{workflow.parameters.transit}}
-                    --staged-out /work/staged/{{inputs.parameters.name}}.json
-                    --applied-out /work/applied/{{inputs.parameters.name}}.json
-        - - name: record-applied  # the source → placed link, and the orders knock withheld
-            template: uske
-            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
-            arguments:
-              parameters:
-                - name: args
-                  value: >-
-                    record --policy {{inputs.parameters.path}} --results /results
-                    --applied /work/applied/{{inputs.parameters.name}}.json
-                    --run "{{workflow.name}}"
-        - - name: second-gate
-            template: staged
-            when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
-            arguments:
-              parameters:
-                - {name: name, value: "{{inputs.parameters.name}}"}
-                - {name: path, value: "{{inputs.parameters.path}}"}
-                - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
-        - - name: place-failed  # the failure stays visible once everything held has been handled
-            template: fail
-            when: >-
-              {{steps.place.status}} == Failed || {{steps.place.status}} == Error ||
-              {{steps.place-staged.status}} == Failed || {{steps.place-staged.status}} == Error
-
-    - name: evaluate
-      inputs:
-        parameters:
-          - {name: policy}
-          - {name: playbook}
-          - {name: ref}
-          - {name: digest}
-          - {name: target}
-          - {name: key}
-          # A held image names its source and writes its lines apart: read with the first
-          # gate's, the source's own line would be replayed after its closure.
-          - {name: source-ref, value: ""}
-          - {name: source-digest, value: ""}
-          - {name: lines, value: lines}
-          - {name: track, value: ""}  # first gate: the regime whose repairable rules apply
-          - {name: epoch, value: ""}  # held image: the remediation order it was built under
-      steps:
-        - - name: regis
-            template: regis-analyze
+                - {name: name, value: "{{item.name}}"}
+                - {name: path, value: "{{item.path}}"}
+                - {name: snapshot-lines, value: "{{item.lines}}"}
+                - {name: commit, value: "{{steps.checkout.outputs.parameters.commit}}"}
+        - - name: merge  # after every child, failed ones included: what they placed is recorded
+            template: merge
             continueOn:
-              failed: true  # a failed evaluation is recorded inconclusive, not lost (D-23)
+              failed: true
+              error: true
+        - - name: summary
+            template: summary
+            when: "{{steps.policy.status}} != Skipped"
             arguments:
               parameters:
-                - {name: target, value: "{{inputs.parameters.target}}"}
-                - {name: playbook, value: "{{inputs.parameters.playbook}}"}
-                - {name: key, value: "{{inputs.parameters.key}}"}
-        - - name: classify
-            template: classify
+                - {name: expected, value: "{{steps.snapshot.outputs.result}}"}
+                # Succeeded children only: a failed one has no outputs, so it is missing here.
+                - {name: done, value: "{{steps.policy.outputs.parameters}}"}
+                - {name: merge, value: "{{steps.merge.status}}"}
+          - name: merge-failed  # no policy, so no summary: the merge must still be seen
+            template: fail
+            when: "{{steps.policy.status}} == Skipped && {{steps.merge.status}} != Succeeded"
             arguments:
               parameters:
-                - name: args
-                  value: >-
-                    classify --playbook {{inputs.parameters.playbook}}
-                    --ref {{inputs.parameters.ref}} --digest {{inputs.parameters.digest}}
-                    --report /work/reports/{{inputs.parameters.key}}/report.json
-                    --report-link /results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}/{{workflow.name}}.html
-                    --regis-exit {{steps.regis.exitCode}}
-                    --source-ref "{{inputs.parameters.source-ref}}"
-                    --source-digest "{{inputs.parameters.source-digest}}"
-                    --track "{{inputs.parameters.track}}"
-                    --epoch "{{inputs.parameters.epoch}}"
-                    --run "{{workflow.name}}"
-                - {name: out, value: "/work/{{inputs.parameters.lines}}/{{inputs.parameters.policy}}/{{inputs.parameters.key}}.json"}
-                - {name: html, value: "/work/reports/{{inputs.parameters.key}}/report.html"}
-                - {name: link, value: "/results/reports/{{inputs.parameters.policy}}/{{inputs.parameters.digest}}/{{workflow.name}}.html"}
+                - {name: message, value: the merge into the journals failed}
 
     - name: checkout
-      # Container steps only: a retry on a steps template would replay the whole policy.
+      # Container steps only: a retry on a steps template would replay the whole screening.
       retryStrategy: &retry
         limit: "2"
         retryPolicy: OnFailure
@@ -262,16 +108,22 @@ spec:
       container:
         image: git
         command: [sh, -c]
+        # The commit, not the branch: every child judges with this screening's policies (D7).
         args:
           - >-
             rm -rf /work/repo &&
-            git clone --depth 1 "https://oauth2:${TOKEN}@{{workflow.parameters.repository}}" /work/repo
+            git clone --depth 1 "https://oauth2:${TOKEN}@{{workflow.parameters.repository}}" /work/repo &&
+            git -C /work/repo rev-parse HEAD > /tmp/commit
         env:
           - name: TOKEN
             valueFrom:
               secretKeyRef: {name: uske-repository, key: token}
         volumeMounts:
           - {name: work, mountPath: /work}
+      outputs:
+        parameters:
+          - name: commit
+            valueFrom: {path: /tmp/commit}
 
     - name: uske
       retryStrategy: *retry
@@ -285,71 +137,427 @@ spec:
         workingDir: /app
         volumeMounts:
           - {name: work, mountPath: /work}
-          - {name: results, mountPath: /results}
 
-    - name: classify
+    # The journals as they stand, for the children to judge on (D9), and each policy's line
+    # count, which `uske export` skips. Under the merge's lock: never a half-merged journal.
+    - name: snapshot
       retryStrategy: *retry
+      synchronization:
+        mutexes:
+          - name: uske-journal
       inputs:
         parameters:
-          - name: args
-          - name: out
-          # Empty for an unknown regime: no regis, no report (D-21).
-          - {name: html, value: ""}  # where regis wrote it, on the screening's volume
-          - {name: link, value: ""}  # where it survives, next to the journal
+          - name: policies  # uske list's output
+      volumes:
+        - name: results
+          persistentVolumeClaim: {claimName: uske-results}
+      script:
+        image: uske
+        command: [python]
+        env:
+          - {name: POLICIES, value: "{{inputs.parameters.policies}}"}
+        source: |
+          import json, os, shutil
+          from pathlib import Path
+
+          out = Path("/tmp/snapshot")
+          out.mkdir(parents=True, exist_ok=True)
+          for journal in Path("/results").glob("*.jsonl"):
+              shutil.copyfile(journal, out / journal.name)
+          listed = json.loads(os.environ["POLICIES"])
+          for policy in listed:
+              copy = out / f"{policy['name']}.jsonl"
+              # Non-blank lines, as results.read counts them: what the child's export skips.
+              text = copy.read_text("utf-8") if copy.exists() else ""
+              policy["lines"] = sum(1 for line in text.split("\n") if line.strip())
+          print(json.dumps(listed))
+        volumeMounts:
+          - {name: results, mountPath: /results, readOnly: true}
+      outputs:
+        artifacts:
+          - name: snapshot
+            path: /tmp/snapshot
+            s3: {key: "runs/{{workflow.name}}/snapshot.tgz"}
+
+    # One child per policy, owned by this screening: deleting it deletes them (D7). The resource
+    # step fails with its child; the child's name is an output only when it succeeded.
+    - name: policy
+      inputs:
+        parameters: [{name: name}, {name: path}, {name: snapshot-lines}, {name: commit}]
+      resource:
+        action: create
+        setOwnerReference: true
+        successCondition: status.phase == Succeeded
+        failureCondition: status.phase in (Failed,Error)
+        manifest: |
+          apiVersion: argoproj.io/v1alpha1
+          kind: Workflow
+          metadata:
+            generateName: "{{inputs.parameters.name}}-"
+            labels:
+              uske.io/policy: "{{inputs.parameters.name}}"
+              uske.io/screening: "{{workflow.name}}"
+          spec:
+            workflowTemplateRef:
+              name: uske-policy
+            arguments:
+              parameters:
+                - {name: repository, value: "{{workflow.parameters.repository}}"}
+                - {name: commit, value: "{{inputs.parameters.commit}}"}
+                - {name: name, value: "{{inputs.parameters.name}}"}
+                - {name: path, value: "{{inputs.parameters.path}}"}
+                - {name: playbooks, value: "{{workflow.parameters.playbooks}}"}
+                - {name: transit, value: "{{workflow.parameters.transit}}"}
+                - {name: epoch, value: "{{workflow.parameters.epoch}}"}
+                - {name: run, value: "{{workflow.name}}"}
+                - {name: snapshot-lines, value: "{{inputs.parameters.snapshot-lines}}"}
+                - {name: merge, value: "false"}
+      outputs:
+        parameters:
+          - name: name
+            valueFrom: {jsonPath: '{.metadata.labels.uske\.io/policy}'}
+
+    # The only writer of the journals: every child's last `lines` artifact, appended by the
+    # rule of `uske record`. Replayed by `argo retry`, it appends nothing (D12).
+    - name: merge
+      retryStrategy: *retry
+      synchronization:
+        mutexes:
+          - name: uske-journal
+      inputs:
+        artifacts:
+          - name: lines  # one <policy>.tgz per child that wrote a line; none at all is fine
+            path: /tmp/out
+            optional: true
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.name}}/out/"}
+      volumes:
+        - name: results
+          persistentVolumeClaim: {claimName: uske-results}
       container:
         image: uske
         command: [sh, -c]
-        args:
-          # The report outlives the screening: its volume goes, /results stays (change
-          # `rapport-durable-dans-le-journal`). Copied before the line that points at it is written.
-          - >-
-            set -o pipefail && mkdir -p "$(dirname {{inputs.parameters.out}})" &&
-            if [ -f "{{inputs.parameters.html}}" ]; then
-              mkdir -p "$(dirname {{inputs.parameters.link}})" &&
-              cp "{{inputs.parameters.html}}" "{{inputs.parameters.link}}";
-            fi &&
-            python -m uske {{inputs.parameters.args}} | tee {{inputs.parameters.out}}
+        args: ["python -m uske merge --results /results --from /tmp/out"]
         workingDir: /app
         volumeMounts:
-          - {name: work, mountPath: /work}
           - {name: results, mountPath: /results}
 
-    - name: regis-analyze
-      retryStrategy: *retry
+    - name: summary  # fails naming the failed policies, or a failed merge
       inputs:
-        parameters: [{name: target}, {name: playbook}, {name: key}]
-      container:
-        image: regis
-        command: [sh, -c]
-        args:
-          - >-
-            regis analyze "{{inputs.parameters.target}}"
-            --playbook "{{inputs.parameters.playbook}}"
-            ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"}
-            -D /work/reports/{{inputs.parameters.key}} -o "report.{format}" --html
-        envFrom:
-          - secretRef: {name: uske-harbor}
-        volumeMounts:
-          - {name: work, mountPath: /work}
+        parameters: [{name: expected}, {name: done}, {name: merge}]
+      script:
+        image: uske
+        command: [python]
+        env:
+          - {name: EXPECTED, value: "{{inputs.parameters.expected}}"}
+          - {name: DONE, value: "{{inputs.parameters.done}}"}
+          - {name: MERGE, value: "{{inputs.parameters.merge}}"}
+        source: |
+          import json, os, sys
 
-    - name: knock
-      retryStrategy: *retry
+          done = {child.get("name") for child in json.loads(os.environ["DONE"])}
+          expected = [policy["name"] for policy in json.loads(os.environ["EXPECTED"])]
+          failed = [name for name in expected if name not in done]
+          merge = os.environ["MERGE"]
+          print(json.dumps({"policies": len(expected), "failed": failed, "merge": merge}))
+          if failed:
+              print(f"failed policies: {', '.join(failed)}", file=sys.stderr)
+          if merge != "Succeeded":
+              print(f"merge: {merge}", file=sys.stderr)
+          sys.exit(1 if failed or merge != "Succeeded" else 0)
+
+    - name: fail  # no retry
       inputs:
         parameters:
-          - name: args
+          - name: message
       container:
-        image: knock
-        command: [sh, -c]  # the executor needs a command: it does not read an image's entrypoint
-        # --plan-out does not create its parent directory
-        args: ["mkdir -p /work/plans /work/staged /work/applied && knock {{inputs.parameters.args}}"]
-        envFrom:
-          - secretRef: {name: uske-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
-        volumeMounts:
-          - {name: work, mountPath: /work}
+        image: uske
+        command: [sh, -c]
+        args: ["echo '{{inputs.parameters.message}}' >&2; exit 1"]
+---
+# One policy, judged and placed. Created by `uske-screening` with `merge: "false"`; resubmitted
+# alone with `merge: "true"`, it merges its own lines at the end.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: uske-policy
+spec:
+  serviceAccountName: uske
+  entrypoint: main
+  parallelism: 1  # ceiling: steps at a time in a child, so judgements at a time
+  artifactRepositoryRef: {configMap: artifact-repositories, key: default-v1}
+  # One writer per policy, across every screening of the namespace.
+  synchronization:
+    mutexes:
+      - name: "policy-{{workflow.parameters.name}}"
+  ttlStrategy:
+    secondsAfterCompletion: 86400  # 10 000 Workflows a screening: keep the controller light
+  podGC:
+    strategy: OnPodSuccess
+  arguments:
+    parameters:
+      - name: repository
+      - name: commit  # the parent's checkout: every child judges with the same policies
+      - name: name
+      - name: path  # the policy file, under /work/repo
+      - name: playbooks
+        value: playbooks
+      - name: transit
+        value: transit
+      - name: epoch
+      - name: run  # the parent's name: every line of a screening carries it (SDR-0018)
+      - name: snapshot-lines  # the journal's line count in the parent's snapshot
+        value: "0"
+      - name: merge
+        value: "true"
+
+  templates:
+    - name: main
+      steps:
+        - - name: policy
+            template: policy
+            continueOn:  # what was decided and placed is merged all the same
+              failed: true
+              error: true
+        - - name: merge
+            template: merge
+            when: "{{workflow.parameters.merge}} == true"
+        - - name: failed
+            template: fail
+            when: "{{steps.policy.status}} != Succeeded"
+            arguments:
+              parameters:
+                - {name: message, value: "the policy {{workflow.parameters.name}} failed"}
+
+    # Every step takes the artifact `work` from the one before and hands its own on. The steps
+    # that write lines also return `lines`, uploaded before the next step starts: a decision is
+    # durable before the placement it allows, and a failed upload fails the step (D9).
+    - name: policy
+      steps:
+        - - name: checkout
+            template: checkout
+        - - name: prepare
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    prepare --policy {{workflow.parameters.path}}
+                    --out /work/policies/{{workflow.parameters.name}}/policy.yaml
+              artifacts:
+                - {name: work, from: "{{steps.checkout.outputs.artifacts.work}}"}
+        - - name: plan  # knock's gate, step 1: place nothing, write every operation (D-30)
+            template: knock
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    reconcile /work/policies/{{workflow.parameters.name}}
+                    --plan-out /work/plans/{{workflow.parameters.name}}.json
+              artifacts:
+                - {name: work, from: "{{steps.prepare.outputs.artifacts.work}}"}
+        - - name: pending
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    pending --policy {{workflow.parameters.path}}
+                    --plan /work/plans/{{workflow.parameters.name}}.json --results /work/results
+              artifacts:
+                - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
+          - name: resolve
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: resolve --policy {{workflow.parameters.path}} --playbooks /work/repo/{{workflow.parameters.playbooks}}
+              artifacts:
+                - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
+        - - name: evaluate
+            template: evaluate
+            withParam: "{{steps.pending.outputs.result}}"
+            when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') != nil}}"
+            arguments:
+              parameters:
+                - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
+                - {name: ref, value: "{{item.ref}}"}
+                - {name: digest, value: "{{item.digest}}"}
+                - {name: target, value: "{{item.target}}"}
+                - {name: key, value: "{{item.key}}"}
+                - {name: track, value: "{{=jsonpath(steps.resolve.outputs.result, '$.track') ?? ''}}"}
+              artifacts:
+                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+          - name: unevaluated  # unknown regime: never sent to regis (D-21)
+            template: classify
+            withParam: "{{steps.pending.outputs.result}}"
+            when: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook') == nil}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: classify --ref {{item.ref}} --digest {{item.digest}} --run "{{workflow.parameters.run}}"
+                - {name: key, value: "{{item.key}}"}
+                - {name: digest, value: "{{item.digest}}"}
+              artifacts:
+                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+        - - name: record
+            template: record-judged
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{workflow.parameters.path}} --results /work/results
+                    --lines /tmp/judged/lines
+              artifacts:
+                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+        - - name: approve
+            template: uske
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    approve --policy {{workflow.parameters.path}} --results /work/results
+                    --plan /work/plans/{{workflow.parameters.name}}.json
+                    --out /work/plans/{{workflow.parameters.name}}.approved.json
+                    --transit "{{workflow.parameters.transit}}"
+                    --epoch {{workflow.parameters.epoch}}
+                    --lines-out /work/approve-lines/{{workflow.parameters.name}}.json
+                    --run "{{workflow.parameters.run}}"
+              artifacts:
+                - {name: work, from: "{{steps.record.outputs.artifacts.work}}"}
+        - - name: record-approve  # a source to repair without a transit: judged again next time
+            template: record
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{workflow.parameters.path}} --results /work/results
+                    --lines /work/approve-lines/{{workflow.parameters.name}}.json
+              artifacts:
+                - {name: work, from: "{{steps.approve.outputs.artifacts.work}}"}
+        - - name: place  # knock's gate, step 2, no order: copies and transform-only rebuilds placed
+            template: knock-once
+            when: >-
+              {{=jsonpath(steps.approve.outputs.result, '$.approved') > 0 &&
+              jsonpath(steps.approve.outputs.result, '$.ordered') == 0}}
+            continueOn:  # what was placed must still be recorded
+              failed: true
+              error: true
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    reconcile /work/policies/{{workflow.parameters.name}}
+                    --apply-plan /work/plans/{{workflow.parameters.name}}.approved.json
+                    --applied-out /work/applied/{{workflow.parameters.name}}.json
+              artifacts:
+                - {name: work, from: "{{steps.record-approve.outputs.artifacts.work}}"}
+          - name: place-staged  # with orders: the remediated images are held in the transit
+            template: knock-once
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
+            continueOn:  # one failed build must not withhold the images that were held
+              failed: true
+              error: true
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    reconcile /work/policies/{{workflow.parameters.name}}
+                    --apply-plan /work/plans/{{workflow.parameters.name}}.approved.json
+                    --stage-to {{workflow.parameters.transit}}
+                    --staged-out /work/staged/{{workflow.parameters.name}}.json
+                    --applied-out /work/applied/{{workflow.parameters.name}}.json
+              artifacts:
+                - {name: work, from: "{{steps.record-approve.outputs.artifacts.work}}"}
+        - - name: record-applied  # the source → placed link, and the orders knock withheld
+            template: record
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    record --policy {{workflow.parameters.path}} --results /work/results
+                    --applied /work/applied/{{workflow.parameters.name}}.json
+                    --run "{{workflow.parameters.run}}"
+              artifacts:
+                - name: work  # whichever apply ran left it there; a failed one too
+                  s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/placed.tgz"}
+        - - name: second-gate  # ordered > 0 implies approved > 0: record-applied ran
+            template: staged
+            when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
+            arguments:
+              parameters:
+                - {name: playbook, value: "{{=jsonpath(steps.resolve.outputs.result, '$.playbook')}}"}
+              artifacts:
+                - {name: work, from: "{{steps.record-applied.outputs.artifacts.work}}"}
+        - - name: place-failed  # the failure stays visible once everything held has been handled
+            template: fail
+            when: >-
+              {{steps.place.status}} == Failed || {{steps.place.status}} == Error ||
+              {{steps.place-staged.status}} == Failed || {{steps.place-staged.status}} == Error
+            arguments:
+              parameters:
+                - {name: message, value: knock reconcile --apply-plan failed for this policy}
+
+    # One digest: regis judges, classify writes the line. Both land at fixed keys of this child,
+    # where `record-judged` reads them back as a directory: the fan-out shares no volume (D9).
+    - name: evaluate
+      inputs:
+        parameters:
+          - {name: playbook}
+          - {name: ref}
+          - {name: digest}
+          - {name: target}
+          - {name: key}
+          # A held image names its source and writes its lines apart: read with the first
+          # gate's, the source's own line would be replayed after its closure.
+          - {name: source-ref, value: ""}
+          - {name: source-digest, value: ""}
+          - {name: lines, value: lines}
+          - {name: track, value: ""}  # first gate: the regime whose repairable rules apply
+          - {name: epoch, value: ""}  # held image: the remediation order it was built under
+        artifacts:
+          - name: work
+      steps:
+        - - name: regis
+            template: regis-analyze
+            continueOn:
+              failed: true  # a failed evaluation is recorded inconclusive, not lost (D-23)
+            arguments:
+              parameters:
+                - {name: target, value: "{{inputs.parameters.target}}"}
+                - {name: playbook, value: "{{inputs.parameters.playbook}}"}
+              artifacts:
+                - {name: work, from: "{{inputs.artifacts.work}}"}
+        - - name: classify
+            template: classify
+            arguments:
+              parameters:
+                - name: args
+                  value: >-
+                    classify --playbook {{inputs.parameters.playbook}}
+                    --ref {{inputs.parameters.ref}} --digest {{inputs.parameters.digest}}
+                    --report /tmp/report/report.json
+                    --report-link /results/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html
+                    --regis-exit {{steps.regis.exitCode}}
+                    --source-ref "{{inputs.parameters.source-ref}}"
+                    --source-digest "{{inputs.parameters.source-digest}}"
+                    --track "{{inputs.parameters.track}}"
+                    --epoch "{{inputs.parameters.epoch}}"
+                    --run "{{workflow.parameters.run}}"
+                - {name: lines, value: "{{inputs.parameters.lines}}"}
+                - {name: key, value: "{{inputs.parameters.key}}"}
+                - {name: digest, value: "{{inputs.parameters.digest}}"}
+                - {name: html, value: /tmp/report/report.html}
+              artifacts:
+                - {name: work, from: "{{inputs.artifacts.work}}"}
+                - {name: report, from: "{{steps.regis.outputs.artifacts.report}}", optional: true}
 
     - name: staged  # the second gate: judge what knock built, then promote what is sound
       inputs:
-        parameters: [{name: name}, {name: path}, {name: playbook}]
+        parameters: [{name: playbook}]
+        artifacts:
+          - name: work
       steps:
         - - name: pending
             template: uske
@@ -357,14 +565,15 @@ spec:
               parameters:
                 - name: args
                   value: >-
-                    pending --policy {{inputs.parameters.path}}
-                    --staged /work/staged/{{inputs.parameters.name}}.json --results /results
+                    pending --policy {{workflow.parameters.path}}
+                    --staged /work/staged/{{workflow.parameters.name}}.json --results /work/results
+              artifacts:
+                - {name: work, from: "{{inputs.artifacts.work}}"}
         - - name: evaluate
             template: evaluate
             withParam: "{{steps.pending.outputs.result}}"
             arguments:
               parameters:
-                - {name: policy, value: "{{inputs.parameters.name}}"}
                 - {name: playbook, value: "{{inputs.parameters.playbook}}"}
                 - {name: ref, value: "{{item.ref}}"}
                 - {name: digest, value: "{{item.digest}}"}
@@ -374,23 +583,30 @@ spec:
                 - {name: source-digest, value: "{{item.source}}"}
                 - {name: epoch, value: "{{item.epoch}}"}
                 - {name: lines, value: staged-lines}
+              artifacts:
+                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
         - - name: record
-            template: uske
+            template: record-judged
             arguments:
               parameters:
                 - name: args
                   value: >-
-                    record --policy {{inputs.parameters.path}} --results /results
-                    --lines /work/staged-lines/{{inputs.parameters.name}}
+                    record --policy {{workflow.parameters.path}} --results /work/results
+                    --lines /tmp/judged/lines
+                - {name: lines, value: staged-lines}
+              artifacts:
+                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
         - - name: approve
             template: uske
             arguments:
               parameters:
                 - name: args
                   value: >-
-                    approve --policy {{inputs.parameters.path}} --results /results
-                    --staged /work/staged/{{inputs.parameters.name}}.json
-                    --out /work/staged/{{inputs.parameters.name}}.approved.json
+                    approve --policy {{workflow.parameters.path}} --results /work/results
+                    --staged /work/staged/{{workflow.parameters.name}}.json
+                    --out /work/staged/{{workflow.parameters.name}}.approved.json
+              artifacts:
+                - {name: work, from: "{{steps.record.outputs.artifacts.work}}"}
         - - name: promote  # the prepared policy, with admit: promote signs what it places
             template: knock
             when: "{{=jsonpath(steps.approve.outputs.result, '$.approved') > 0}}"
@@ -398,34 +614,277 @@ spec:
               parameters:
                 - name: args
                   value: >-
-                    promote /work/policies/{{inputs.parameters.name}}
-                    --staged /work/staged/{{inputs.parameters.name}}.approved.json
+                    promote /work/policies/{{workflow.parameters.name}}
+                    --staged /work/staged/{{workflow.parameters.name}}.approved.json
+              artifacts:
+                - {name: work, from: "{{steps.approve.outputs.artifacts.work}}"}
         - - name: record-promoted  # the source → promoted digest link, once promote has placed it all
-            template: uske
+            template: record
             when: "{{steps.promote.status}} == Succeeded"
             arguments:
               parameters:
                 - name: args
                   value: >-
-                    record --policy {{inputs.parameters.path}} --results /results
-                    --promoted /work/staged/{{inputs.parameters.name}}.approved.json
-                    --run "{{workflow.name}}"
+                    record --policy {{workflow.parameters.path}} --results /work/results
+                    --promoted /work/staged/{{workflow.parameters.name}}.approved.json
+                    --run "{{workflow.parameters.run}}"
+              artifacts:
+                - {name: work, from: "{{steps.promote.outputs.artifacts.work}}"}
+
+    - name: checkout
+      # Container steps only: a retry on a steps template would replay the whole policy.
+      retryStrategy: &child-retry
+        limit: "2"
+        retryPolicy: OnFailure
+        backoff:
+          duration: 10s
+          factor: "2"
+      inputs:
+        artifacts:
+          - name: snapshot  # absent on a first screening: an empty journal
+            path: /tmp/snapshot
+            optional: true
+            s3: {key: "runs/{{workflow.parameters.run}}/snapshot.tgz"}
+      volumes:
+        - {name: work, emptyDir: {}}  # this pod's only: the work leaves as an artifact
+      container:
+        image: git
+        command: [sh, -c]
+        # The parent's commit, not the branch head (D7). .git goes: it holds the token, and
+        # every step would carry it to the artifact repository.
+        args:
+          - >-
+            git init -q /work/repo && cd /work/repo &&
+            git remote add origin "https://oauth2:${TOKEN}@{{workflow.parameters.repository}}" &&
+            git fetch -q --depth 1 origin "{{workflow.parameters.commit}}" &&
+            git checkout -q FETCH_HEAD && rm -rf /work/repo/.git &&
+            mkdir -p /work/results &&
+            if [ -f "/tmp/snapshot/{{workflow.parameters.name}}.jsonl" ]; then
+              cp "/tmp/snapshot/{{workflow.parameters.name}}.jsonl" /work/results/;
+            fi
+        env:
+          - name: TOKEN
+            valueFrom:
+              secretKeyRef: {name: uske-repository, key: token}
+        volumeMounts:
+          - {name: work, mountPath: /work}
+      outputs:
+        artifacts:
+          - &work-out {name: work, path: /work}
+
+    - name: uske
+      retryStrategy: *child-retry
+      inputs:
+        parameters:
+          - name: args
+        artifacts:
+          # Writable whoever extracted it: each tool's image runs as its own user.
+          - &work-in {name: work, path: /work, mode: 511, recurseMode: true}  # 0777
+      container:
+        image: uske
+        command: [sh, -c]
+        args: ["python -m uske {{inputs.parameters.args}}"]
+        workingDir: /app
+      outputs:
+        artifacts:
+          - *work-out
+
+    # A step that appends to the journal's copy, then exports every line past the snapshot with
+    # the reports they cite. The key is fixed, so the last export holds all of them (D9).
+    - name: record
+      retryStrategy: *child-retry
+      inputs:
+        parameters:
+          - name: args
+        artifacts:
+          - *work-in
+      container:
+        image: uske
+        command: [sh, -c]
+        args:
+          - >-
+            python -m uske {{inputs.parameters.args}} &&
+            python -m uske export --policy {{workflow.parameters.path}} --results /work/results
+            --snapshot-lines {{workflow.parameters.snapshot-lines}} --out /tmp/lines.tgz >&2
+        workingDir: /app
+      outputs:
+        artifacts:
+          - *work-out
+          - &lines-out
+            name: lines
+            path: /tmp/lines.tgz
+            archive: {none: {}}  # already an archive, read as such by `uske merge`
+            s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}.tgz"}
+
+    # `record` after a fan-out: its lines and reports, read back by prefix as directories. The
+    # child's own name in the key keeps a resubmitted child from reading the first one's lines.
+    - name: record-judged
+      retryStrategy: *child-retry
+      inputs:
+        parameters:
+          - name: args
+          - {name: lines, value: lines}
+        artifacts:
+          - *work-in
+          - name: lines  # none when nothing was owed a decision
+            path: /tmp/judged/lines
+            optional: true
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/"}
+          - name: reports
+            path: /tmp/judged/reports
+            optional: true
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/reports/"}
+      container:
+        image: uske
+        command: [sh, -c]
+        # The reports first: a line never points at a report the export cannot find.
+        args:
+          - >-
+            if [ -d /tmp/judged/reports ]; then
+              mkdir -p /work/results/reports && cp -R /tmp/judged/reports/. /work/results/reports/;
+            fi &&
+            python -m uske {{inputs.parameters.args}} &&
+            python -m uske export --policy {{workflow.parameters.path}} --results /work/results
+            --snapshot-lines {{workflow.parameters.snapshot-lines}} --out /tmp/lines.tgz >&2
+        workingDir: /app
+      outputs:
+        artifacts:
+          - *work-out
+          - *lines-out
+
+    - name: classify
+      retryStrategy: *child-retry
+      inputs:
+        parameters:
+          - name: args
+          - name: lines  # first gate's lines, or the held images' staged-lines
+            value: lines
+          - name: key
+          - name: digest
+          - {name: html, value: ""}  # where regis wrote it; empty for an unknown regime (D-21)
+        artifacts:
+          - *work-in
+          - {name: report, path: /tmp/report, optional: true}
+      container:
+        image: uske
+        command: [sh, -c]
+        args:
+          # The report outlives the screening: it goes where the line says it lives once merged
+          # (change `rapport-durable-dans-le-journal`), copied before the line is written.
+          - >-
+            set -o pipefail &&
+            out=/work/{{inputs.parameters.lines}}/{{workflow.parameters.name}}/{{inputs.parameters.key}}.json &&
+            copy=/work/results/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html &&
+            mkdir -p "$(dirname "$out")" &&
+            if [ -f "{{inputs.parameters.html}}" ]; then
+              mkdir -p "$(dirname "$copy")" && cp "{{inputs.parameters.html}}" "$copy";
+            fi &&
+            python -m uske {{inputs.parameters.args}} | tee "$out"
+        workingDir: /app
+      outputs:
+        artifacts:
+          - name: line
+            path: /work/{{inputs.parameters.lines}}/{{workflow.parameters.name}}/{{inputs.parameters.key}}.json
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/{{inputs.parameters.key}}.json"}
+          - name: report
+            path: /work/results/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html
+            optional: true
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html"}
+
+    - name: regis-analyze
+      retryStrategy: *child-retry
+      inputs:
+        parameters: [{name: target}, {name: playbook}]
+        artifacts:
+          - *work-in  # the playbook, in the checkout
+      container:
+        image: regis
+        command: [sh, -c]
+        # The directory exists even when regis fails: classify then records it inconclusive.
+        args:
+          - >-
+            mkdir -p /tmp/report &&
+            regis analyze "{{inputs.parameters.target}}"
+            --playbook "{{inputs.parameters.playbook}}"
+            ${HARBOR_USER:+--auth "${HARBOR_HOST}=${HARBOR_USER}:${HARBOR_PASSWORD}"}
+            -D /tmp/report -o "report.{format}" --html
+        envFrom:
+          - secretRef: {name: uske-harbor}
+      outputs:
+        artifacts:
+          - {name: report, path: /tmp/report, optional: true}
+
+    - name: knock
+      retryStrategy: *child-retry
+      inputs:
+        parameters:
+          - name: args
+        artifacts:
+          - *work-in
+      container:
+        image: knock
+        command: [sh, -c]  # the executor needs a command: it does not read an image's entrypoint
+        # --plan-out does not create its parent directory
+        args: ["mkdir -p /work/plans /work/staged /work/applied && knock {{inputs.parameters.args}}"]
+        envFrom:
+          - secretRef: {name: uske-knock}  # registry credentials and KNOCK_ATTEST_SIGNER
+      outputs:
+        artifacts:
+          - *work-out
 
     - name: knock-once  # no retry: a retried apply rebuilds every held image under a new digest
       inputs:
         parameters:
           - name: args
+        artifacts:
+          - *work-in
       container:
         image: knock
         command: [sh, -c]
         args: ["mkdir -p /work/plans /work/staged /work/applied && knock {{inputs.parameters.args}}"]
         envFrom:
           - secretRef: {name: uske-knock}
-        volumeMounts:
-          - {name: work, mountPath: /work}
+      outputs:
+        artifacts:
+          # Saved on failure too, at a key of its own: record-applied reads what was placed,
+          # whether place or place-staged ran.
+          - name: work
+            path: /work
+            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/placed.tgz"}
 
-    - name: fail  # no retry either
+    # A child resubmitted alone merges its own lines, under the parent merge's lock (D12).
+    - name: merge
+      retryStrategy: *child-retry
+      synchronization:
+        mutexes:
+          - name: uske-journal
+      inputs:
+        artifacts:
+          - name: lines
+            path: "/tmp/out/{{workflow.parameters.name}}.tgz"
+            optional: true
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}.tgz"}
+      volumes:
+        - name: results
+          persistentVolumeClaim: {claimName: uske-results}
       container:
         image: uske
         command: [sh, -c]
-        args: ["echo 'knock reconcile --apply-plan failed for this policy' >&2; exit 1"]
+        args: ["python -m uske merge --results /results --from /tmp/out"]
+        workingDir: /app
+        volumeMounts:
+          - {name: results, mountPath: /results}
+
+    - name: fail  # no retry
+      inputs:
+        parameters:
+          - name: message
+      container:
+        image: uske
+        command: [sh, -c]
+        args: ["echo '{{inputs.parameters.message}}' >&2; exit 1"]

@@ -1,4 +1,4 @@
-# Results outlive screenings: one append-only file per policy, written by `record` only.
+# Results outlive screenings: one append-only file per policy, written by the merge only.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -32,6 +32,29 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: uske-executor
+subjects:
+  - kind: ServiceAccount
+    name: uske
+---
+# What the parent's `resource` steps need to create a child Workflow per policy and wait for it
+# (change `screen-and-policy-fan-out`, D8); nothing else is widened.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: uske-children
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [create, get, list, watch, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: uske-children
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: uske-children
 subjects:
   - kind: ServiceAccount
     name: uske

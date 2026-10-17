@@ -241,12 +241,13 @@ class Classify(Workdir):
         self.assertEqual((code, line["report"]), (0, durable))
 
     def test_a_rejudged_digest_never_overwrites_an_earlier_report(self):
-        # The line written by an earlier screening must keep pointing at its own report.
+        # The line written by an earlier screening must keep pointing at its own report: named
+        # by the screening's `run`, the parent's name that every child carries.
         template = (HERE.parent / "deploy/base/workflowtemplate.yaml").read_text()
         links = re.findall(r"/results/reports/\S+?\.html", template)
         self.assertTrue(links)
         for link in links:
-            self.assertTrue(link.endswith("/{{workflow.name}}.html"), link)
+            self.assertTrue(link.endswith("/{{workflow.parameters.run}}.html"), link)
 
     def test_without_a_link_the_read_path_is_recorded(self):
         line = self.classify(LIGHT, "r:1", D1, report("Quarantaine", [SECRET_FAILED]))

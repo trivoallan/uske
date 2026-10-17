@@ -92,7 +92,7 @@
   politiques, une fusion*, *Rejouer la fusion*, *Une ligne écrite à la main pendant le screening*,
   plus un nom `../x` et un membre d'archive `../../x` refusés.
 - [x] 4.2 Commit : `feat(cli): verser au journal les lignes d'un screening réparti`.
-- [ ] 4.3 `deploy/base/workflowtemplate.yaml` : un second `WorkflowTemplate` `uske-policy`, avec
+- [x] 4.3 `deploy/base/workflowtemplate.yaml` : un second `WorkflowTemplate` `uske-policy`, avec
   les paramètres `repository`, `commit`, `name`, `path`, `playbooks`, `transit`, `epoch`, `run`,
   `snapshot-lines` et `merge` (défaut `true`), son propre `checkout` au commit (D7), `{{workflow.name}}`
   remplacé par `run`, le mutex `policy-{{workflow.parameters.name}}`, `parallelism: 1`,
@@ -102,18 +102,18 @@
   `runs/{{run}}/{{name}}/`, `record` reçoit le préfixe `lines/` comme répertoire, et chaque étape
   qui écrit des lignes rend l'artefact `lines` par `uske export` (D9). Une dernière étape `merge`,
   `when: merge == true`, mutex `uske-journal`, seule à monter `uske-results`.
-- [ ] 4.4 Le parent `uske-screening` : `checkout` qui sort `git rev-parse HEAD`, `list`,
+- [x] 4.4 Le parent `uske-screening` : `checkout` qui sort `git rev-parse HEAD`, `list`,
   `snapshot` (archive des `*.jsonl` de `uske-results`, un compte de lignes par politique), l'étape
   `policy` en template `resource` (D7 : `setOwnerReference`, label `uske.io/policy`, conditions,
   `continueOn: failed`, `merge: "false"`), `merge` (D12, préfixe `runs/{{workflow.name}}/out/`,
   mutex `uske-journal`, après tous les enfants), puis `summary`, qui échoue en nommant les
   politiques en échec ou une fusion échouée ; `parallelism: 1`.
-- [ ] 4.5 `deploy/base/storage-and-access.yaml` : un `Role` `uske-children` (`workflows`, verbes
+- [x] 4.5 `deploy/base/storage-and-access.yaml` : un `Role` `uske-children` (`workflows`, verbes
   `create`, `get`, `list`, `watch`, `patch`) et son `RoleBinding` au compte `uske`. Un test lit le
   rendu de `deploy/base` (scénario *Le rendu des manifestes*) : seul le template de fusion monte
   `uske-results`, aucun template de `uske-policy` ne déclare de volume persistant, les deux
   `parallelism` valent 1. Il est lancé par `make lint` après `argo lint`.
-- [ ] 4.6 `deploy/kind` : `up.sh` installe MinIO et le configmap `artifact-repositories` (D10) ;
+- [x] 4.6 `deploy/kind` : `up.sh` installe MinIO et le configmap `artifact-repositories` (D10) ;
   `kustomization.yaml` réécrit les patches par indice pour les deux templates (le `checkout` par
   copie `hostPath`, le CA et la clé de `knock` sur `knock`, `knock-once` et `regis-analyze` de
   l'enfant). Attendu : `kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline
@@ -123,7 +123,7 @@
   fichier de `deploy/kind/policies/` (`kubectl -n uske get wf -l uske.io/policy`), une fusion, et
   des lignes qui portent toutes le `run` du parent (scénarios *Trois politiques*, *Les lignes d'un
   screening se reconnaissent*, *Deux politiques, une fusion*).
-- [ ] 4.8 Commit : `feat(deploy): un Workflow enfant par politique, sans volume partagé`.
+- [x] 4.8 Commit : `feat(deploy): un Workflow enfant par politique, sans volume partagé`.
 
 ## 5. Documentation et clôture
 
