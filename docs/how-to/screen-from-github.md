@@ -2,8 +2,8 @@
 
 This guide shows how to screen one policy from a policy repository, with the reusable workflow
 `trivoallan/uske/.github/workflows/extra-screen.yml`. The workflow runs `uske screen` on a
-GitHub-hosted runner, writes the journal to a branch of your repository, and attaches the reports to
-the run. For every input, see the [reference](../reference/screen-workflow.md).
+GitHub-hosted runner, and writes the journal and the reports its lines cite to a branch of your
+repository. For every input, see the [reference](../reference/screen-workflow.md).
 
 To run the same screening on a workstation, see [Screen locally](operate.md#screen-locally).
 
@@ -236,22 +236,23 @@ To read the outcome, open the journal on its branch. Each line has a `state` and
 ## Read the results and reports
 
 Each journal line for a verdict or a placement has a `run` field, the URL of the run that wrote it.
-To find the report for a line:
+A line's report sits on the journal branch, at the path the line cites, relative to the root of
+the branch: `reports/<policy name>/<digest>/<epoch>.md`. It was committed with the line, so it lives
+as long as the line does. To read it:
 
-1. Open the run from the `run` URL.
-2. Download the artifact `uske-reports-<policy name>`. It holds `reports.tar`.
-3. Extract it. Each report sits at the path the journal line cites, relative to the journal.
+```bash
+git fetch origin uske-journal
+git show "origin/uske-journal:reports/<policy name>/<digest>/<epoch>.md"
+```
 
-The artifact lives for `report-retention-days` days, 90 by default. GitHub caps it at 90 days on a
-public repository; a private repository can keep it longer, up to the limit its settings allow. After that the journal line still records the state, the playbook and the reason
-(see [journal states and reasons](../reference/reasons.md)); the full report is gone.
+The run also attaches a copy of the reports it wrote, the artifact `uske-reports-<policy name>`,
+which holds `reports.tar`.
+It lives for `report-retention-days` days, at most 90 on a public repository, and re-running the
+job deletes the copy of the attempt before it. The branch keeps the reports either way: you can
+re-run a failed job.
 
-## Start a new run instead of re-running a job
-
-Re-running the `screen` job deletes the reports artifact of the attempt before it. The journal
-lines that attempt pushed stay, and keep their state, playbook and reason, but their reports are
-gone. To screen again, start a new run, for example from `workflow_dispatch`: each run keeps its
-own artifact.
+A report on the branch is never rewritten, and it stays in the branch history. `regis` keeps only
+the redacted form of a secret it finds. A public repository publishes its reports with its journal.
 
 ## Avoid parallel runs on one policy
 

@@ -563,7 +563,7 @@ flowchart LR
   end
   caller -->|"<code>uses:</code> … <code>@v0.N</code>"| nj --> sj
   res -->|"push after each write, and at the end"| jb[("Branch <code>uske-journal</code><br>of the policy repository")]
-  sj -->|"<code>reports.tar</code>"| art[("Run artifact<br><code>uske-reports-&lt;name&gt;</code>")]
+  sj -->|"<code>reports.tar</code>, a copy"| art[("Run artifact<br><code>uske-reports-&lt;name&gt;</code>")]
   sj <-->|"<code>grype-db-&lt;day&gt;</code>"| cache[("Actions cache")]
   kn -->|"HTTPS"| reg[("Registry<br>GHCR, the only one the workflow logs in to")]
   rg -->|"HTTPS"| reg
@@ -576,8 +576,8 @@ flowchart LR
 | Job `screen` | A whole screening of one policy, by `uske screen` | `contents`, `packages` and `id-token: write`, granted by the caller; one lock per policy name (`concurrency`), at most one run waiting |
 | `regis` and `knock` containers | The judge and the placer, each in its image, started by `uske` through `USKE_REGIS_CMD` and `USKE_KNOCK_CMD` | Versions pinned in the workflow, followed by Renovate; host network, runner uid, the work directory under `$RUNNER_TEMP` mounted at the same path |
 | `buildkitd` container | Rebuilds, by `transform:` and by remediation | Privileged, published on `127.0.0.1` only; acceptable on a throwaway hosted runner |
-| Branch `uske-journal` | The journal, one file per policy | Cloned under `$RUNNER_TEMP`, outside the caller's checkout; born orphan, written only by the hook (`USKE_AFTER_RECORD`) and the final push, three rebases at most; never protected against the workflow |
-| Run artifact | The reports, as one `reports.tar` that keeps the paths the journal lines cite | Re-running the job deletes the artifact of its earlier attempt (RISK-13); `report-retention-days`, 90 by default and at most on a public repository |
+| Branch `uske-journal` | The journal, one file per policy, and the reports its lines cite, each committed with the first line that cites it | Cloned under `$RUNNER_TEMP`, outside the caller's checkout; born orphan, written only by the hook (`USKE_AFTER_RECORD`) and the final push, three rebases at most; never protected against the workflow |
+| Run artifact | A copy of the reports this run wrote, as one `reports.tar` that keeps the paths the journal lines cite | Re-running the job deletes the copy of its earlier attempt, not the reports on the branch (RISK-13); `report-retention-days`, 90 by default and at most on a public repository |
 | Actions cache | The `grype` database, one per UTC day, shared by the judgements of a run | Filled once by `grype db update` when empty, and saved at once, before the screening, so a failed screening does not lose it; `GRYPE_DB_AUTO_UPDATE=false` in `regis` |
 | Credentials | The registry token (secret `registry-token`, else `GITHUB_TOKEN`) for `ghcr.io`, the only registry the workflow logs in to, in `config.json`, mounted read-only in `regis` and `knock`; the journal token only in the hook's git calls; the signing identity (the run's OpenID Connect token, which Sigstore's certificate authority, Fulcio, turns into a certificate, logged in its public transparency log, Rekor) or the `cosign-key`, in `knock` only | No input is interpolated into a script; secrets cross into a container by name only |
 
@@ -670,10 +670,10 @@ MADR format. This section is their **log**: it points to them, and copies neithe
 nor their options, nor their values — each ADR says that its values are written in it "and nowhere
 else", and that is what keeps them from being contradicted here.
 
-Nineteen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
-one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; fourteen are therefore in force. Eleven are inherited from the method — see *Architecture
+Twenty ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
+one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; fifteen are therefore in force. Eleven are inherited from the method — see *Architecture
 Constraints*: ten questions that it asks every repository adopting it, and the rule that says how
-to answer them. Eight are specific to `uske`: `SDR-0016` to `SDR-0023`. A new decision is written
+to answer them. Nine are specific to `uske`: `SDR-0016` to `SDR-0024`. A new decision is written
 when a choice is expensive to undo, touches several blocks, arbitrates between two quality goals,
 or constrains the following changes.
 
@@ -721,6 +721,7 @@ supersedes `SDR-0020`.
 | [SDR-0021](../adr/SDR-0021-screen-et-repartition.md) | A verb that runs both tools, and one Workflow per policy | accepted | 2026-10-17 | Operability, against Thinness | yes — `uske screen`, and the parent and child templates proven on the `kind` bench on 2026-10-17 |
 | [SDR-0022](../adr/SDR-0022-documentation-en-anglais.md) | Documentation in English; ADRs, discovery and commits in French | accepted | 2026-10-17 | Contestability | yes |
 | [SDR-0023](../adr/SDR-0023-workflow-github.md) | Off the cluster, a reusable GitHub workflow, and the journal on a branch of the calling repository | accepted | 2026-10-17 | Operability and Contestability, against Thinness | yes — the bench `extra-screen-example.yml` proven on GitHub on 2026-10-17, repair promoted included |
+| [SDR-0024](../adr/SDR-0024-rapports-sur-la-branche.md) | Off the cluster, the reports a journal line cites live on the journal branch (amends `SDR-0023`) | accepted | 2026-10-17 | Contestability, against Thinness | yes — the bench re-ran a job that judged (run 39028551786) and kept its report |
 
 ## Open gaps
 
@@ -777,7 +778,7 @@ Thinness, in the name of Safety. The ranking of the goals settles it — that is
 | RISK-03 | medium | With a `knock` older than 0.13.0, nothing is remediated, and nothing says why. | low × medium | The overlay pins `knock` by digest; the bench runs 0.16.0 |
 | RISK-05 | low | The journal volume is `ReadWriteOnce`: a reading pod waits for the end of the snapshot or the merge of a screening that runs on another node — the only pods that mount it. Between a placement and the merge, the journal on the volume lags behind what was placed. | likely × low | Wait; the decision is already durable in the artifact repository before its placement, and a failed merge fails the parent and replays (`argo retry`). The snapshot leaves the mark `.pending-merge/<run>`, which only a successful merge clears: while it stays, the next screening fails at its snapshot, naming the run, and never judges on a lagging journal (`Forbid` alone is not enough: a failed parent is finished, and the `CronWorkflow` starts the next one). The storage no longer needs to be shared: no child mounts the volume, whatever the ceilings. A line written by hand during that lag escapes the child, which may place the image that the line quarantines: the merge then refuses the child's lines on that digest, names them, fails and keeps the mark — the conflict is visible (fail-visible), the placement is not undone |
 | RISK-06 | low | On the bench, `buildkitd` listens in cleartext on the cluster network. | certain × low, on the bench only | Outside the bench: mTLS or a `NetworkPolicy` |
-| RISK-13 | medium | On the GitHub Actions runner, re-running the `screen` job deletes the reports artifact of its earlier attempt, whatever its name (probe of 2026-10-17). Journal lines pushed by that attempt keep citing reports that are gone; they still carry state, playbook and reason. | possible × medium | Do not re-run a job that judged: start a new run. Reports kept outside the run artifact would close it (follow-up of change `screen-workflow-followups`) |
+| RISK-13 | medium | On the GitHub Actions runner, re-running the `screen` job deletes the reports artifact of its earlier attempt, whatever its name (probe of 2026-10-17). Journal lines pushed by that attempt keep citing reports that are gone; they still carry state, playbook and reason. | possible × medium | *Closed* 2026-10-17 (change `reports-survive-rerun`): the journal hook commits the policy's reports with its journal, and `uske` copies a report before it writes the line that cites it, so the commit of a line holds its report. A re-run deletes only the artifact, now a copy. Proven on the bench: run 39028551786 judged one digest, its job was re-run, and the report the line cites stayed on the branch, in the commit of its line. The branch grows with each new digest judged, not with each run |
 | RISK-12 | low | On the GitHub Actions runner, `uv tool install git+…` does not read `uv.lock`: the workflow resolves `uske`'s dependencies at install time. There is one, PyYAML (`>=6.0.2`), with no dependencies of its own. | low × medium | Accepted (change `screen-workflow-followups`, 2026-10-17): pinning it would mean exporting `uv.lock` on the caller's runner for a single package. Revisit when `uske` gains a second dependency |
 | RISK-10 | low | On the GitHub Actions runner, keyless signing writes the name and digest of every placed image to the public Rekor log. | certain × low | The `cosign-key` secret signs without a public log |
 | RISK-07 | medium | One child Workflow per policy: beyond 10,000 policies, a screening creates more than 10,000 `Workflow` objects every 5 minutes, which load the Argo controller and etcd; each `resource` step that waits for its child holds a pod, and each successful child starts one more pod for its `done/` mark. The list of policies is passed as a parameter to the parent's single `withParam`: the size of the parent's status at 10,000 is not known. No measurement exists. | possible × medium | `ttlStrategy` (one day) and `podGC: OnPodSuccess` on the child; the parent owns the children and takes them with it; the waiting pods are bounded by the ceiling of policies. The volume spike of 2026-10-19 measures it; if it does not hold, split into several `CronWorkflow`s over subdirectories of `policies` |

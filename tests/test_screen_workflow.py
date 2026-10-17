@@ -101,9 +101,8 @@ class Scripts(unittest.TestCase):
         return self.run_script("hook", results, USKE_POLICY=policy, USKE_STEP="record")
 
     def test_first_run_creates_an_orphan_branch(self) -> None:
-        results = self.born("r1")
-        self.assertEqual(self.remote_files(), [".gitignore"])
-        self.assertEqual((results / ".gitignore").read_text(), "reports/\n")
+        self.born("r1")
+        self.assertEqual(self.remote_files(), [])
         roots = git(
             "--git-dir", str(self.remote), "rev-list", "--max-parents=0", "uske-journal"
         ).split()
@@ -113,19 +112,78 @@ class Scripts(unittest.TestCase):
         self.assertEqual(self.record(self.born("r1"), "x"), 0)
         self.assertTrue((self.born("r2") / "x.jsonl").is_file())
 
-    def test_the_hook_pushes_the_policy_journal_only(self) -> None:
+    def report(self, results: Path, policy: str) -> str:
+        cited = f"reports/{policy}/sha256:ab/1.md"
+        (results / cited).parent.mkdir(parents=True)
+        (results / cited).write_text("report")
+        return cited
+
+    def test_the_hook_pushes_the_policy_journal_and_reports_only(self) -> None:
         results = self.born("r1")
-        (results / "reports" / "x" / "sha256:ab").mkdir(parents=True)
-        (results / "reports" / "x" / "sha256:ab" / "1.md").write_text("report")
+        cited = self.report(results, "x")
+        self.report(results, "y")
         (results / "y.jsonl").write_text("{}\n")
         self.assertEqual(self.record(results, "x"), 0)
-        self.assertEqual(self.remote_files(), [".gitignore", "x.jsonl"])
+        self.assertEqual(self.remote_files(), [cited, "x.jsonl"])
+
+    def test_a_cited_report_is_in_the_commit_of_its_line(self) -> None:
+        # Rejouer un job supprime l'archive de la tentative précédente (RISK-13) : le rapport
+        # que cite une ligne poussée doit être sur la branche, dans le même commit.
+        results = self.born("r1")
+        cited = self.report(results, "x")
+        self.assertEqual(self.record(results, "x"), 0)
+        changed = git(
+            "--git-dir",
+            str(self.remote),
+            "show",
+            "--name-only",
+            "--format=",
+            "uske-journal",
+        ).split()
+        self.assertEqual(sorted(changed), [cited, "x.jsonl"])
+
+    def test_a_branch_that_ignores_reports_gets_them_anyway(self) -> None:
+        # Une branche née en v0.11.0 porte un `.gitignore` qui écarte `reports/`.
+        results = self.born("r1")
+        (results / ".gitignore").write_text("reports/\n")
+        for args in (["add", ".gitignore"], ["commit", "-q", "-m", "v0.11.0"]):
+            subprocess.run(
+                ["git", "-C", str(results), *args],
+                check=True,
+                env=self.env,
+                capture_output=True,
+            )
+        cited = self.report(results, "x")
+        self.assertEqual(self.record(results, "x"), 0)
+        self.assertIn(cited, self.remote_files())
+
+    def test_the_archive_holds_only_the_reports_of_this_run(self) -> None:
+        # Le clone porte les rapports commités : l'archive n'en reprend aucun, sans quoi elle
+        # grossirait à chaque run.
+        first = self.born("r1")
+        old = self.report(first, "x")
+        self.assertEqual(self.record(first, "x"), 0)
+        second = self.born("r2")
+        self.assertTrue((second / old).is_file())
+        new = "reports/x/sha256:cd/1.md"
+        (second / new).parent.mkdir(parents=True)
+        (second / new).write_text("report")
+        archive = step(load(SCREEN), "screen", "archive")["run"]
+        env = {**self.env, "RESULTS": str(second), "RUNNER_TEMP": str(self.tmp)}
+        subprocess.run(["bash", "-e", "-c", archive], check=True, env=env)
+        listed = subprocess.run(
+            ["tar", "-tf", str(self.tmp / "reports.tar")],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.split()
+        self.assertEqual(listed, [new])
 
     def test_the_hook_rebases_on_a_concurrent_push(self) -> None:
         first, second = self.born("r1"), self.born("r2")
         self.assertEqual(self.record(second, "y"), 0)
         self.assertEqual(self.record(first, "x"), 0)
-        self.assertEqual(self.remote_files(), [".gitignore", "x.jsonl", "y.jsonl"])
+        self.assertEqual(self.remote_files(), ["x.jsonl", "y.jsonl"])
 
     def test_the_hook_fails_when_the_push_is_refused(self) -> None:
         results = self.born("r1")
