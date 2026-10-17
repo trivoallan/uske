@@ -7,6 +7,12 @@ grype is not in this image.
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import subprocess
+import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,6 +20,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "deploy" / "base" / "grype-db.yaml"
+FAKES = Path(__file__).resolve().parent / "fakes"
 POINTER = "grype-db/current.json"
 ARCHIVE = "grype-db/current.tar.zst"
 
@@ -60,24 +67,14 @@ class GrypeDb(unittest.TestCase):
         self.assertEqual(outputs[ARCHIVE]["path"], "/tmp/out/current.tar.zst")
         self.assertEqual(outputs[POINTER]["path"], "/tmp/out/current.json")
 
-    def test_the_script_lists_before_it_downloads(self) -> None:
-        script = self.script
-        self.assertLess(script.index("grype db list"), script.index("grype db update"))
-        self.assertIn("exit 0", script)  # "no newer database" ends in success, empty
-
-    def test_an_interrupted_download_publishes_nothing(self) -> None:
-        """*Un téléchargement interrompu*: `set -eu`, and the status check precedes the packing."""
-        script = self.script
-        self.assertIn("set -eu", script)
-        self.assertLess(
-            script.index("grype db update"), script.index("grype db status")
-        )
-        self.assertLess(script.index("grype db status"), script.index("tarfile"))
-        self.assertIn("'w:zst'", script)
-        # the pointer is moved to the outputs only after the archive is written
-        self.assertLess(script.index("tarfile"), script.index("/tmp/out/current.json"))
-
     def test_the_retry_is_the_screenings(self) -> None:
+        self.assertEqual(self.template["activeDeadlineSeconds"], 1800)
+        self.assertEqual(
+            self.by_kind["WorkflowTemplate"]["spec"]["podGC"],
+            {"strategy": "OnPodSuccess"},
+        )
+        limits = self.template["container"]["resources"]
+        self.assertEqual(limits["requests"]["ephemeral-storage"], "5Gi")
         self.assertEqual(
             self.template["retryStrategy"],
             {
@@ -86,6 +83,114 @@ class GrypeDb(unittest.TestCase):
                 "backoff": {"duration": "10s", "factor": "2"},
             },
         )
+
+
+OLD = {"built": "2026-10-01T00:00:00Z", "checksum": "sha256:old"}
+NEW = {"built": "2026-10-02T00:00:00Z", "checksum": "sha256:new"}
+LISTING = [
+    {"status": "deprecated", "built": "2025-01-01T00:00:00Z", "checksum": "sha256:x"},
+    {"status": "active", **NEW, "url": "https://example.test/db.tar.zst"},
+]
+
+
+def _python3_has_zstd() -> bool:
+    """The script runs the `python3` on PATH, which may not be the interpreter of the tests."""
+    probe = (
+        "import tarfile, io; tarfile.open(fileobj=io.BytesIO(), mode='w:zst').close()"
+    )
+    return (
+        subprocess.run(
+            ["python3", "-c", probe], capture_output=True, check=False
+        ).returncode
+        == 0
+    )
+
+
+@unittest.skipUnless(_python3_has_zstd(), "tarfile 'w:zst' needs Python 3.14")
+class Script(unittest.TestCase):
+    """The refresh script run against a fake grype, with WORK redirected to a temp dir."""
+
+    def run_script(self, pointer: str | None = None, **env: str):
+        script = "\n".join(
+            yaml.safe_load(MANIFEST.read_text().split("\n---\n")[0])["spec"][
+                "templates"
+            ][0]["container"]["args"]
+        )
+        work = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(work, ignore_errors=True))
+        if pointer is not None:
+            (work / "in").mkdir()
+            (work / "in" / "current.json").write_text(pointer)
+        environ = {
+            **os.environ,
+            "PATH": f"{FAKES}:{os.environ['PATH']}",
+            "WORK": str(work),
+            "FAKE_LIST": json.dumps(LISTING),
+            "FAKE_CALLS": str(work / "calls"),
+            **env,
+        }
+        proc = subprocess.run(
+            ["sh", "-c", script],
+            check=False,
+            env=environ,
+            capture_output=True,
+            text=True,
+        )
+        calls = (work / "calls").read_text() if (work / "calls").exists() else ""
+        return proc, work, calls
+
+    def assertPublished(self, work: Path) -> None:
+        out = work / "out"
+        self.assertEqual(
+            sorted(p.name for p in out.iterdir()), ["current.json", "current.tar.zst"]
+        )
+        self.assertEqual(json.loads((out / "current.json").read_text()), NEW)
+        with tarfile.open(out / "current.tar.zst", "r:zst") as archive:
+            names = archive.getnames()
+        self.assertIn("6", names)
+        self.assertIn("6/vulnerability.db", names)
+
+    def test_a_new_database_is_published(self) -> None:
+        """*Le rafraîchissement planifié distribue une nouvelle base*."""
+        proc, work, _ = self.run_script(pointer=json.dumps(OLD))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertPublished(work)
+
+    def test_the_first_run_publishes(self) -> None:
+        proc, work, _ = self.run_script()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertPublished(work)
+
+    def test_no_newer_database_publishes_nothing(self) -> None:
+        """*Aucune base nouvelle n'est publiée*: success, no output, no download."""
+        proc, work, calls = self.run_script(pointer=json.dumps(NEW))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(list((work / "out").iterdir()), [])
+        self.assertNotIn("update", calls)
+
+    def test_a_failed_download_publishes_nothing(self) -> None:
+        """*Un téléchargement interrompu*."""
+        proc, work, _ = self.run_script(pointer=json.dumps(OLD), FAKE_UPDATE_FAIL="1")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(list((work / "out").iterdir()), [])
+
+    def test_an_invalid_database_publishes_nothing(self) -> None:
+        proc, work, _ = self.run_script(pointer=json.dumps(OLD), FAKE_STATUS_FAIL="1")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(list((work / "out").iterdir()), [])
+
+    def test_a_malformed_pointer_does_not_block_the_refresh(self) -> None:
+        for pointer in ("{not json", "{}", "[]", '{"checksum": 3}'):
+            with self.subTest(pointer=pointer):
+                proc, work, _ = self.run_script(pointer=pointer)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertPublished(work)
+
+    def test_no_active_database_fails(self) -> None:
+        proc, work, _ = self.run_script(FAKE_LIST="[]")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("no active database", proc.stderr)
+        self.assertEqual(list((work / "out").iterdir()), [])
 
 
 if __name__ == "__main__":

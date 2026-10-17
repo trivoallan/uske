@@ -12,9 +12,13 @@ metadata:
 spec:
   serviceAccountName: uske
   entrypoint: refresh
+  podGC:
+    strategy: OnPodSuccess
   artifactRepositoryRef: {configMap: artifact-repositories, key: default-v1}
   templates:
     - name: refresh
+      # A hung download fails visibly instead of blocking later runs under `Forbid`.
+      activeDeadlineSeconds: 1800
       retryStrategy:
         limit: "2"
         retryPolicy: OnFailure
@@ -30,31 +34,51 @@ spec:
       container:
         image: regis
         command: [sh, -c]
-        # Exit code 10 inside means "nothing newer": leave in success, with no output, so Argo
-        # uploads nothing and the keys in place do not change. A failed update or status stops
-        # the script before any output, with the same result.
+        # The archive is a ~500 MB file, written twice over (cache, then staging): leave room.
+        resources:
+          requests: {ephemeral-storage: 5Gi}
+          limits: {ephemeral-storage: 6Gi}
+        # Argo saves optional outputs even when the container fails, so nothing reaches /tmp/out
+        # until everything succeeded: the archive is packed in a staging directory, then renamed
+        # into place (same filesystem), the pointer last. Exit code 10 inside means "nothing
+        # newer": leave in success with no output, so the keys in place do not change.
+        # WORK is /tmp in the pod; the tests point it elsewhere.
         args:
           - |
             set -eu
-            export GRYPE_CHECK_FOR_APP_UPDATE=false GRYPE_DB_CACHE_DIR=/tmp/db
-            mkdir -p /tmp/out
-            grype db list -o json > /tmp/list.json
+            W="${WORK:-/tmp}"
+            export GRYPE_CHECK_FOR_APP_UPDATE=false GRYPE_DB_CACHE_DIR="$W/db" WORK="$W"
+            mkdir -p "$W/out" "$W/stage"
+            grype db list -o json > "$W/list.json"
             rc=0
             python3 - <<'PY' || rc=$?
-            import json, pathlib, sys
-            latest = next(d for d in json.load(open("/tmp/list.json")) if d["status"] == "active")
-            current = pathlib.Path("/tmp/in/current.json")
-            if current.exists() and json.loads(current.read_text())["checksum"] == latest["checksum"]:
+            import json, os, pathlib, sys
+            w = pathlib.Path(os.environ["WORK"])
+            latest = next((d for d in json.load(open(w / "list.json")) if d["status"] == "active"), None)
+            if latest is None:
+                sys.exit("no active database in grype db list")
+            try:
+                known = json.loads((w / "in" / "current.json").read_text())["checksum"]
+            except (OSError, ValueError, KeyError, TypeError):
+                known = None
+                print("no usable current pointer: refreshing")
+            if known == latest["checksum"]:
                 print("no newer database"); sys.exit(10)
-            pathlib.Path("/tmp/latest.json").write_text(json.dumps({k: latest[k] for k in ("built", "checksum")}))
+            # The listing, not what update imports: a database published in between costs, at
+            # worst, one redundant download on the next run.
+            (w / "latest.json").write_text(json.dumps({k: latest[k] for k in ("built", "checksum")}))
             PY
             [ "$rc" -ne 10 ] || exit 0
             [ "$rc" -eq 0 ] || exit "$rc"
             grype db update
-            grype db status
-            cd /tmp/db
-            python3 -c "import tarfile; t = tarfile.open('/tmp/out/current.tar.zst', 'w:zst'); t.add('6'); t.close()"
-            mv /tmp/latest.json /tmp/out/current.json
+            grype db status  # exits non-zero on an invalid database: nothing is packed then
+            cd "$W/db"
+            # 6 is the schema directory of grype's v6 database; a v7 makes this fail, not pack wrong.
+            python3 -c "import tarfile
+            with tarfile.open('$W/stage/current.tar.zst', 'w:zst', level=1) as t:
+                t.add('6')"
+            mv "$W/stage/current.tar.zst" "$W/out/current.tar.zst"
+            mv "$W/latest.json" "$W/out/current.json"
       outputs:
         artifacts:
           # The archive first, the pointer last: a reader never sees a pointer ahead of its archive.
