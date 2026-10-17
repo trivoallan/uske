@@ -1,0 +1,15 @@
+{
+  "playbooks": [
+    {
+      "tier": "Quarantaine",
+      "rules": [
+        {
+          "slug": "no-secret",
+          "level": "critical",
+          "passed": false,
+          "status": "failed"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+---
+adr: SDR-0021
+slug: screen-et-repartition
+title: Un verbe qui lance les deux outils, et un Workflow par politique
+status: accepted
+date: 2026-10-17
+authors: [Tristan Rivoallan]
+supersedes: []
+---
+
+# Un verbe qui lance les deux outils, et un Workflow par politique
+
+> Verdict `accepted` reçu de Tristan Rivoallan le 2026-10-17, décision par décision : le verbe
+> `uske screen` qui lance les deux outils, et la répartition par politique sans volume partagé.
+> Le code du change `screen-and-policy-fan-out` s'y conforme, éprouvé sur le banc `kind`. Le
+> raisonnement complet, les alternatives et les risques vivent dans
+> `openspec/changes/archive/2026-10-17-screen-and-policy-fan-out/design.md`, décisions D1, D2,
+> D4, D7, D9 et D12. Cet ADR n'en retient que ce qui engage les changes suivants.
+
+## Context and Problem Statement
+
+Jusqu'ici, `uske` ne lançait jamais `regis` ni `knock` : le workflow les lançait, chacun dans son
+image, et `uske` lisait leurs fichiers. Un screening hors du cluster se recopiait donc à la main,
+en Bash (`base-images/screen.sh`). Dans le cluster, toutes les politiques passaient par un seul
+Workflow, tenu à `parallelism: 1` par des volumes `ReadWriteOnce`. L'ordre de grandeur annoncé est
+de plus de 10 000 politiques.
+
+## Considered Options
+
+* **Garder la règle, et laisser chaque dépôt recopier les étapes** : écartée, les copies dérivent
+  déjà.
+* **`uske screen` lance les deux outils par leur ligne de commande, et un préfixe les déplace** :
+  retenue.
+* **`regis` et `knock` en bibliothèques de `uske`** : écartée, car elle lierait trois versions.
+* **Un seul Workflow, rendu parallèle sur un stockage partagé** : écartée, car il garde une trace
+  et un rejeu pour toutes les politiques, et il n'y aura pas de stockage `ReadWriteMany`.
+* **Un Workflow enfant par politique, créé par un parent qui fixe commit, epoch et `run`** :
+  retenue.
+
+## Decision Outcome
+
+* `uske screen` est le seul verbe qui lance `regis` et `knock`. Il les lance par leur nom sur le
+  `PATH`, ou par le préfixe de `USKE_REGIS_CMD` et `USKE_KNOCK_CMD`. Il ne lit d'eux que leurs
+  fichiers et leur code de retour. Les sous-commandes d'étape restent sans outil.
+* `uske` ne connaît pas git : ce qui doit suivre une écriture au journal passe par
+  `USKE_AFTER_RECORD`.
+* Dans le cluster, l'unité de travail est la politique : un `Workflow` enfant `uske-policy` par
+  politique, chaque outil dans son image, et deux plafonds posés par l'overlay. Aucun volume
+  n'est partagé : l'enfant passe son travail par artefacts Argo, sur une copie du journal de sa
+  politique, et une étape de fusion (`uske merge`), seule à monter le journal, y verse ses lignes
+  à la fin, sous un verrou, par la règle d'ajout de toujours.
+
+### Consequences
+
+* Bon : un seul enchaînement décide hors du cluster, et un test de parité le tient aligné sur les
+  étapes.
+* Bon : une politique se rejoue seule, et sa trace est à elle.
+* Coût : `uske` grossit d'un module qui lance des processus (objectif Minceur).
+* Coût : un droit de plus pour le compte `uske`, créer des `Workflow`, et un dépôt d'artefacts
+  (S3) à fournir.
+* Coût : entre le placement et la fusion, le journal du volume retarde ; la décision est durable
+  dans le dépôt d'artefacts.
+* Ne décide ni le planificateur (`DEBT-07`) ni le support du journal (`DEBT-08`).

@@ -1,0 +1,33 @@
+{
+  "apiVersion": "knock.io/v1alpha1",
+  "kind": "ReconcilePlan",
+  "operations": [
+    {
+      "policy": "fixture-standard",
+      "kind": "import",
+      "destination": "harbor.example/shared-test/app",
+      "tag": "1.0",
+      "source": "harbor.example/producer/app",
+      "sourceTag": "1.0",
+      "sourceDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "policy": "fixture-standard",
+      "kind": "import",
+      "destination": "harbor.example/shared-test/app",
+      "tag": "1.1",
+      "source": "harbor.example/producer/app",
+      "sourceTag": "1.1",
+      "sourceDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "policy": "fixture-standard",
+      "kind": "import",
+      "destination": "harbor.example/shared-test/app",
+      "tag": "1.2",
+      "source": "harbor.example/producer/app",
+      "sourceTag": "1.2",
+      "sourceDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ]
+}

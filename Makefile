@@ -10,11 +10,12 @@ ci-tools: ## Installe argo dans .bin/ (version et empreinte épinglées)
 	echo "2c8ef41d53593f2ee64d85fb69b631c89a0fc2c57e6ce011422caa525a97ec58  .bin/argo.gz" | sha256sum -c -
 	gunzip -f .bin/argo.gz && chmod +x .bin/argo
 
-lint: ## ruff, puis les manifestes rendus par kustomize et validés par argo
+lint: ## ruff, puis les manifestes rendus par kustomize, validés par argo et relus par leur test
 	uv run ruff check .
 	uv run ruff format --check .
 	@d="$$(mktemp -d)" && trap 'rm -rf "$$d"' EXIT && \
 	kubectl kustomize deploy/kind > "$$d/uske.yaml" && $(ARGO) lint --offline "$$d/uske.yaml"
+	uv run python -m pytest --no-cov -q tests/test_manifests.py
 
 test: ## Tests et couverture de branches (90 %)
 	uv run python -m pytest

@@ -1,0 +1,15 @@
+{
+  "apiVersion": "knock.io/v1alpha1",
+  "kind": "ReconcilePlan",
+  "operations": [
+    {
+      "policy": "fixture-unknown",
+      "kind": "import",
+      "destination": "harbor.example/shared-test/app",
+      "tag": "3.0",
+      "source": "harbor.example/producer/app",
+      "sourceTag": "3.0",
+      "sourceDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+    }
+  ]
+}

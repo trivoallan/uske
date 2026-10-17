@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 TRACK_LABEL = "admission-track"
+# metadata.name names files and directories (journal, reports, work): a Kubernetes DNS-1123
+# subdomain, so never a path (`../x`) nor a shell word (`a;b`)
+NAME = re.compile(r"[a-z0-9]([-a-z0-9.]*[a-z0-9])?")
+NAME_MAX = 63  # also a label value on the policy's child Workflow (uske.io/policy)
 
 
 class PolicyError(Exception):
@@ -26,13 +31,19 @@ def load(path: str | Path) -> Policy:
     path = Path(path)
     try:
         doc = yaml.safe_load(path.read_text())
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise PolicyError(f"{path}: {exc}") from exc
     if not isinstance(doc, dict) or doc.get("kind") != "MirrorPolicy":
         raise PolicyError(f"{path}: not a MirrorPolicy")
     meta = doc.get("metadata") or {}
     if not meta.get("name"):
         raise PolicyError(f"{path}: metadata.name is missing")
+    name = meta["name"]
+    if not isinstance(name, str) or len(name) > NAME_MAX or not NAME.fullmatch(name):
+        raise PolicyError(
+            f"{path}: metadata.name {name!r} is not a DNS-1123 subdomain "
+            "(lowercase letters, digits, '-' and '.', at most 63 characters)"
+        )
     return Policy(meta["name"], path, (meta.get("labels") or {}).get(TRACK_LABEL), doc)
 
 

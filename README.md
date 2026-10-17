@@ -44,7 +44,8 @@ flowchart LR
 
 - **Runs one screening per policy, on a schedule**, as an Argo Workflows `CronWorkflow`. A policy is
   a knock policy: which images to bring in, and how. A screening is one pass over it: plan, judge,
-  place, record.
+  place, record. Each policy gets its own child Workflow, so one can be replayed alone, and no
+  volume is shared between them: their lines are merged into the journal at the end.
 - **Asks regis only what is still owed a decision**, and hands knock only what was accepted.
 - **Holds rebuilt images in a staging registry** until regis has judged them by their own digest:
   a rebuild is a new image, so it is judged again before it is placed.
@@ -66,6 +67,20 @@ deploy/kind/up.sh down   # when you are done
 
 To find out why an image was not placed, ask the journal: `uv run uske decisions <image> --results <dir>`
 prints its timeline and the rule that refused it.
+
+## Screen locally
+
+Outside a cluster, on a workstation or in CI, one command runs the same steps with the same
+decisions:
+
+```bash
+uv run uske screen --policies policies/ --playbooks playbooks/ --results results/ --transit transit
+```
+
+It is the only `uske` command that runs regis and knock itself: from `PATH`, or through the
+prefixes in `USKE_REGIS_CMD` and `USKE_KNOCK_CMD` (a `docker run …`). `USKE_AFTER_RECORD` runs after
+each journal write, before the next placement: commit the journal there. See
+[Screen locally](docs/how-to/operate.md#screen-locally).
 
 ## Is it for you?
 

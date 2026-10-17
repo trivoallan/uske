@@ -241,12 +241,13 @@ class Classify(Workdir):
         self.assertEqual((code, line["report"]), (0, durable))
 
     def test_a_rejudged_digest_never_overwrites_an_earlier_report(self):
-        # The line written by an earlier screening must keep pointing at its own report.
+        # The line written by an earlier screening must keep pointing at its own report: named
+        # by the screening's `run`, the parent's name that every child carries.
         template = (HERE.parent / "deploy/base/workflowtemplate.yaml").read_text()
         links = re.findall(r"/results/reports/\S+?\.html", template)
         self.assertTrue(links)
         for link in links:
-            self.assertTrue(link.endswith("/{{workflow.name}}.html"), link)
+            self.assertTrue(link.endswith("/{{workflow.parameters.run}}.html"), link)
 
     def test_without_a_link_the_read_path_is_recorded(self):
         line = self.classify(LIGHT, "r:1", D1, report("Quarantaine", [SECRET_FAILED]))
@@ -272,9 +273,12 @@ def plan(
     ops: list[tuple[str, str]],
     kind: str = "import",
     transformed: bool | None = None,
+    remediated: bool | None = None,
 ) -> dict:
     """A ReconcilePlan as `knock reconcile --plan-out` writes it: (tag, source digest) per op."""
     extra = {} if transformed is None else {"transformed": transformed}
+    if remediated is not None:
+        extra["remediated"] = remediated
     return {
         "apiVersion": "knock.io/v1alpha1",
         "kind": "ReconcilePlan",
@@ -878,6 +882,54 @@ class Rebuild(Workdir):
             FULL, self.SOURCE, D1, self.REPAIR, 0, "--track", "standard"
         )
         self.assertTrue(line["repairable"])
+
+    def test_remediated_tag_upstream_fix_renews_the_order(self):
+        """Un correctif amont sur un tag réparé (D11)."""
+        self.judge_source(D1, report("Placement direct"))
+        value = plan(self.NAME, [("1.0", D1)], remediated=True)
+        result, tags = self.approve(
+            value, "--transit", "t", "--epoch", "20261017T020000Z"
+        )
+        self.assertEqual(tags, ["1.0"])
+        self.assertEqual(result["discarded"], {})
+        approved = json.loads((self.tmp / "approved.json").read_text())
+        self.assertEqual(
+            approved["operations"][0]["remediate"], {"epoch": "20261017T020000Z"}
+        )
+
+    def test_remediated_tag_without_transit_is_withheld_inconclusive(self):
+        """Un tag réparé, sans transit."""
+        self.judge_source(D1, report("Placement direct"))
+        out = self.tmp / "approve-lines.json"
+        result, tags = self.approve(
+            plan(self.NAME, [("1.0", D1)], remediated=True), "--lines-out", str(out)
+        )
+        self.assertEqual(tags, [])
+        self.assertEqual(result["discarded"], {"no-transit": 1})
+        [line] = json.loads(out.read_text())
+        self.assertEqual(
+            (line["digest"], line["state"], line["reason"]),
+            (D1, "inconclusive", "uske/no-transit"),
+        )
+
+    def test_remediated_tag_whose_new_source_is_refused_is_withheld(self):
+        """Un tag réparé dont la nouvelle source est refusée."""
+        self.judge_source(D1, report("Quarantaine", [SECRET_FAILED]))
+        result, tags = self.approve(
+            plan(self.NAME, [("1.0", D1)], remediated=True), "--transit", "t"
+        )
+        self.assertEqual(tags, [])
+        self.assertEqual(result["discarded"], {"refused": 1})
+
+    def test_never_remediated_tag_is_handed_back_without_order(self):
+        """Un tag jamais réparé: no key, or the key set false, counts as unmarked."""
+        self.judge_source(D1, report("Placement direct"))
+        for remediated in (None, False):
+            with self.subTest(remediated=remediated):
+                value = plan(self.NAME, [("1.0", D1)], remediated=remediated)
+                self.assertEqual(self.approve(value, "--transit", "t")[1], ["1.0"])
+                approved = json.loads((self.tmp / "approved.json").read_text())
+                self.assertNotIn("remediate", approved["operations"][0])
 
     def test_a_sound_source_is_approved_rebuilt_or_not(self):
         self.judge_source(D1, report("Placement direct"))

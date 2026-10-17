@@ -1,5 +1,6 @@
 # Local environment: kind, Zot (TLS, self-signed CA, with its UI) for Harbor, the published regis
 # and knock. Every tool trusts the CA through SSL_CERT_FILE (a bundle: public CAs plus ours).
+# RustFS (artifacts.yaml) is the S3 artifact repository the screening's children pass their work through.
 # `up.sh` creates the cluster, the images and the secrets, then applies this.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -7,6 +8,7 @@ namespace: uske
 resources:
   - ../base
   - registry.yaml
+  - artifacts.yaml
 images:
   - {name: uske, newName: uske, newTag: dev}
   - {name: regis, newName: ghcr.io/trivoallan/regis, digest: "sha256:7c09aeae02b4bb039847690983f2ccf10a3307c38987eaffdce79b2720138315"}  # 0.41.0-full
@@ -18,6 +20,7 @@ patches:
       - op: add
         path: /spec/suspend
         value: true
+  # JSON 6902 patches reach templates by index only; each one names its template.
   - target: {kind: WorkflowTemplate, name: uske-screening}
     patch: |-
       - op: replace
@@ -30,42 +33,63 @@ patches:
       - op: replace
         path: /spec/arguments/parameters/2/value
         value: tests/fixtures/repo/playbooks
-      # The repository is mounted from the host (kind extraMounts), not cloned.
+      # The repository is mounted from the host (kind extraMounts), not cloned: no commit to fix.
       - op: add
-        path: /spec/volumes/-
-        value: {name: repository, hostPath: {path: /repository, type: Directory}}
+        path: /spec/volumes
+        value:
+          - {name: repository, hostPath: {path: /repository, type: Directory}}
       - op: replace
-        path: /spec/templates/3/container
+        path: /spec/templates/1/container  # checkout
         value:
           image: uske
           command: [sh, -c]
-          args: ["rm -rf /work/repo && cp -r /repository /work/repo"]
+          args: ["rm -rf /work/repo && cp -r /repository /work/repo && echo local > /tmp/commit"]
           volumeMounts:
             - {name: work, mountPath: /work}
             - {name: repository, mountPath: /repository, readOnly: true}
-      # The CA bundle for regis and knock, and knock's test signing key.
+  - target: {kind: WorkflowTemplate, name: uske-policy}
+    patch: |-
       - op: add
-        path: /spec/volumes/-
-        value: {name: registry-ca, secret: {secretName: registry-ca}}
+        path: /spec/volumes
+        value:
+          - {name: repository, hostPath: {path: /repository, type: Directory}}
+          # The CA bundle for regis and knock, and knock's test signing key.
+          - {name: registry-ca, secret: {secretName: registry-ca}}
+          - {name: knock-key, secret: {secretName: uske-knock-key}}
+      # checkout: the policy file and the rule sets only, from the host; the work artifact then
+      # stays small. The journal's copy comes from the snapshot, as in the base.
+      - op: replace
+        path: /spec/templates/4/container
+        value:
+          image: uske
+          command: [sh, -c]
+          args:
+            - >-
+              set -o pipefail && mkdir -p /work/repo /work/results &&
+              policy="{{workflow.parameters.path}}" &&
+              tar -C /repository -cf - "${policy#/work/repo/}" "{{workflow.parameters.playbooks}}"
+              | tar -C /work/repo -xf - &&
+              if [ -f "/tmp/snapshot/{{workflow.parameters.name}}.jsonl" ]; then
+                cp "/tmp/snapshot/{{workflow.parameters.name}}.jsonl" /work/results/;
+              fi
+          volumeMounts:
+            - {name: work, mountPath: /work}
+            - {name: repository, mountPath: /repository, readOnly: true}
       - op: add
-        path: /spec/volumes/-
-        value: {name: knock-key, secret: {secretName: uske-knock-key}}
+        path: /spec/templates/9/container/volumeMounts  # regis-analyze
+        value:
+          - {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
       - op: add
-        path: /spec/templates/6/container/volumeMounts/-
-        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
-      - op: add
-        path: /spec/templates/7/container/volumeMounts/-
-        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
-      - op: add
-        path: /spec/templates/7/container/volumeMounts/-
-        value: {name: knock-key, mountPath: /keys, readOnly: true}
+        path: /spec/templates/10/container/volumeMounts  # knock
+        value:
+          - {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+          - {name: knock-key, mountPath: /keys, readOnly: true}
       # knock-once, the apply that holds rebuilds: the same mounts as knock.
       - op: add
-        path: /spec/templates/9/container/volumeMounts/-
-        value: {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
-      - op: add
-        path: /spec/templates/9/container/volumeMounts/-
-        value: {name: knock-key, mountPath: /keys, readOnly: true}
+        path: /spec/templates/11/container/volumeMounts  # knock-once
+        value:
+          - {name: registry-ca, mountPath: /etc/registry-ca, readOnly: true}
+          - {name: knock-key, mountPath: /keys, readOnly: true}
   # dt-sync (change `dt-sync`): passes started by hand, the same checkout, CA and policies.
   - target: {kind: CronWorkflow, name: dt-sync}
     patch: |-

@@ -66,12 +66,19 @@ def _decide(
     repaired image is refused, the closing line is not repairable any more. The same holds when
     knock replans a remediated tag (its transform changed): the order is renewed, the source is
     not judged again, and the new image is.
+
+    A sound source on a tag knock marks `remediated: true` (the destination tag it replaces
+    carries a remediation) is remediated too (D11): placed as is, the next upstream patch would
+    undo the repair. uske never infers the mark from the destination; no key means unmarked.
+    Refused and exhausted sources stay withheld, mark or not.
     """
     line = last.get(op["sourceDigest"]) or {}
     state = line.get("state")
-    if state == Outcome.DIRECT_PLACEMENT:
+    if state == Outcome.DIRECT_PLACEMENT and op.get("remediated") is not True:
         return None
-    if state != Outcome.TRANSFORMATION_REQUIRED or not line.get("repairable"):
+    if state != Outcome.DIRECT_PLACEMENT and (
+        state != Outcome.TRANSFORMATION_REQUIRED or not line.get("repairable")
+    ):
         return "refused"
     if attempts(lines, op["sourceDigest"]) >= MAX_ATTEMPTS:
         return "attempts-exhausted"

@@ -13,12 +13,23 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import yaml
 
-from uske import census, decisions, dtsync, gate, outcomes, playbooks, policies, results
+from uske import (
+    census,
+    decisions,
+    dtsync,
+    gate,
+    merge,
+    outcomes,
+    playbooks,
+    policies,
+    results,
+)
 
 
 class Failure(Exception):
@@ -29,16 +40,16 @@ def _json(value) -> None:
     print(json.dumps(value, ensure_ascii=False))
 
 
-def _read_json(path: str):
+def read_json(path: str):
     try:
         return json.loads(Path(path).read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise Failure(f"{path}: {exc}") from exc
 
 
-def _read_staged(path: str) -> dict:
+def read_staged(path: str) -> dict:
     """knock's StagedRebuilds. No file: knock held nothing, or did not get that far."""
-    return _read_json(path) if Path(path).exists() else {"entries": []}
+    return read_json(path) if Path(path).exists() else {"entries": []}
 
 
 def _policy(path: str) -> policies.Policy:
@@ -55,7 +66,7 @@ def cmd_list(args) -> None:
     _json([{"name": p.name, "path": str(p.path)} for p in found])
 
 
-def _target(candidate: dict) -> dict:
+def target(candidate: dict) -> dict:
     """What the workflow needs per digest: `regis` evaluates by digest, never by tag (D-24)."""
     repository = candidate["ref"]
     if ":" in repository.rsplit("/", 1)[-1]:
@@ -72,10 +83,10 @@ def cmd_pending(args) -> None:
     policy = _policy(args.policy)
     lines = results.read(results.path_for(args.results, policy.name))
     if args.staged:
-        found = gate.staged_candidates(_read_staged(args.staged), policy)
+        found = gate.staged_candidates(read_staged(args.staged), policy)
     else:
-        found = gate.candidates(_read_json(args.plan), policy)
-    _json([_target(c) for c in results.pending(found, lines)])
+        found = gate.candidates(read_json(args.plan), policy)
+    _json([target(c) for c in results.pending(found, lines)])
 
 
 def cmd_prepare(args) -> None:
@@ -95,52 +106,64 @@ def cmd_resolve(args) -> None:
     _json({"track": policy.track, "playbook": str(playbook) if playbook else None})
 
 
-def cmd_classify(args) -> None:
-    """The report is read where the screening wrote it, and recorded where it will still be."""
-    if bool(args.source_ref) != bool(args.source_digest):
+def classify_lines(
+    playbook: Path | None,
+    ref: str,
+    digest: str,
+    report: Path | None,
+    report_link: str | None,
+    regis_exit: int,
+    source_ref: str,
+    source_digest: str,
+    track: str,
+    epoch: str,
+    run: str,
+) -> list[dict]:
+    """The result lines of one judged digest: one, or two when a repaired image closes its source.
+
+    The report is read where the screening wrote it, and recorded where it will still be.
+    """
+    if bool(source_ref) != bool(source_digest):
         # half a pair would write an anonymous closing line, or silently skip the second gate
         raise Failure("--source-ref and --source-digest go together")
-    if args.playbook is None:
+    report_path = report
+    if playbook is None:
         # unknown regime: never evaluated, recorded as such (D-21, D-23)
-        ruleset, report_path, report = "none", None, None
+        ruleset, report_path, document = "none", None, None
         outcome, reason = outcomes.Outcome.INCONCLUSIVE, "uske/unknown-track"
     else:
         try:
-            raw = Path(args.playbook).read_bytes()
-            playbook = yaml.safe_load(raw) or {}
+            raw = Path(playbook).read_bytes()
+            rules = yaml.safe_load(raw) or {}
         except (OSError, yaml.YAMLError) as exc:
-            raise Failure(f"{args.playbook}: {exc}") from exc
+            raise Failure(f"{playbook}: {exc}") from exc
         ruleset = "sha256:" + hashlib.sha256(raw).hexdigest()
-        report_path = Path(args.report) if args.report else None
         try:
-            report = json.loads(report_path.read_text()) if report_path else None
+            document = json.loads(report_path.read_text()) if report_path else None
         except (OSError, json.JSONDecodeError):
-            report = None  # unreadable is inconclusive, not a failure
-        outcome, reason = outcomes.classify(report, playbook, args.regis_exit)
+            document = None  # unreadable is inconclusive, not a failure
+        outcome, reason = outcomes.classify(document, rules, regis_exit)
     repairable = (
         outcome is outcomes.Outcome.TRANSFORMATION_REQUIRED
-        and not args.source_digest  # a repaired image is judged, never repaired again
-        and outcomes.repairable(report, playbooks.repairable(args.track or None))
+        and not source_digest  # a repaired image is judged, never repaired again
+        and outcomes.repairable(document, playbooks.repairable(track or None))
     )
     line = results.ResultLine(
         ts=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        ref=args.ref,
-        digest=args.digest,
+        ref=ref,
+        digest=digest,
         state=outcome.value,
         ruleset=ruleset,
         reason=reason,
         # what a human opens, when the workflow kept it; else what was read, for a local run
-        report=(args.report_link or str(report_path)) if report is not None else None,
-        run=args.run_id or None,  # Argo passes an empty string when it has none
+        report=(report_link or str(report_path)) if document is not None else None,
+        run=run or None,  # Argo passes an empty string when it has none
         repairable=True if repairable else None,
     )
-    if not args.source_digest:  # first gate; Argo passes an empty string
-        _json(line.to_dict())
-        return
+    if not source_digest:  # first gate; Argo passes an empty string
+        return [line.to_dict()]
     lines = [
-        dataclasses.replace(
-            line, source=args.source_digest, epoch=args.epoch or None
-        ).to_dict()
+        dataclasses.replace(line, source=source_digest, epoch=epoch or None).to_dict()
     ]
     if outcome in (
         outcomes.Outcome.TRANSFORMATION_REQUIRED,
@@ -150,102 +173,302 @@ def cmd_classify(args) -> None:
         lines.append(
             results.ResultLine(
                 ts=line.ts,
-                ref=args.source_ref,
-                digest=args.source_digest,
+                ref=source_ref,
+                digest=source_digest,
                 state=outcomes.Outcome.QUARANTINE.value,
                 ruleset=ruleset,
                 reason=gate.REMEDIATION_REFUSED,
                 report=line.report,
                 run=line.run,
-                rebuilt=args.digest,
+                rebuilt=digest,
             ).to_dict()
         )
-    _json(lines)
+    return lines
+
+
+def cmd_classify(args) -> None:
+    lines = classify_lines(
+        Path(args.playbook) if args.playbook is not None else None,
+        args.ref,
+        args.digest,
+        Path(args.report) if args.report else None,
+        args.report_link,
+        args.regis_exit,
+        args.source_ref,
+        args.source_digest,
+        args.track,
+        args.epoch,
+        args.run_id,
+    )
+    # the first gate prints one line, a held image the list of its lines
+    _json(lines if args.source_digest else lines[0])
 
 
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def cmd_record(args) -> None:
-    policy = _policy(args.policy)
-    if not (args.lines or args.applied or args.promoted):
+def record_lines(
+    policy: policies.Policy,
+    results_dir: str | Path,
+    lines: str | Path | None,
+    applied: str | Path | None,
+    promoted: str | Path | None,
+    run: str,
+) -> tuple[int, list[str]]:
+    """Append this screening's lines to the journal: how many were written, and the stale ones."""
+    if not (lines or applied or promoted):
         raise Failure("record needs --lines, --applied or --promoted")
     files: list[Path] = []
-    if args.lines:
-        source = Path(args.lines)
+    if lines:
+        source = Path(lines)
         # a directory holds one line per digest, written by each `classify` of the fan-out
         if source.is_dir():
             files = sorted(source.glob("*.json"))
-        else:  # no directory: no candidate this screening
-            files = [source] if source.exists() or source.suffix else []
-    lines = []
+        else:  # nothing written, a file or a directory, whatever its name: no line
+            files = [source] if source.exists() else []
+    found: list[dict] = []
     for f in files:
-        value = _read_json(str(f))
-        lines.extend(value if isinstance(value, list) else [value])
-    if args.applied and Path(args.applied).exists():
-        journal = results.read(results.path_for(args.results, policy.name))
-        lines.extend(
+        value = read_json(str(f))
+        found.extend(value if isinstance(value, list) else [value])
+    journal_path = results.path_for(str(results_dir), policy.name)
+    if applied and Path(applied).exists():
+        found.extend(
             gate.from_applied(
-                _read_json(args.applied),
+                read_json(str(applied)),
                 policy,
-                journal,
+                results.read(journal_path),
                 ts=_now(),
-                run=args.run_id or None,
+                run=run or None,
             )
         )
-    if args.promoted:
-        journal = results.read(results.path_for(args.results, policy.name))
-        lines.extend(
+    if promoted:
+        found.extend(
             gate.from_promoted(
-                _read_staged(args.promoted),
+                read_staged(str(promoted)),
                 policy,
-                journal,
+                results.read(journal_path),
                 ts=_now(),
-                run=args.run_id or None,
+                run=run or None,
             )
         )
-    for line in lines:
+    for line in found:
         try:
             datetime.strptime(line["ts"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, TypeError, ValueError) as exc:
             raise Failure(
                 f"{line.get('digest')}: ts must be %Y-%m-%dT%H:%M:%SZ, got {line.get('ts')!r}"
             ) from exc
-    written, stale = results.append(results.path_for(args.results, policy.name), lines)
+    return results.append(journal_path, found)
+
+
+def cmd_record(args) -> None:
+    written, stale = record_lines(
+        _policy(args.policy),
+        args.results,
+        args.lines,
+        args.applied,
+        args.promoted,
+        args.run_id,
+    )
     for message in stale:
         print(message, file=sys.stderr)
     _json({"written": written, **({"stale": len(stale)} if stale else {})})
 
 
+def approve_staged(
+    policy: policies.Policy, results_dir: str | Path, staged: str | Path
+) -> tuple[dict, dict]:
+    """The held rebuilds this screening approves, and their count."""
+    lines = results.read(results.path_for(str(results_dir), policy.name))
+    approved = gate.approve_staged(read_staged(str(staged)), policy, lines)
+    return approved, {"approved": len(approved["entries"])}
+
+
+def approve_plan(
+    policy: policies.Policy,
+    results_dir: str | Path,
+    plan: str | Path,
+    transit: str,
+    epoch: str,
+    run: str,
+    lines_out: str | Path | None = None,
+) -> tuple[dict, dict]:
+    """The plan minus its refused operations, and its count; the transit lines go to `lines_out`."""
+    lines = results.read(results.path_for(str(results_dir), policy.name))
+    approved, discarded, written = gate.approve(
+        read_json(str(plan)),
+        policy,
+        lines,
+        transit,
+        epoch=epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
+        ts=_now(),
+        run=run or None,
+    )
+    count = {
+        "approved": len(approved["operations"]),
+        "ordered": gate.ordered(approved),
+        "discarded": discarded,
+    }
+    if lines_out:
+        Path(lines_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(lines_out).write_text(json.dumps(written, ensure_ascii=False))
+    return approved, count
+
+
 def cmd_approve(args) -> None:
     policy = _policy(args.policy)
-    lines = results.read(results.path_for(args.results, policy.name))
     if args.staged:
-        approved = gate.approve_staged(_read_staged(args.staged), policy, lines)
-        count = {"approved": len(approved["entries"])}
+        approved, count = approve_staged(policy, args.results, args.staged)
     else:
-        approved, discarded, written = gate.approve(
-            _read_json(args.plan),
+        approved, count = approve_plan(
             policy,
-            lines,
+            args.results,
+            args.plan,
             args.transit,
-            epoch=args.epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
-            ts=_now(),
-            run=args.run_id or None,
+            args.epoch,
+            args.run_id,
+            args.lines_out,
         )
-        count = {
-            "approved": len(approved["operations"]),
-            "ordered": gate.ordered(approved),
-            "discarded": discarded,
-        }
-        if args.lines_out:
-            Path(args.lines_out).parent.mkdir(parents=True, exist_ok=True)
-            Path(args.lines_out).write_text(json.dumps(written, ensure_ascii=False))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(approved, indent=2))
     _json(count)
+
+
+def cmd_screen(args) -> None:
+    # screen runs this module's decisions: imported here, once both modules exist
+    from uske import screen
+
+    tools = screen.Tools.from_env(os.environ)
+    tools.check()  # before any step: a missing tool writes nothing
+    if args.policy:
+        found = [_policy(args.policy)]
+    else:
+        found, errors = policies.load_dir(args.policies)
+        for error in errors:
+            print(f"skipped: {error}", file=sys.stderr)
+    work = Path(args.work) if args.work else Path(tempfile.mkdtemp(prefix="uske-"))
+    print(f"work: {work}", file=sys.stderr)  # kept: a failed screening is read there
+    epoch = args.epoch or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    failed = []
+    for policy in found:
+        summary = screen.screen_policy(
+            policy,
+            work,
+            Path(args.results),
+            Path(args.playbooks),
+            args.transit,
+            epoch,
+            args.run_id,
+            tools,
+            os.environ.get("USKE_AFTER_RECORD") or None,
+            args.judge_only,
+        )
+        if args.judge_only:
+            for line in summary["lines"]:
+                _json(line)
+        else:
+            _json(summary)
+        if summary["outcome"] != "ok":
+            failed.append(policy.name)
+    if failed:
+        raise Failure(f"screening failed for: {', '.join(failed)}")
+
+
+def cmd_export(args) -> None:
+    policy = _policy(args.policy)
+    try:
+        count, warnings = merge.export(
+            policy.name,
+            Path(args.results),
+            args.snapshot_lines,
+            Path(args.out),
+            args.run_id,
+        )
+    except (merge.ArchiveError, OSError, ValueError) as exc:
+        raise Failure(str(exc)) from exc
+    for warning in warnings:
+        print(warning, file=sys.stderr)
+    _json({"exported": count, "out": args.out})
+
+
+def cmd_snapshot(args) -> None:
+    try:
+        listed = json.loads(Path(args.listed).read_text("utf-8"))
+        fanned = merge.snapshot(listed, Path(args.results), Path(args.out), args.run_id)
+        expected = Path(args.expected)
+        expected.parent.mkdir(parents=True, exist_ok=True)
+        expected.write_text(json.dumps([p["name"] for p in fanned]) + "\n")
+    except (merge.ArchiveError, OSError, ValueError, KeyError, TypeError) as exc:
+        raise Failure(str(exc)) from exc
+    _json(fanned)
+
+
+def cmd_merge(args) -> None:
+    try:
+        found = merge.archives(Path(args.source))
+        if args.pending:
+            merge.check_run(args.pending)
+    except merge.ArchiveError as exc:
+        raise Failure(str(exc)) from exc
+    merged, failed, conflicted = {}, [], []
+    # one bad archive never keeps the other policies out of the journal; within a policy, the
+    # archives after it wait, or their lines would make its own stale on the replay. A conflict is
+    # no such failure: the archive's other lines merged, so the next archive of its policy goes on.
+    for policy, files in found:
+        for n, archive in enumerate(files):
+            name = f"{policy}/{archive.name}"
+            try:
+                written, stale, conflicts = merge.merge_one(
+                    policy, archive, Path(args.results)
+                )
+            except merge.ArchiveError as exc:
+                print(f"error: {name}: {exc}", file=sys.stderr)
+                failed += [f"{policy}/{a.name}" for a in files[n:]]
+                break
+            for message in stale + conflicts:
+                print(f"{policy}: {message}", file=sys.stderr)
+            if conflicts and policy not in conflicted:
+                conflicted.append(policy)
+            merged[policy] = merged.get(policy, 0) + written
+    _json(merged)
+    problems = []
+    if failed:
+        problems.append(f"not merged: {', '.join(failed)}")
+    if conflicted:
+        mark = f"{Path(args.results) / merge.PENDING}/{args.pending or '<run>'}"
+        problems.append(
+            f"conflict in {', '.join(conflicted)}: a line written to the journal since the "
+            "snapshot wins over the child's lines on its digest, which were not merged. Check "
+            "each digest named above (the child may have placed it), then remove the mark "
+            f"{mark} by hand: `argo retry` would refuse the same lines again"
+        )
+    if problems:
+        raise Failure("; ".join(problems))
+    if args.pending:
+        try:
+            merge.merged(Path(args.results), args.pending)
+        except OSError as exc:
+            raise Failure(str(exc)) from exc
+
+
+SCREEN_EPILOG = """\
+environment:
+  USKE_REGIS_CMD     the judge's command, split like a POSIX shell and run without one;
+                     the arguments are appended. Default: regis, from PATH.
+                       USKE_REGIS_CMD="docker run --rm -v $PWD:$PWD regis:1"
+  USKE_KNOCK_CMD     the placer's command, likewise. Default: knock, from PATH.
+                       USKE_KNOCK_CMD="docker run --rm -v $PWD:$PWD --env-file knock.env knock:1"
+  USKE_AFTER_RECORD  run by `sh -c` after each step that wrote the journal, before the next one,
+                     with USKE_POLICY and USKE_RESULTS set; a failure stops the policy.
+                       USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A &&
+                         git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY)"'
+
+Paths are handed to the tools as uske sees them: a container mounts them at the same path.
+An unreadable policy file under --policies is reported `skipped:` and leaves the exit code as is.
+Exit 0 when every policy went through, whatever its verdicts; 1 when one failed.
+"""
 
 
 def _dependency_track() -> dtsync.DependencyTrack:
@@ -265,7 +488,7 @@ def _sync(step):
 
 def cmd_dt_plan(args) -> None:
     def step():
-        fleet = dtsync.placed(_read_json(args.audit))
+        fleet = dtsync.placed(read_json(args.audit))
         found, errors = policies.load_dir(args.policies)
         for error in errors:
             print(f"skipped: {error}", file=sys.stderr)
@@ -511,6 +734,105 @@ def parser() -> argparse.ArgumentParser:
         "--run", dest="run_id", default="", help="the screening that decides"
     )
     s.set_defaults(run=cmd_approve)
+
+    s = sub.add_parser(
+        "screen",
+        help="a whole screening in one command: plan, judge, record, place, per policy",
+        epilog=SCREEN_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    which = s.add_mutually_exclusive_group(required=True)
+    which.add_argument(
+        "--policies", help="a directory: every policy, in `uske list` order"
+    )
+    which.add_argument("--policy", help="one policy file")
+    s.add_argument("--playbooks", default="playbooks")
+    s.add_argument("--results", required=True, help="where the journals are")
+    s.add_argument(
+        "--work",
+        default="",
+        help="where plans, reports and lines are written (default: a new temporary "
+        "directory, named on stderr and kept)",
+    )
+    s.add_argument(
+        "--transit",
+        help="name of the registry remediated images are held in; without it, no source to "
+        "repair is ordered (uske/no-transit)",
+    )
+    s.add_argument(
+        "--epoch",
+        default="",
+        help="the remediation orders' epoch, UTC, YYYYMMDDTHHMMSSZ (default: now)",
+    )
+    s.add_argument(
+        "--run", dest="run_id", default="", help="the screening that writes (SDR-0018)"
+    )
+    s.add_argument(
+        "--judge-only",
+        action="store_true",
+        help="plan and judge only: print the verdict lines, record and place nothing",
+    )
+    s.set_defaults(run=cmd_screen)
+
+    s = sub.add_parser(
+        "export",
+        help="a child's lines past the snapshot, with the reports they cite, as one archive",
+    )
+    s.add_argument("--policy", required=True)
+    s.add_argument("--results", required=True, help="the child's copy of the journals")
+    s.add_argument(
+        "--snapshot-lines",
+        type=int,
+        required=True,
+        help="how many lines the journal had in the parent's snapshot",
+    )
+    s.add_argument("--out", required=True, help="the archive to write, <policy>.tgz")
+    s.add_argument(
+        "--run",
+        dest="run_id",
+        required=True,
+        help="the screening: the merge does not count its own lines in the journal as conflicts",
+    )
+    s.set_defaults(run=cmd_export)
+
+    s = sub.add_parser(
+        "snapshot",
+        help="the parent's snapshot: copy the journals, mark the run pending, count each policy's lines",
+    )
+    s.add_argument("--listed", required=True, help="`uske list`'s output, as a file")
+    s.add_argument("--results", required=True, help="where the journals are")
+    s.add_argument("--out", required=True, help="the directory to copy the journals to")
+    s.add_argument(
+        "--expected", required=True, help="where to write the listed policies' names"
+    )
+    s.add_argument(
+        "--run",
+        dest="run_id",
+        required=True,
+        help="the screening: its mark stays in <results>/.pending-merge until `merge --pending` "
+        "clears it, and another run's mark fails the snapshot",
+    )
+    s.set_defaults(run=cmd_snapshot)
+
+    s = sub.add_parser(
+        "merge",
+        help="append the children's archives to the journals; replaying it appends nothing. "
+        "A child's line on a digest the journal gained a line on since the snapshot is refused, "
+        "and the merge fails",
+    )
+    s.add_argument("--results", required=True, help="where the journals are")
+    s.add_argument(
+        "--from",
+        dest="source",
+        required=True,
+        help="a directory of <policy>/<archive>.tgz, written by `uske export`, merged by name",
+    )
+    s.add_argument(
+        "--pending",
+        default="",
+        help="the screening whose snapshot mark to clear once every archive has merged",
+    )
+    s.set_defaults(run=cmd_merge)
 
     s = sub.add_parser(
         "dt-plan",
