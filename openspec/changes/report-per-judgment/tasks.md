@@ -41,7 +41,7 @@ bloquante sous 90 %).
 **Fichiers :** `uske/screen.py` (`_Screening.keep_report`, et une fonction `_free_stem` à ajouter
 après `_file_name`), `tests/test_screen.py` (classe `Reports`).
 
-- [ ] 1.1 Dans `tests/test_screen.py`, classe `Reports`, remplacer les quatre premiers tests par
+- [x] 1.1 Dans `tests/test_screen.py`, classe `Reports`, remplacer les quatre premiers tests par
   ceux-ci. Ils couvrent le scénario « Un rapport cité par un chemin relatif », et le run ne nomme
   plus le rapport :
 
@@ -68,7 +68,7 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
 
   Supprimer `test_without_a_run_the_epoch_names_the_report` et
   `test_a_run_of_dots_falls_back_to_the_epoch` : le run ne sert plus au nom.
-- [ ] 1.2 Ajouter le test du scénario « Une empreinte rejugée sous le même epoch » :
+- [x] 1.2 Ajouter le test du scénario « Une empreinte rejugée sous le même epoch » :
 
   ```python
   def test_a_judgment_never_rewrites_an_earlier_report(self):
@@ -87,12 +87,12 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
       )
   ```
 
-- [ ] 1.3 Lancer `uv run python -m pytest --no-cov -q tests/test_screen.py -k Reports`. Résultat
+- [x] 1.3 Lancer `uv run python -m pytest --no-cov -q tests/test_screen.py -k Reports`. Résultat
   attendu : échecs sur `test_the_report_is_copied_and_cited_relative_to_the_results` (le rapport
   est cité en `41.md`), sur `test_the_run_never_names_the_report` (`https_ci.example_runs_77.md`)
   et sur `test_a_judgment_never_rewrites_an_earlier_report` (le fichier contient le rapport du
   juge, et non `earlier`).
-- [ ] 1.4 Dans `uske/screen.py`, ajouter sous `_file_name` :
+- [x] 1.4 Dans `uske/screen.py`, ajouter sous `_file_name` :
 
   ```python
   REPORT_EXTS = ("md", "html", "json")
@@ -125,9 +125,9 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
   ```
 
   Mettre à jour la docstring de `keep_report` : le nom est l'epoch, ou le premier nom libre.
-- [ ] 1.5 Relancer `uv run python -m pytest --no-cov -q tests/test_screen.py`. Résultat attendu :
+- [x] 1.5 Relancer `uv run python -m pytest --no-cov -q tests/test_screen.py`. Résultat attendu :
   tout passe, `0 failed`.
-- [ ] 1.6 Point de commit : `fix: un rapport rejugé par uske screen n'écrase plus celui d'une décision antérieure`.
+- [x] 1.6 Point de commit : `fix: un rapport rejugé par uske screen n'écrase plus celui d'une décision antérieure`.
 
 ## 2. Le crochet reçoit l'étape qui l'appelle
 
@@ -135,7 +135,7 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
 `self.record`), `tests/test_screen.py` (la classe des tests du crochet, celle de
 `test_the_journal_is_committed_before_the_placement`).
 
-- [ ] 2.1 Ajouter les tests des deux scénarios, dans la classe de
+- [x] 2.1 Ajouter les tests des deux scénarios, dans la classe de
   `test_the_journal_is_committed_before_the_placement` :
 
   ```python
@@ -164,10 +164,10 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
       self.assertEqual(self.steps(), ["record", "record-applied"])
   ```
 
-- [ ] 2.2 Lancer `uv run python -m pytest --no-cov -q tests/test_screen.py -k hook`. Résultat
+- [x] 2.2 Lancer `uv run python -m pytest --no-cov -q tests/test_screen.py -k hook`. Résultat
   attendu : les trois nouveaux tests échouent, parce que `steps` ne contient que des lignes vides
   (`['']` ou une liste vide).
-- [ ] 2.3 Dans `uske/screen.py` :
+- [x] 2.3 Dans `uske/screen.py` :
   - ajouter `step: str` comme premier paramètre de `record` (`def record(self, step: str, *, lines=…)`) ;
   - remplacer `self.hook()` par `self.hook(step)` ;
   - définir `def hook(self, step: str) -> None:` et ajouter `"USKE_STEP": step,` dans `env`, à
@@ -182,15 +182,15 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
   | `self.record(lines=p.staged_lines)` | `self.record("record-held", lines=p.staged_lines)` |
   | `self.record(promoted=p.staged_approved)` | `self.record("record-promoted", promoted=p.staged_approved)` |
 
-- [ ] 2.4 Relancer `uv run python -m pytest --no-cov -q tests/test_screen.py`. Résultat attendu :
+- [x] 2.4 Relancer `uv run python -m pytest --no-cov -q tests/test_screen.py`. Résultat attendu :
   tout passe, `0 failed`. Si `test_the_hook_after_a_source_left_without_transit` ne voit pas
   `record-approve`, c'est que l'approbation n'a pas écrit de ligne `uske/no-transit` : vérifier
   d'abord que `test_without_a_transit_nothing_is_ordered` passe, plutôt que de modifier le test.
-- [ ] 2.5 Point de commit : `feat: le crochet de uske screen sait quelle étape l'appelle`.
+- [x] 2.5 Point de commit : `feat: le crochet de uske screen sait quelle étape l'appelle`.
 
 ## 3. Documentation
 
-- [ ] 3.1 Dans `docs/how-to/operate.md`, section *Screen locally* :
+- [x] 3.1 Dans `docs/how-to/operate.md`, section *Screen locally* :
   - remplacer le paragraphe « Reports are copied to `reports/<policy>/<digest>/<run>.<ext>` … » par
     `reports/<policy>/<digest>/<epoch>.<ext>`, avec le premier nom libre (`<epoch>-2`, …) quand
     l'empreinte a déjà un rapport sous cet epoch : un rapport cité n'est jamais réécrit, et la
@@ -202,10 +202,10 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
 
   Vérification : `grep -n "<run>.<ext>" docs/how-to/operate.md` ne renvoie rien, et
   `grep -c USKE_STEP docs/how-to/operate.md` renvoie au moins 2.
-- [ ] 3.2 Dans `uske/cli.py`, `SCREEN_EPILOG` : sur la ligne de `USKE_AFTER_RECORD`, écrire
+- [x] 3.2 Dans `uske/cli.py`, `SCREEN_EPILOG` : sur la ligne de `USKE_AFTER_RECORD`, écrire
   « with USKE_POLICY, USKE_RESULTS and USKE_STEP set ». Vérification :
   `uv run uske screen --help | grep USKE_STEP` affiche la ligne.
-- [ ] 3.3 Point de commit : `docs: dire comment uske screen nomme ses rapports, et USKE_STEP`.
+- [x] 3.3 Point de commit : `docs: dire comment uske screen nomme ses rapports, et USKE_STEP`.
 
 ## 4. Vérification d'ensemble
 
