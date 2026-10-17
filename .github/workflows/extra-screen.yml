@@ -56,7 +56,7 @@ on:
 permissions: {}
 
 env:
-  USKE_VERSION: 0.10.0 # x-release-please-version
+  USKE_VERSION: 0.11.0 # x-release-please-version
   # renovate: datasource=docker depName=ghcr.io/trivoallan/regis
   REGIS_VERSION: 0.42.0
   # renovate: datasource=docker depName=ghcr.io/trivoallan/knock
