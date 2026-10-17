@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.0](https://github.com/trivoallan/uske/compare/v0.8.0...v0.9.0) (2026-10-17)
+
+
+### Features
+
+* un screening en une commande, et un Workflow par politique sans volume partagé ([#53](https://github.com/trivoallan/uske/issues/53)) ([a94a51b](https://github.com/trivoallan/uske/commit/a94a51b2f890c410142f2a80f48c928aea1ff611))
+
+
+### Bug Fixes
+
+* un rapport rejugé n'écrase plus celui d'une décision antérieure ([#44](https://github.com/trivoallan/uske/issues/44)) ([fe956bb](https://github.com/trivoallan/uske/commit/fe956bbd9c195568fd437ba886b4e63fa48faa49))
+
+
+### Documentation
+
+* aligner le README et l'arc42 sur ce que le code fait ([#46](https://github.com/trivoallan/uske/issues/46)) ([bd86b1c](https://github.com/trivoallan/uske/commit/bd86b1caa7454b27f5d64bd0625486821fe7c2c3))
+* déclarer la documentation publique (SDR-0019) ([#47](https://github.com/trivoallan/uske/issues/47)) ([5c78c35](https://github.com/trivoallan/uske/commit/5c78c3506e5c0b58b547ee79ec6f7d5436ae523a))
+* dire screening, pas criblage, comme le glossaire de référence ([#48](https://github.com/trivoallan/uske/issues/48)) ([8ff4d24](https://github.com/trivoallan/uske/commit/8ff4d240c1f3d103d338ed538d2fd50871ee261d))
+* lever les imprécisions de fond relevées à la lecture à froid ([#52](https://github.com/trivoallan/uske/issues/52)) ([0578bb2](https://github.com/trivoallan/uske/commit/0578bb2d2639e145eee6b5b7402376ad77859454))
+* passer la documentation en anglais, les décisions restent en français ([#51](https://github.com/trivoallan/uske/issues/51)) ([5959588](https://github.com/trivoallan/uske/commit/59595880f4f67f8a54ef1a63576de52e80bc615b))
+* rédiger les douze sections du document d'architecture ([#42](https://github.com/trivoallan/uske/issues/42)) ([d13c480](https://github.com/trivoallan/uske/commit/d13c480727bfbd737f9acfbac4098c70d03d2ea6))
+* réécrire le README en page produit commune à regis et knock (SDR-0020) ([#49](https://github.com/trivoallan/uske/issues/49)) ([5de2add](https://github.com/trivoallan/uske/commit/5de2add7599d5127fc2232c97654e6d9aba5b464))
+
 ## [0.8.0](https://github.com/trivoallan/uske/compare/v0.7.0...v0.8.0) (2026-10-16)
 
 
