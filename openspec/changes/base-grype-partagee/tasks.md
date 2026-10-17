@@ -153,7 +153,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   (rafraîchissement, rafraîchissement manuel après une montée de version de regis, `grype-db`
   comme première piste d'un *inconclusive* sur `cve-critical`, banc) et
   `docs/architecture/arc42.md` (*Deployment View*). Commit : `docs: décrire la base grype distribuée`.
-- [ ] 4.5 Rédiger, en anglais, le contrat de l'appelant dans *Screen locally* de
+- [x] 4.5 Rédiger, en anglais, le contrat de l'appelant dans *Screen locally* de
   `docs/how-to/operate.md`. Exemple de `USKE_REGIS_CMD` qui monte `~/.cache/grype:/grype-db` et
   pose les quatre variables avec `GRYPE_DB_CACHE_DIR=/grype-db`, et clé de cache CI
   `grype-db-$(date -u +%F)`. Scénario : *La documentation décrit le contrat de l'appelant*.

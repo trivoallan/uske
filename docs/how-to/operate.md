@@ -67,6 +67,25 @@ export USKE_KNOCK_CMD="docker run --rm -v $PWD:$PWD --env-file knock.env ghcr.io
 export USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A && git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY)"'
 ```
 
+`uske` never runs `grype`, and `uske screen` never downloads its database: the caller supplies it.
+Without a database, `regis` still exits 0, but the `cve-critical` rule stays incomplete and a
+full-regime decision is `inconclusive` (see
+[Refreshing the vulnerability database](#refreshing-the-vulnerability-database)). Mount a `grype`
+cache in the `regis` container and set four variables:
+
+```bash
+export USKE_REGIS_CMD="docker run --rm -v $PWD:$PWD -v $HOME/.cache/grype:/grype-db \
+  -e GRYPE_DB_CACHE_DIR=/grype-db -e GRYPE_DB_AUTO_UPDATE=false \
+  -e GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h -e GRYPE_CHECK_FOR_APP_UPDATE=false \
+  ghcr.io/trivoallan/regis:VERSION"
+```
+
+Fill the cache once: run `grype db update` with `GRYPE_DB_CACHE_DIR` set to that directory, or
+run `regis` once with `GRYPE_DB_AUTO_UPDATE` left on. A database built more than 48 hours ago is
+refused, as in the cluster: refresh the cache before it ages out. In CI, cache that directory
+with a daily key, such as `grype-db-$(date -u +%F)`, so each day's first job fills it and the
+others reuse it.
+
 `uske` hands the tools the paths it sees: mount the work directory and the results directory
 **at the same path** in a tool's container (`-v "$PWD:$PWD"` above, with `--work` and `--results`
 under it). A path the container cannot see makes `knock` fail (exit 1) or `regis` give
