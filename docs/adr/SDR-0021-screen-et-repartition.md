@@ -31,7 +31,7 @@ de plus de 10 000 politiques.
   retenue.
 * **`regis` et `knock` en bibliothèques de `uske`** : écartée, car elle lierait trois versions.
 * **Un seul Workflow, rendu parallèle sur un stockage partagé** : écartée, car il garde une trace
-  et un rejeu pour toutes les politiques.
+  et un rejeu pour toutes les politiques, et il n'y aura pas de stockage `ReadWriteMany`.
 * **Un Workflow enfant par politique, créé par un parent qui fixe commit, epoch et `run`** :
   retenue.
 
@@ -43,8 +43,10 @@ de plus de 10 000 politiques.
 * `uske` ne connaît pas git : ce qui doit suivre une écriture au journal passe par
   `USKE_AFTER_RECORD`.
 * Dans le cluster, l'unité de travail est la politique : un `Workflow` enfant `uske-policy` par
-  politique, chaque outil dans son image, et deux plafonds posés par l'overlay. Au-delà de 1, le
-  stockage est `ReadWriteMany`.
+  politique, chaque outil dans son image, et deux plafonds posés par l'overlay. Aucun volume
+  n'est partagé : l'enfant passe son travail par artefacts Argo, sur une copie du journal de sa
+  politique, et une étape de fusion (`uske merge`), seule à monter le journal, y verse ses lignes
+  à la fin, sous un verrou, par la règle d'ajout de toujours.
 
 ### Consequences
 
@@ -52,6 +54,8 @@ de plus de 10 000 politiques.
   étapes.
 * Bon : une politique se rejoue seule, et sa trace est à elle.
 * Coût : `uske` grossit d'un module qui lance des processus (objectif Minceur).
-* Coût : un droit de plus pour le compte `uske`, créer des `Workflow`, et un stockage
-  `ReadWriteMany` à fournir pour dépasser 1.
+* Coût : un droit de plus pour le compte `uske`, créer des `Workflow`, et un dépôt d'artefacts
+  (S3, MinIO) à fournir.
+* Coût : entre le placement et la fusion, le journal du volume retarde ; la décision est durable
+  dans le dépôt d'artefacts.
 * Ne décide ni le planificateur (`DEBT-07`) ni le support du journal (`DEBT-08`).

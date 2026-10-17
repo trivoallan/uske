@@ -33,11 +33,12 @@ copie à la main coûte plus cher qu'une commande.
   enfant par politique. L'enfant, `uske-policy`, porte les étapes d'aujourd'hui, chacune dans
   l'image de son outil, et garde la répartition des jugements par empreinte.
 - Deux plafonds, posés par l'overlay : le nombre de politiques traitées à la fois, et le nombre de
-  jugements à la fois dans une politique. La base garde 1 et 1 ; le banc `kind` aussi, sur du
-  stockage `ReadWriteOnce`.
-- Au-delà de 1, l'overlay doit fournir un stockage `ReadWriteMany` pour `uske-results` et pour le
-  volume de travail de chaque enfant. Le verrou par politique et le journal à un fichier par
-  politique restent ce qui empêche deux écritures concurrentes sur un même journal.
+  jugements à la fois dans une politique. La base garde 1 et 1 ; le banc `kind` aussi.
+- **Aucun volume partagé** : un enfant passe son travail d'étape en étape par artefacts Argo, sur
+  une copie du journal de sa politique tirée d'un instantané que publie le parent. Ses lignes
+  nouvelles partent en artefact avant tout placement. **Une étape de fusion**, `uske merge`, seul
+  pod à monter `uske-results`, les verse au journal à la fin, sous un verrou, par la règle d'ajout
+  de `uske record` ; elle se rejoue sans rien doubler. Le stockage reste `ReadWriteOnce`.
 - La panne d'une politique n'arrête pas les autres ; le screening finit en échec si l'une a échoué.
 - **Le renouvellement d'une réparation** (décision D11 de la revue des étapes de durcissement de
   `knock`) : une opération que le plan de `knock` marque `remediated: true` repart avec un ordre de
@@ -55,10 +56,12 @@ copie à la main coûte plus cher qu'une commande.
 - **Répartir par empreinte seulement, dans un seul Workflow** : c'est déjà ce que fait `withParam` ;
   un seul Workflow de 10 000 politiques reste un seul objet, une seule trace, un seul échec à
   rejouer en entier.
-- **Partager le travail entre les pods par des artefacts Argo (S3) plutôt que par un volume
-  `ReadWriteMany`** : il faudrait un dépôt d'artefacts et réécrire le passage de fichiers de toutes
-  les étapes ; le volume garde le modèle actuel. À reprendre si le stockage `ReadWriteMany` manque
-  là où `uske` sera déployé.
+- **Un volume `ReadWriteMany` partagé par les pods** : réponse reçue, il n'y en aura pas là où
+  `uske` sera déployé.
+- **Que chaque enfant écrive le journal lui-même** : chaque écriture attacherait le volume
+  `ReadWriteOnce` au nœud de son pod, 10 000 fois en série.
+- **Déplacer le journal canonique dans le dépôt d'artefacts** : c'est décider son support
+  (`DEBT-08`), hors de ce change.
 - **Découper en plusieurs `CronWorkflow`, chacun sur un sous-répertoire de politiques** : c'est
   déjà possible avec le paramètre `policies`, sans rien construire. Ce change ne le fait pas ; il
   le documente comme le levier suivant si un seul parent ne suffit pas.
@@ -73,7 +76,7 @@ copie à la main coûte plus cher qu'une commande.
 
 `design` est dû : changement transverse et motif d'architecture nouveau (`uske` lance ses
 voisins ; un Workflow parent crée des Workflows enfants), et dépendance d'infrastructure nouvelle
-(stockage `ReadWriteMany` hors du banc).
+(un dépôt d'artefacts, S3 ou MinIO, déclaré par l'overlay).
 
 ## Revue
 
@@ -114,9 +117,10 @@ l'Opérabilité *renonce à* : le cluster les garde séparées, et le verbe ne s
   `knock` plus ancien n'écrit pas la clé, et rien n'est renouvelé.
 - Déploiement : `deploy/base/workflowtemplate.yaml` se scinde en un parent et un enfant
   (`uske-policy`) ; `deploy/base/cronworkflow.yaml` vise le parent ; un `Role` qui permet au compte
-  `uske` de créer et lire des Workflows ; `deploy/kind` garde 1 et 1.
-- Documentation : `README.md` (la règle « ne lance jamais », le verbe, les deux plafonds et le
-  stockage), `docs/architecture/arc42.md` (*Solution Strategy*, *Deployment View*, `RISK-05`,
+  `uske` de créer et lire des Workflows ; un dépôt d'artefacts déclaré par l'overlay ;
+  `deploy/kind` garde 1 et 1 et installe MinIO. Un verbe `uske merge`.
+- Documentation : `README.md` (la règle « ne lance jamais », les verbes, les deux plafonds et le
+  dépôt d'artefacts), `docs/architecture/arc42.md` (*Solution Strategy*, *Deployment View*, `RISK-05`,
   `DEBT-07`), un ADR.
 - Hors dépôt : `base-images/screen.sh` peut se réduire à des variables et à son crochet git ;
   ce change ne le modifie pas.
@@ -133,6 +137,10 @@ Cadrage, passe 1 sur 5 (budget du cadrage), le 2026-10-17 : trois questions — 
 `uske screen` lance les outils, l'unité de répartition, le stockage —, posées en prose à la
 session qui a ouvert ce change (`AskUserQuestion` n'atteignait pas la personne depuis ici).
 Réponse reçue : les trois propositions par défaut, et le schéma `surdesrails`.
+
+Cadrage, passe 2 sur 5, le 2026-10-17, par `AskUserQuestion` dans cette session : la session
+mère avait relayé d'autres réponses. Réponses reçues : `uske screen` lance les deux outils
+(option A) ; pas de stockage `ReadWriteMany`, mais des artefacts et une fusion.
 
 Ajout reçu le 2026-10-17 de la même session, hors passe : le renouvellement sur `remediated: true`
 (D11 de la revue de `knock`), à porter comme exigence avec scénario.

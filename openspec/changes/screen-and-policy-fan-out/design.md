@@ -1,7 +1,7 @@
 # Conception — `uske screen` et la répartition par politique
 
 Sections d'arc42 touchées : *Solution Strategy* (le choix « Enchaînement » et « Intégration »),
-*Deployment View* (deux `WorkflowTemplate`, un `Role`, le stockage `ReadWriteMany`),
+*Deployment View* (deux `WorkflowTemplate`, un `Role`, le dépôt d'artefacts, la fusion),
 *Architecture Decisions* (SDR-0021), *Risks and Technical Debts* (`RISK-05`, un risque nouveau sur
 la charge du contrôleur, `DEBT-07`). Les skills `arc42-section-NN` et `devops-engineer` n'ont pas
 été lancées : ce change a été ouvert par une autre session, sans personne pour donner son aval ;
@@ -34,6 +34,8 @@ vocabulaire (SDR-0016) et sa clé `run` (SDR-0018) ; le cœur sans entrée-sorti
 - Une politique par Workflow enfant, que l'on rejoue seule ; un nombre de politiques et de
   jugements simultanés réglable par l'overlay.
 - Le parent fixe ce qui doit être commun au screening : le commit du dépôt, l'epoch, le `run`.
+- Aucun volume partagé : le stockage reste `ReadWriteOnce`, et seul un pod de fusion écrit le
+  journal (réponse reçue le 2026-10-17 : « pas de RWX »).
 
 **Non-Goals:**
 
@@ -121,7 +123,11 @@ politique : `{"policy", "judged", "approved", "ordered", "promoted", "outcome"}`
    `uske.io/policy`, `successCondition: status.phase == Succeeded` et
    `failureCondition: status.phase in (Failed,Error)`. `continueOn: failed` pour que les autres
    politiques continuent.
-4. `summary` écrit les politiques en échec et fait échouer le parent s'il y en a une.
+4. `merge` (D12) verse au journal les lignes de tous les enfants, en échec compris.
+5. `summary` écrit les politiques en échec et fait échouer le parent s'il y en a une, ou si la
+   fusion a échoué.
+
+Avant l'étape 3, `snapshot` publie en artefact les `*.jsonl` de `uske-results` (D9).
 
 Le `spec.parallelism` du parent est le plafond de politiques ; celui de `uske-policy` est le
 plafond de jugements. Ces champs sont des entiers, pas des paramètres Argo : l'overlay les pose par
@@ -129,9 +135,9 @@ un patch kustomize.
 
 L'enfant reçoit `repository`, `commit`, `name`, `path`, `playbooks`, `transit`, `epoch` et `run`. Son
 `checkout` fait `git init`, `git fetch --depth 1 origin <commit>`, puis `git checkout FETCH_HEAD`.
-Il garde un `volumeClaimTemplate` `work` à lui, le mutex `policy-<name>`, et les étapes
-d'aujourd'hui, à ceci près que `{{workflow.name}}` devient le paramètre `run` et que l'epoch vient
-du parent. Le parent passe `run = {{workflow.name}}` : toutes les lignes d'un screening portent le
+Il garde le mutex `policy-<name>` et les étapes d'aujourd'hui, à ceci près que
+`{{workflow.name}}` devient le paramètre `run`, que l'epoch vient du parent, et que ses fichiers
+passent par artefacts (D9). Le parent passe `run = {{workflow.name}}` : toutes les lignes d'un screening portent le
 même `run` (SDR-0018).
 
 *Écartée :* `templateRef` vers `uske-policy` dans le même Workflow. Les étapes partageraient le
@@ -145,20 +151,44 @@ volume du parent et la trace unique, ce qu'il s'agit de quitter.
 Le compte `uske` reçoit, dans son `Role`, `create`, `get`, `list`, `watch` et `patch` sur
 `workflows.argoproj.io`, ce que demande un template `resource`. Rien d'autre n'est élargi.
 
-### D9 — Le stockage partagé se vérifie au rendu
+### D9 — Rien de partagé : l'enfant passe son travail d'étape en étape par artefacts
 
-Un script `deploy/check-storage.py`, en bibliothèque standard plus `pyyaml`, lit un rendu
-kustomize. Si le `parallelism` de l'un des deux templates dépasse 1, il exige `ReadWriteMany` sur le
-`PersistentVolumeClaim` `uske-results` et sur le `volumeClaimTemplate` `work` de `uske-policy`. Sinon,
-il sort en 1 en nommant le volume. `make lint` le lance sur chaque overlay du dépôt, aujourd'hui
-`deploy/kind`. Un test le lance sur un rendu fautif en fixture.
+L'enfant ne monte aucun volume persistant. Son répertoire `/work` est un artefact Argo, `work`,
+que chaque étape reçoit en entrée et rend en sortie, compressé, dans le dépôt d'artefacts par
+défaut du namespace (`artifactRepositoryRef`, configmap `artifact-repositories`). Il contient le
+dépôt extrait, la politique préparée, les plans, les listes d'images retenues, et
+`/work/results/<politique>.jsonl`, la copie du journal de la politique tirée de l'instantané du
+parent, que les sous-commandes lisent et complètent par `--results /work/results`, sans changer
+de code. Le nombre de lignes de l'instantané est passé en paramètre `snapshot-lines`.
 
-### D10 — Le banc garde 1 et 1, et ses patches suivent
+Les jugements répartis (`evaluate`, par empreinte) reçoivent `work` en lecture et rendent leur
+ligne et leur rapport dans des artefacts à clé fixe,
+`runs/{{run}}/{{name}}/lines/<key>.json` et `runs/{{run}}/{{name}}/reports/…` ; l'étape `record`
+qui suit reçoit le préfixe `runs/{{run}}/{{name}}/lines/` comme un répertoire. Argo sait charger
+un préfixe S3 comme un répertoire ; c'est ce qui remplace le répertoire partagé de la répartition.
+Le rapport est rangé dans `work` à `/work/results/reports/<politique>/<empreinte>/<run>.html`, et la
+ligne cite toujours `/results/reports/…` : la fusion l'y copiera.
 
-`deploy/kind` remplace le `checkout` du parent et de l'enfant par sa copie depuis `hostPath`, et
-monte le CA et la clé de `knock` dans les templates de l'enfant. Ses patches visent aujourd'hui des
-indices (`/spec/templates/3`) que la scission déplace. Ils sont réécrits, et le README du banc dit
-de lancer `deploy/kind/screening.yaml` comme avant.
+Chaque étape qui écrit des lignes (`record`, `record-approve`, `record-applied`, et les mêmes de la
+seconde porte) rend aussi l'artefact `lines`, à clé fixe `runs/{{run}}/out/{{name}}.tgz` : les
+lignes de `/work/results/<politique>.jsonl` au-delà des `snapshot-lines` premières, et les
+rapports qu'elles citent. Argo téléverse les sorties d'une étape avant de lancer la suivante :
+une décision est donc durable avant le placement qu'elle permet. Une étape qui ne peut pas
+téléverser échoue, et l'étape `place` ne démarre pas.
+
+*Écartée :* un volume `ReadWriteMany`. Réponse reçue : pas de RWX là où `uske` sera déployé.
+
+*Écartée :* épingler tous les pods d'un enfant sur un nœud pour garder un volume
+`ReadWriteOnce` par enfant. La répartition des jugements serait bornée par un nœud, et le
+planificateur Kubernetes ferait attendre des pods sans le dire.
+
+### D10 — Le banc garde 1 et 1, gagne un MinIO, et ses patches suivent
+
+`deploy/kind/up.sh` installe MinIO et le configmap `artifact-repositories` qui le désigne, comme
+le fait le démarrage rapide d'Argo. `deploy/kind` remplace le `checkout` du parent et de l'enfant
+par sa copie depuis `hostPath`, et monte le CA et la clé de `knock` dans les templates de l'enfant.
+Ses patches visent aujourd'hui des indices (`/spec/templates/3`) que la scission déplace. Ils sont
+réécrits, et le README du banc dit de lancer `deploy/kind/screening.yaml` comme avant.
 
 ### D11 — Renouveler l'ordre sur un tag réparé
 
@@ -176,6 +206,35 @@ autre geste. L'image réparée est jugée à la seconde porte comme toute autre.
 *Écartée :* que `uske` lise la destination pour savoir si un tag est réparé. Il ne connaît pas la
 forme d'une réparation, et la marque du plan est déjà là.
 
+### D12 — La fusion : un pod, un verrou, la règle d'ajout de toujours
+
+Un verbe nouveau, `uske merge --results /results --from <répertoire>`, lit dans `<répertoire>`
+un `<politique>.tgz` par enfant (le dernier artefact `lines` qu'il a rendu), et pour chacun :
+vérifie le nom de la politique (DNS-1123, comme `policies.load`), ajoute ses lignes au journal par
+`results.append`, et copie ses rapports sous `/results/reports/` sans écraser un fichier existant.
+`results.append` tient déjà ce qu'il faut : ajout seul, une ligne qui répète le dernier état d'une
+empreinte ou qui précède sa dernière ligne n'est pas écrite, et les lignes périmées sont dites sur
+la sortie d'erreur. La fusion est donc rejouable : sur les mêmes artefacts, elle n'ajoute rien.
+Elle sort `{"<politique>": <écrites>, …}` et échoue (code 1) sur un artefact illisible, après
+avoir fusionné les autres.
+
+L'étape `merge` du parent reçoit le préfixe `runs/{{run}}/out/` comme un répertoire, monte
+`uske-results` — c'est le seul pod du screening à le faire —, prend le mutex `uske-journal` et
+tourne après tous les enfants, en échec compris. Un enfant relancé seul a le paramètre `merge`
+à `true` et finit par la même étape, sur sa seule politique, sous le même mutex ; le parent le
+passe à `false`.
+
+Tant que la fusion n'a pas tourné, le journal du volume retarde sur ce qui a été placé : la
+décision existe, durable, dans le dépôt d'artefacts. Une fusion échouée fait échouer le parent ;
+`argo retry` la rejoue. Le screening suivant ne part pas avant (`Forbid`), et son instantané
+contient donc les lignes fusionnées.
+
+*Écartée :* que chaque enfant fusionne lui-même. Chaque fusion attacherait le volume
+`ReadWriteOnce` sur le nœud de son pod : 10 000 attachements en série par screening.
+
+*Écartée :* que le journal canonique quitte le volume pour le dépôt d'artefacts. C'est décider son
+support, `DEBT-08`, hors de ce change.
+
 ## Risks / Trade-offs
 
 - [Un `knock` qui n'écrit pas `remediated` laisse un correctif amont défaire une réparation] →
@@ -190,12 +249,21 @@ forme d'une réparation, et la marque du plan est déjà là.
   reste à découper en plusieurs `CronWorkflow` sur des sous-répertoires de `policies`.
 - [Chaque `resource` qui attend son enfant occupe un pod] → borné par le plafond de politiques,
   pas par leur nombre.
-- [Le stockage `ReadWriteMany` manque là où `uske` sera déployé] → les plafonds restent à 1, et le
-  passage de fichiers par artefacts Argo est l'alternative consignée dans `proposal.md`.
+- [Le dépôt d'artefacts devient une dépendance du screening : injoignable, rien ne se place] →
+  c'est la Sûreté ; l'overlay le déclare, le banc l'installe.
+- [Le journal du volume retarde sur les placements jusqu'à la fusion] → la décision est durable
+  dans le dépôt d'artefacts avant le placement ; la fusion échouée se voit sur le parent et se
+  rejoue ; `Forbid` empêche le screening suivant de juger sur un journal en retard.
+- [Une ligne écrite à la main entre l'instantané et la fusion rend périmée une ligne de l'enfant]
+  → `results.append` ne l'écrit pas et le dit ; c'est la règle « le journal n'avance que vers
+  l'avant ».
+- [L'artefact `work` circule à chaque étape : un dépôt de politiques lourd coûte autant de
+  transferts] → l'extraction est `--depth 1` ; le spike mesure.
 - [`concurrencyPolicy: Forbid` saute un screening quand le précédent dure plus de 5 minutes] →
   c'est la conduite voulue : une politique n'a qu'un écrivain. Le spike dira si la cadence tient.
-- [Le verrou `policy-<name>` est une ressource du namespace : deux namespaces qui partagent un
-  volume de journal le contourneraient] → un seul namespace par volume `uske-results`, dit au README.
+- [Les verrous `policy-<name>` et `uske-journal` sont des ressources du namespace : deux
+  namespaces qui partagent un volume de journal les contourneraient] → un seul namespace par
+  volume `uske-results`, dit au README.
 - [`uske screen` fond les étapes que l'Opérabilité veut séparées] → hors du cluster seulement. Le
   répertoire `--work` gardé et la sortie par politique rendent le diagnostic ; une politique se
   rejoue par `--policy`.
@@ -211,9 +279,9 @@ forme d'une réparation, et la marque du plan est déjà là.
 2. Livrer la scission du template et le `Role`, plafonds à 1. Le parent garde le nom
    `uske-screening` : le `CronWorkflow` ne change pas. Un screening en cours finit sur la
    définition qu'il a déjà lue.
-3. Lancer le banc : `deploy/kind/up.sh`, puis un screening ; vérifier un enfant par politique et
-   des journaux identiques à ceux d'avant la scission.
-4. Après le spike, un overlay de production pose ses plafonds et son stockage `ReadWriteMany`.
+3. Lancer le banc : `deploy/kind/up.sh` (avec MinIO), puis un screening ; vérifier un enfant par
+   politique, une fusion, et des journaux identiques à ceux d'avant la scission.
+4. Après le spike, un overlay de production pose ses plafonds et son dépôt d'artefacts.
 
 Retour arrière : réappliquer les manifestes de la version précédente. Le journal ne change pas de
 forme, et un enfant interrompu laisse sa politique due au screening suivant, comme aujourd'hui.

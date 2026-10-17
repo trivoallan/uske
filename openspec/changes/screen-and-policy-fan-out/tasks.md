@@ -9,8 +9,8 @@
 
 | Chemin | Quadrant | Destinataire | Geste |
 | --- | --- | --- | --- |
-| `README.md` | — | l'opératrice qui lance un screening hors du cluster, ou qui écrit un overlay | modifiée : la règle « ne lance jamais » réduite aux sous-commandes ; une section *Screen locally* (verbe, trois variables, montage au même chemin, crochet) ; les deux plafonds et le stockage `ReadWriteMany` ; un seul namespace par volume `uske-results` ; la forme nouvelle des chemins de rapport |
-| `docs/architecture/arc42.md` | explication | la mainteneuse et l'agent qui lit l'architecture | modifiée : *Solution Strategy* (lignes « Enchaînement » et « Intégration ») ; *Building Block View*, bloc *Workflow* en parent et enfant, plus un bloc *Screen* ; *Deployment View* (deux templates, le `Role`, le stockage) ; *Architecture Decisions* (SDR-0021) ; *Risks* (`RISK-05` révisé, un `RISK-07` sur la charge du contrôleur) |
+| `README.md` | — | l'opératrice qui lance un screening hors du cluster, ou qui écrit un overlay | modifiée : la règle « ne lance jamais » réduite aux sous-commandes ; une section *Screen locally* (verbe, trois variables, montage au même chemin, crochet) ; les deux plafonds, le dépôt d'artefacts et `uske merge` (rejouer une fusion, relancer un enfant seul) ; un seul namespace par volume `uske-results` ; la forme nouvelle des chemins de rapport |
+| `docs/architecture/arc42.md` | explication | la mainteneuse et l'agent qui lit l'architecture | modifiée : *Solution Strategy* (lignes « Enchaînement » et « Intégration ») ; *Building Block View*, bloc *Workflow* en parent et enfant, plus un bloc *Screen* ; *Deployment View* (deux templates, le `Role`, le dépôt d'artefacts, la fusion) ; *Architecture Decisions* (SDR-0021) ; *Risks* (`RISK-05` révisé, un `RISK-07` sur la charge du contrôleur) |
 | `docs/adr/SDR-0021-screen-et-repartition.md` | référence | qui conteste le choix plus tard | créée (écrite avec ce plan, `proposed`) |
 | `deploy/base/workflowtemplate.yaml` (commentaire d'en-tête) | — | qui lit le manifeste | modifiée : parent et enfant, les deux plafonds |
 
@@ -81,36 +81,49 @@
 
 ## 4. Le workflow réparti
 
-- [ ] 4.1 `deploy/base/workflowtemplate.yaml` : renommer le template de politique en un second
-  `WorkflowTemplate` `uske-policy`, avec les paramètres `repository`, `commit`, `name`, `path`,
-  `playbooks`, `transit`, `epoch` et `run`, son propre `checkout` au commit (D7), `{{workflow.name}}`
-  remplacé par le paramètre `run`, le mutex `policy-{{workflow.parameters.name}}` et
-  `parallelism: 1`. Chaque occurrence de `--run "{{workflow.name}}"` et de
-  `{{workflow.name}}.html` passe par `run`.
-- [ ] 4.2 Le parent `uske-screening` : `checkout` qui sort `git rev-parse HEAD`, `list`, l'étape
+- [ ] 4.1 `uske merge` (D12) : dans `uske/cli.py`, le verbe `merge --results <dir> --from <dir>`.
+  Pour chaque `<politique>.tgz` de `--from` (trié par nom) : nom vérifié DNS-1123, membres de
+  l'archive refusés s'ils sortent de leur répertoire, lignes de `lines.jsonl` ajoutées par
+  `results.append` au journal de la politique, rapports de `reports/` copiés sous
+  `<results>/reports/` sans écraser. Sortie `{"<politique>": <écrites>}` ; un artefact illisible
+  fait sortir en 1 après les autres. Un verbe `uske export --policy <f> --results <dir>
+  --snapshot-lines <n> --out <f.tgz>` écrit l'archive (lignes au-delà des `n` premières, rapports
+  qu'elles citent sous `<dir>/reports/`). Tests dans `tests/test_merge.py`, scénarios *Deux
+  politiques, une fusion*, *Rejouer la fusion*, *Une ligne écrite à la main pendant le screening*,
+  plus un nom `../x` et un membre d'archive `../../x` refusés.
+- [ ] 4.2 Commit : `feat(cli): verser au journal les lignes d'un screening réparti`.
+- [ ] 4.3 `deploy/base/workflowtemplate.yaml` : un second `WorkflowTemplate` `uske-policy`, avec
+  les paramètres `repository`, `commit`, `name`, `path`, `playbooks`, `transit`, `epoch`, `run`,
+  `snapshot-lines` et `merge` (défaut `true`), son propre `checkout` au commit (D7), `{{workflow.name}}`
+  remplacé par `run`, le mutex `policy-{{workflow.parameters.name}}`, `parallelism: 1`,
+  `ttlStrategy.secondsAfterCompletion: 86400`, `podGC.strategy: OnPodSuccess`, et aucun volume
+  persistant : chaque template reçoit et rend l'artefact `work` (`/work`), les sous-commandes
+  lisent `--results /work/results`, `evaluate` rend sa ligne et son rapport à clé fixe sous
+  `runs/{{run}}/{{name}}/`, `record` reçoit le préfixe `lines/` comme répertoire, et chaque étape
+  qui écrit des lignes rend l'artefact `lines` par `uske export` (D9). Une dernière étape `merge`,
+  `when: merge == true`, mutex `uske-journal`, seule à monter `uske-results`.
+- [ ] 4.4 Le parent `uske-screening` : `checkout` qui sort `git rev-parse HEAD`, `list`,
+  `snapshot` (archive des `*.jsonl` de `uske-results`, un compte de lignes par politique), l'étape
   `policy` en template `resource` (D7 : `setOwnerReference`, label `uske.io/policy`, conditions,
-  `continueOn: failed`), puis `summary`, qui échoue en nommant les politiques en échec ;
-  `parallelism: 1`. Sur l'enfant, `ttlStrategy.secondsAfterCompletion: 86400` et
-  `podGC.strategy: OnPodSuccess`.
-- [ ] 4.3 `deploy/base/storage-and-access.yaml` : un `Role` `uske-children` (`workflows`, verbes
-  `create`, `get`, `list`, `watch`, `patch`) et son `RoleBinding` au compte `uske`.
-- [ ] 4.4 `deploy/check-storage.py` (D9), plus `tests/test_check_storage.py` sur deux rendus en
-  fixture : un rendu sain, et un rendu `parallelism: 20` avec `uske-results` en `ReadWriteOnce`
-  (scénario *Un plafond relevé sans stockage partagé*). Attendu sur le second : code 1, et la sortie
-  d'erreur nomme `uske-results`.
-- [ ] 4.5 `Makefile`, cible `lint` : après `argo lint`, `uv run python deploy/check-storage.py
-  "$$d/uske.yaml"`. Attendu : `make lint` passe sur `deploy/kind`.
-- [ ] 4.6 `deploy/kind/kustomization.yaml` : réécrire les patches par indice pour les deux
-  templates (le `checkout` du parent et de l'enfant par copie `hostPath`, le CA et la clé de
-  `knock` sur `knock`, `knock-once` et `regis-analyze` de l'enfant). Attendu :
-  `kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline /tmp/uske.yaml` imprime
-  `no linting errors found!`.
+  `continueOn: failed`, `merge: "false"`), `merge` (D12, préfixe `runs/{{workflow.name}}/out/`,
+  mutex `uske-journal`, après tous les enfants), puis `summary`, qui échoue en nommant les
+  politiques en échec ou une fusion échouée ; `parallelism: 1`.
+- [ ] 4.5 `deploy/base/storage-and-access.yaml` : un `Role` `uske-children` (`workflows`, verbes
+  `create`, `get`, `list`, `watch`, `patch`) et son `RoleBinding` au compte `uske`. Un test lit le
+  rendu de `deploy/base` (scénario *Le rendu des manifestes*) : seul le template de fusion monte
+  `uske-results`, aucun template de `uske-policy` ne déclare de volume persistant, les deux
+  `parallelism` valent 1. Il est lancé par `make lint` après `argo lint`.
+- [ ] 4.6 `deploy/kind` : `up.sh` installe MinIO et le configmap `artifact-repositories` (D10) ;
+  `kustomization.yaml` réécrit les patches par indice pour les deux templates (le `checkout` par
+  copie `hostPath`, le CA et la clé de `knock` sur `knock`, `knock-once` et `regis-analyze` de
+  l'enfant). Attendu : `kubectl kustomize deploy/kind > /tmp/uske.yaml && argo lint --offline
+  /tmp/uske.yaml` réussit.
 - [ ] 4.7 Sur le banc : `deploy/kind/up.sh`, puis `kubectl -n uske create -f
   deploy/kind/screening.yaml`, puis `argo -n uske wait @latest`. Attendu : un Workflow enfant par
-  fichier de `deploy/kind/policies/` (`kubectl -n uske get wf -l uske.io/policy`), et des lignes
-  qui portent toutes le `run` du parent (scénarios *Trois politiques* et *Les lignes d'un
-  screening se reconnaissent*).
-- [ ] 4.8 Commit : `feat(deploy): un Workflow enfant par politique, deux plafonds posés par l'overlay`.
+  fichier de `deploy/kind/policies/` (`kubectl -n uske get wf -l uske.io/policy`), une fusion, et
+  des lignes qui portent toutes le `run` du parent (scénarios *Trois politiques*, *Les lignes d'un
+  screening se reconnaissent*, *Deux politiques, une fusion*).
+- [ ] 4.8 Commit : `feat(deploy): un Workflow enfant par politique, sans volume partagé`.
 
 ## 5. Documentation et clôture
 
