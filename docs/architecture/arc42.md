@@ -482,6 +482,8 @@ flowchart LR
   subgraph ns["Kubernetes namespace, with Argo Workflows"]
     c1["CronWorkflow <code>uske</code><br>every 5 min, Forbid"]
     c2["CronWorkflow <code>dt-sync</code><br>every 15 min"]
+    c3["CronWorkflow <code>grype-db</code><br>every 6 h, Forbid"]
+    gd["Workflow <code>grype-db</code><br>regis image"]
     wt["Parent Workflow<br><code>uske-screening</code>"]
     wc["Child Workflows<br><code>uske-policy</code>, one per policy"]
     pp["Parent pods<br>checkout, list, snapshot, merge, summary"]
@@ -492,11 +494,14 @@ flowchart LR
     c1 --> wt --> pp
     wt -->|"creates, Role <code>uske-children</code>"| wc --> pods
     c2 --> pods
+    c3 --> gd
     pp --- work
     pp ---|"snapshot (read), merge"| res
     sec -.->|"environment"| pods
   end
   pp & pods <-->|"artifacts"| art[("Artifact repository<br>S3")]
+  gd -->|"<code>grype-db/current.tar.zst</code>, <code>current.json</code>"| art
+  gd -->|"HTTPS"| anchore["Anchore<br>grype database"]
   pods -->|"HTTPS"| git[("Policy repository")]
   pods -->|"HTTPS"| reg[("Registry")]
   pods -->|"HTTPS"| dt["Dependency-Track"]
@@ -507,9 +512,10 @@ flowchart LR
 | `CronWorkflow` `uske` | One screening every 5 minutes | `concurrencyPolicy: Forbid`: never two screenings at once |
 | `WorkflowTemplate` `uske-screening` (parent) | The commit, the epoch and the `run` of a screening; the snapshot of the journals; one child Workflow per policy, created by a `resource` template that owns it; the merge; the summary | `parallelism: 1`, the ceiling of policies at a time, which the overlay sets with a kustomize patch; a failed child does not stop the others |
 | `WorkflowTemplate` `uske-policy` (child) | The steps of R-1 to R-4, for one policy; resubmitted alone with `merge=true`, it merges its own lines | `parallelism: 1`, the ceiling of judgements at a time, set the same way; one lock per policy, across all the screenings of the namespace; two retries per container step; deleted a day after it ends (`ttlStrategy`), pods deleted on success (`podGC`) |
+| `WorkflowTemplate` and `CronWorkflow` `grype-db` | The `grype` vulnerability database, refreshed in the `regis` image: compare Anchore's latest build with the pointer, and only if newer import it, pack it and upload it | Every 6 hours, `concurrencyPolicy: Forbid`; a run with nothing new ends in about 15 seconds; a failed run uploads nothing; suspended on the bench |
 | `CronWorkflow` for `dt-sync` | The tracker sync (IF-06) | Every 15 minutes |
 | Volume `work`, 1 Gi, `ReadWriteOnce` | The checked-out repository and the list of policies, for the parent only | Created and destroyed with each screening; no child mounts it |
-| Artifact repository | A child's work from step to step (`work`), the snapshot of the journals, each child's new lines as an archive of its own (`runs/<run>/out/<policy>/<created>-<child>.tgz`), and its success mark (`runs/<run>/done/<policy>`) | Provided by the overlay: configmap `artifact-repositories`, key `default-v1`; unreachable, nothing is placed. A child's work goes with it (`artifactGC`); the lines and the marks stay: a lifecycle rule on the bucket's `runs/` expires them |
+| Artifact repository | The database `grype-db/current.tar.zst` (about 530 MB) and its pointer `grype-db/current.json`, outside `runs/` and kept by artifact GC; read by each `regis-analyze` step, which refuses a database built more than 48 hours ago. A child's work from step to step (`work`), the snapshot of the journals, each child's new lines as an archive of its own (`runs/<run>/out/<policy>/<created>-<child>.tgz`), and its success mark (`runs/<run>/done/<policy>`) | Provided by the overlay: configmap `artifact-repositories`, key `default-v1`; unreachable, nothing is placed. A child's work goes with it (`artifactGC`); the lines and the marks stay: a lifecycle rule on the bucket's `runs/` expires them |
 | Volume `uske-results`, 5 Gi, `ReadWriteOnce` | The journal, one file per policy, and one report per decision | Outlives the screenings; mounted by the snapshot, which writes only its mark `.pending-merge/<run>` there, and by the merge, the only one to write the journal and which clears the mark, both under the `uske-journal` lock; one namespace per volume, since the locks are namespace resources |
 | Service account `uske` | The screening pods | Two permissions: report step outputs and artifact GC tasks to Argo (`uske-executor`); create, read and watch `Workflow`s, and update their finalizers, which `blockOwnerDeletion` requires on OpenShift (`uske-children`) |
 | Secrets | `uske-repository` (repository token), `uske-harbor` (registry credentials), `uske-knock` (the placer's credentials and signing key), `uske-dt` (Dependency-Track) | Read through the environment of only the containers that need them; none is a workflow parameter |
@@ -519,7 +525,8 @@ flowchart LR
 *Journal*, the *Merge* and the *Tracker sync* run in the `uske` image, one pod per step; the
 *Journal* writes to `uske-results` only in the merge pod. *Screen* runs in no workflow: it is the
 verb of the workstation and the CI. The *Census* is in the same image but **is scheduled by no workflow**: it is run by hand. `regis` and `knock` run in their
-own images, pinned by digest in the overlay.
+own images, pinned by digest in the overlay. The `grype-db` Workflow also runs in the `regis` image,
+so the database is built by the same `grype` version as its readers; no volume is shared.
 
 **TLS.** `uske` terminates none: it is a client of each partner. Harbor and Dependency-Track are
 reached through the URLs that the overlay gives; encryption is their concern. The repository is

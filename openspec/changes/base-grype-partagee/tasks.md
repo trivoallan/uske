@@ -149,7 +149,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   décision donnée par les règles de secrets et de licences ; dans les deux rapports, une erreur
   dans `results.cve`. Retirer le réglage. Scénarios : *Une base de 50 h, régime complet*, *Une base
   de 50 h, régime allégé*.
-- [ ] 4.4 Rédiger, en anglais, les lignes du *Plan de documentation* : `docs/how-to/operate.md`
+- [x] 4.4 Rédiger, en anglais, les lignes du *Plan de documentation* : `docs/how-to/operate.md`
   (rafraîchissement, rafraîchissement manuel après une montée de version de regis, `grype-db`
   comme première piste d'un *inconclusive* sur `cve-critical`, banc) et
   `docs/architecture/arc42.md` (*Deployment View*). Commit : `docs: décrire la base grype distribuée`.

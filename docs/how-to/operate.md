@@ -174,6 +174,42 @@ report its GC tasks (Role `uske-executor`).
 The `policy-<name>` and `uske-journal` locks are namespace resources: run **one namespace per
 `uske-results` volume**, or two writers could meet on a journal.
 
+### Refreshing the vulnerability database
+
+`regis` needs the `grype` vulnerability database, and no evaluation downloads it. The
+`grype-db` `CronWorkflow` runs every 6 hours, in the `regis` image: it compares the latest
+database Anchore publishes with the pointer `grype-db/current.json` in the artifact repository,
+exits in about 15 seconds when nothing is newer, and otherwise imports the new database and
+uploads it as `grype-db/current.tar.zst` (about 530 MB), then the pointer. A refresh takes about 3.5
+minutes. Each `regis-analyze` step unpacks the archive (about 13 seconds) and runs `grype` with
+`GRYPE_DB_AUTO_UPDATE=false`. A failed refresh uploads nothing: the previous keys stay.
+
+`grype` refuses a database built more than 48 hours ago (`GRYPE_DB_MAX_ALLOWED_BUILT_AGE=48h`),
+and an absent or unreadable one. `regis` still exits 0, with an error in `results.cve`, and the
+`cve-critical` rule stays incomplete. What follows depends on the regime:
+
+| Regime | Effect |
+|--------|--------|
+| Full (`cve-critical` is `critical`) | The decision is `inconclusive`, with the reason `cve-critical`: nothing is placed |
+| Light (D-05, CVEs informative) | The decision does not change |
+
+- **After you upgrade the `regis` image**, refresh by hand: a new `grype` can change the database
+  schema, and the archive in the repository was built by the old one. In a cluster, run
+  `argo -n <ns> submit --from cronwf/grype-db`.
+- **When the full regime goes `inconclusive` on `cve-critical` across the board**, look at the
+  `grype-db` runs first (`argo -n <ns> list`), and at when the database was built. Anchore not
+  publishing for more than 48 hours has the same effect, by design. No alert exists yet
+  (`TODOS.md`).
+- **The artifact repository's bucket must exist before the first refresh.** An optional input in
+  a missing bucket is an error, not an absent artifact. The bench's `up.sh` creates it.
+
+On the bench, the `grype-db` `CronWorkflow` is suspended. `up.sh` fills the database once before it
+announces the bench ready. After a pause of more than 48 hours, refill it by hand:
+
+```bash
+kubectl -n uske create -f deploy/kind/grype-db.yaml
+```
+
 ### Why was an image not placed?
 
 The journal lives on the `uske-results` volume. Read it from a throwaway pod that mounts the
