@@ -13,11 +13,15 @@ class Outcome(StrEnum):
     INCONCLUSIVE = "inconclusive"
 
 
-# Tier names as the playbooks in playbooks/version/ write them.
+# Tier `id` -> outcome: the playbook's own names are labels for humans, in any language.
+# inconclusive is no tier: it says an evaluation did not finish (D-23).
 TIERS = {
-    "Placement direct": Outcome.DIRECT_PLACEMENT,
-    "Transformation requise puis placement": Outcome.TRANSFORMATION_REQUIRED,
-    "Quarantaine": Outcome.QUARANTINE,
+    o.value: o
+    for o in (
+        Outcome.DIRECT_PLACEMENT,
+        Outcome.TRANSFORMATION_REQUIRED,
+        Outcome.QUARANTINE,
+    )
 }
 
 
@@ -54,7 +58,7 @@ def classify(
     if incomplete:
         return Outcome.INCONCLUSIVE, reason(incomplete)
 
-    outcome = TIERS.get(result.get("tier"))
+    outcome = TIERS.get(result.get("tier_id"))
     if outcome is None:
         return Outcome.INCONCLUSIVE, "regis/unknown-tier"
     if outcome is Outcome.DIRECT_PLACEMENT:
@@ -72,8 +76,8 @@ def classify(
 
 
 def repairable(report: dict | None, slugs: frozenset[str]) -> bool:
-    """Whether a refusal can be remediated: the tier is "Transformation requise" (never
-    Quarantaine: the playbook said nothing repairs it), at least one failed rule is repairable,
+    """Whether a refusal can be remediated: the tier is `transformation-required` (never
+    `quarantine`: the playbook said nothing repairs it), at least one failed rule is curable,
     and every failed critical rule is. An unfinished rule is not a failure here; classify has
     already made an incomplete critical rule inconclusive (D-23)."""
     if not slugs or not isinstance(report, dict):
@@ -82,7 +86,7 @@ def repairable(report: dict | None, slugs: frozenset[str]) -> bool:
     if not results or not isinstance(results[0], dict):
         return False
     result = results[0]
-    if TIERS.get(result.get("tier")) is not Outcome.TRANSFORMATION_REQUIRED:
+    if TIERS.get(result.get("tier_id")) is not Outcome.TRANSFORMATION_REQUIRED:
         return False
     failed = [
         r
@@ -170,9 +174,11 @@ REASONS = (
     Reason(
         "regis/unknown-tier",
         (Outcome.INCONCLUSIVE,),
-        "The tier returned is none of those `uske` knows. They are named as the playbooks "
-        "write them: " + ", ".join(f"`{name}`" for name in TIERS) + ".",
-        "Align the playbook's tier names with this list.",
+        "The tier returned carries no `id`, or one `uske` does not know: "
+        + ", ".join(f"`{tier_id}`" for tier_id in TIERS)
+        + ". The tier's `name` is a label and is never read.",
+        "Give the playbook's tier this `id`, and check that `regis` writes `tier_id` in its "
+        "report.",
     ),
     Reason(
         "uske/unknown-track",

@@ -2,6 +2,7 @@
   "playbooks": [
     {
       "tier": "Quarantaine",
+      "tier_id": "quarantine",
       "rules": [
         {
           "slug": "no-secret",

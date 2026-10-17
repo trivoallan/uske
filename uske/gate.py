@@ -1,8 +1,7 @@
 """knock's gate (D-30, form b; knock ADR 0051): knock plans, uske judges, knock applies.
 
-uske also holds the conditional of remediation: a source refused on rules its regime lists as
-repairable (playbooks.REPAIRABLE) is handed back with a remediation order, and knock repairs that
-one digest; the repaired image is held in the transit and judged before it is promoted.
+uske also holds the conditional of remediation: a source refused on rules its playbook tags
+`curable` is handed back with a remediation order, and knock repairs that one digest; the repaired image is held in the transit and judged before it is promoted.
 
 `knock reconcile --plan-out` writes a ReconcilePlan: one operation per import, update or rebuild,
 each with the source digest it would copy. uske has those digests judged and returns

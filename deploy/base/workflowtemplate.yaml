@@ -4,7 +4,7 @@
 # then merges their lines into the journals in one pod.
 #
 # In a child, knock plans, regis judges the plan's digests, and knock applies only the approved
-# operations (D-30, knock's gate). A source refused on rules its track lists as repairable is
+# operations (D-30, knock's gate). A source refused on rules its playbook tags `curable` is
 # handed back with a remediation order: knock repairs that digest, holds it in a transit registry,
 # where it is judged by its own digest and promoted only if it is sound (change
 # `split-knock-policy-transform-remediate`). A transform-only rebuild is placed directly.
@@ -145,7 +145,7 @@ spec:
       container:
         image: uske
         command: [sh, -c]
-        args: ["python -m uske list --policies /work/repo/{{workflow.parameters.policies}} > /tmp/listed.json"]
+        args: ["python -m uske list --policies /work/repo/{{workflow.parameters.policies}} --playbooks /work/repo/{{workflow.parameters.playbooks}} > /tmp/listed.json"]
         workingDir: /app
         volumeMounts:
           - {name: work, mountPath: /work}
@@ -422,7 +422,6 @@ spec:
                 - {name: digest, value: "{{item.digest}}"}
                 - {name: target, value: "{{item.target}}"}
                 - {name: key, value: "{{item.key}}"}
-                - {name: track, value: "{{=jsonpath(steps.resolve.outputs.result, '$.track') ?? ''}}"}
               artifacts:
                 - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
           - name: unevaluated  # unknown track: never sent to regis (D-21)
@@ -551,7 +550,6 @@ spec:
           - {name: source-ref, value: ""}
           - {name: source-digest, value: ""}
           - {name: lines, value: lines}
-          - {name: track, value: ""}  # first gate: the track whose repairable rules apply
           - {name: epoch, value: ""}  # held image: the remediation order it was built under
         artifacts:
           - name: work
@@ -579,7 +577,6 @@ spec:
                     --regis-exit {{steps.regis.exitCode}}
                     --source-ref "{{inputs.parameters.source-ref}}"
                     --source-digest "{{inputs.parameters.source-digest}}"
-                    --track "{{inputs.parameters.track}}"
                     --epoch "{{inputs.parameters.epoch}}"
                     --run "{{workflow.parameters.run}}"
                 - {name: lines, value: "{{inputs.parameters.lines}}"}

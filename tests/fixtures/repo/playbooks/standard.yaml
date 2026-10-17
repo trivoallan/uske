@@ -13,7 +13,8 @@ spec:
   # qui se lit à l'envers de son nom : la règle `fix-available` de `regis` PASSE
   # quand aucune faille n'a de correctif, et ÉCHOUE quand il en existe.
   tiers:
-    - name: Placement direct
+    - id: direct-placement
+      name: Placement direct
       condition:
         and:
           - { var: rules.cve-critical.passed }
@@ -22,7 +23,8 @@ spec:
           - { var: rules.no-root.passed }
           - { var: rules.freshness.passed }
 
-    - name: Transformation requise puis placement
+    - id: transformation-required
+      name: Transformation requise puis placement
       condition:
         and:
           - { var: rules.no-secret.passed }
@@ -34,7 +36,8 @@ spec:
               - { var: rules.cve-critical.passed }
               - { "!": [{ var: rules.cve-fixable.passed }] }
 
-    - name: Quarantaine
+    - id: quarantine
+      name: Quarantaine
       condition:
         or:
           - { "!": [{ var: rules.no-secret.passed }] }
@@ -81,7 +84,7 @@ spec:
       criterion: cve-count
       slug: cve-critical
       level: critical
-      tags: [version, discriminant]
+      tags: [version, discriminant, curable]  # ce que la réparation corrige (uske)
       options: { level: critical, max_count: 0 }
 
     - provider: cve

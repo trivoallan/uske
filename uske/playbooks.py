@@ -1,32 +1,62 @@
-"""The regime picks the rule set (D-21). The only place that knows the regimes."""
+"""The regime picks the rule set (D-21), by file name: `<playbooks>/<regime>.yaml`.
+
+uske knows no regime: a repository adds one by adding its file. What uske reads in a playbook is
+the `id` of its tiers and the rules tagged `curable`; the schema stays `regis`'s to check.
+"""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-# D-05, D-19: derogation and redistribution share the lightweight tier.
-TABLE = {
-    "standard": "version/playbook.yaml",
-    "derogation": "version/playbook-allege.yaml",
-    "redistribution": "version/playbook-allege.yaml",
-}
+import yaml
+
+from uske.outcomes import TIERS
+
+# a label value becomes a file name: never a path (`../x`)
+REGIME = re.compile(r"[a-z0-9][a-z0-9-]*")
+TIER_IDS = frozenset(TIERS)
+CURABLE = "curable"
+
+
+class PlaybookError(Exception):
+    """A playbooks directory uske cannot route to: a technical failure."""
 
 
 def resolve(track: str | None, playbooks_dir: str | Path) -> Path | None:
-    """The playbook for `track`, or None: an unknown regime is never evaluated."""
-    relative = TABLE.get(track) if track else None
-    return Path(playbooks_dir) / relative if relative else None
+    """The playbook for `track`, or None: a regime without its file is never evaluated."""
+    if not track or not REGIME.fullmatch(track):
+        return None
+    root = Path(playbooks_dir).resolve()
+    path = (root / f"{track}.yaml").resolve()
+    return path if path.is_relative_to(root) and path.is_file() else None
 
 
-# The rules a remediation can fix, by regime: slugs of that regime's playbook. A refusal whose
-# failed rules all sit here (and at least one does) becomes a remediation order; a regime absent
-# from this table has nothing repairable. Slugs, not `provider/criterion`: `cve-critical` and
-# `cve-high` share `cve/cve-count`.
-REPAIRABLE: dict[str, frozenset[str]] = {
-    "standard": frozenset({"cve-critical"}),
-}
+def curable(playbook: dict) -> frozenset[str]:
+    """Slugs of the rules a remediation can fix: those the playbook tags `curable`."""
+    rules = (playbook.get("spec") or {}).get("rules") or []
+    return frozenset(
+        r["slug"]
+        for r in rules
+        if isinstance(r, dict) and "slug" in r and CURABLE in (r.get("tags") or [])
+    )
 
 
-def repairable(track: str | None) -> frozenset[str]:
-    """The repairable rules of `track`; none for an unknown or absent regime."""
-    return REPAIRABLE.get(track or "", frozenset())
+def check(playbooks_dir: str | Path) -> None:
+    """Refuse, before anything is judged, a directory whose playbooks uske could not classify."""
+    root = Path(playbooks_dir)
+    if not root.is_dir():
+        raise PlaybookError(f"{root}: not a directory")
+    for path in sorted(root.glob("*.yaml")):
+        try:
+            doc = yaml.safe_load(path.read_text())
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            raise PlaybookError(f"{path.name}: {exc}") from exc
+        if not isinstance(doc, dict) or doc.get("kind") != "Playbook":
+            raise PlaybookError(f"{path.name}: not a Playbook")
+        for tier in (doc.get("spec") or {}).get("tiers") or []:
+            if not isinstance(tier, dict) or tier.get("id") not in TIER_IDS:
+                name = tier.get("name") if isinstance(tier, dict) else tier
+                raise PlaybookError(
+                    f"{path.name}: tier {name!r} has no id among {', '.join(sorted(TIER_IDS))}"
+                )
