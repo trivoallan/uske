@@ -556,14 +556,14 @@ flowchart LR
     bk["<code>buildkitd</code><br>privileged, 127.0.0.1:1234"]
     rg["<code>regis</code> container<br>runner uid"]
     kn["<code>knock</code> container<br>runner uid"]
-    res[("<code>results/</code><br>clone of the journal branch")]
+    res[("<code>$RUNNER_TEMP/uske-results</code><br>clone of the journal branch")]
     sj -->|"<code>docker run</code>"| rg & kn
     kn -->|"BUILDKIT_HOST"| bk
     sj --- res
   end
   caller -->|"<code>uses:</code> … <code>@v0.N</code>"| nj --> sj
   res -->|"push after each write, and at the end"| jb[("Branch <code>uske-journal</code><br>of the policy repository")]
-  sj -->|"<code>reports.tar</code>"| art[("Run artifact<br><code>uske-reports-&lt;name&gt;</code>")]
+  sj -->|"<code>reports.tar</code>"| art[("Run artifact<br><code>uske-reports-&lt;name&gt;-&lt;attempt&gt;</code>")]
   sj <-->|"<code>grype-db-&lt;day&gt;</code>"| cache[("Actions cache")]
   kn -->|"HTTPS"| reg[("Registry<br>GHCR, the only one the workflow logs in to")]
   rg -->|"HTTPS"| reg
@@ -576,9 +576,9 @@ flowchart LR
 | Job `screen` | A whole screening of one policy, by `uske screen` | `contents`, `packages` and `id-token: write`, granted by the caller; one lock per policy name (`concurrency`), at most one run waiting |
 | `regis` and `knock` containers | The judge and the placer, each in its image, started by `uske` through `USKE_REGIS_CMD` and `USKE_KNOCK_CMD` | Versions pinned in the workflow, followed by Renovate; host network, runner uid, the work directory under `$RUNNER_TEMP` mounted at the same path |
 | `buildkitd` container | Rebuilds, by `transform:` and by remediation | Privileged, published on `127.0.0.1` only; acceptable on a throwaway hosted runner |
-| Branch `uske-journal` | The journal, one file per policy | Born orphan, written only by the hook (`USKE_AFTER_RECORD`) and the final push, three rebases at most; never protected against the workflow |
-| Run artifact | The reports, as one `reports.tar` that keeps the paths the journal lines cite | `report-retention-days`, 90 by default and at most on a public repository |
-| Actions cache | The `grype` database, one per UTC day, shared by the judgements of a run | Filled once by `grype db update` when empty; `GRYPE_DB_AUTO_UPDATE=false` in `regis` |
+| Branch `uske-journal` | The journal, one file per policy | Cloned under `$RUNNER_TEMP`, outside the caller's checkout; born orphan, written only by the hook (`USKE_AFTER_RECORD`) and the final push, three rebases at most; never protected against the workflow |
+| Run artifact | The reports, as one `reports.tar` that keeps the paths the journal lines cite | One per run attempt, so a re-run job never collides with or replaces the reports of an earlier attempt; `report-retention-days`, 90 by default and at most on a public repository |
+| Actions cache | The `grype` database, one per UTC day, shared by the judgements of a run | Filled once by `grype db update` when empty, and saved at once, before the screening, so a failed screening does not lose it; `GRYPE_DB_AUTO_UPDATE=false` in `regis` |
 | Credentials | The registry token (secret `registry-token`, else `GITHUB_TOKEN`) for `ghcr.io`, the only registry the workflow logs in to, in `config.json`, mounted read-only in `regis` and `knock`; the journal token only in the hook's git calls; the signing identity (the run's OpenID Connect token, which Sigstore's certificate authority, Fulcio, turns into a certificate, logged in its public transparency log, Rekor) or the `cosign-key`, in `knock` only | No input is interpolated into a script; secrets cross into a container by name only |
 
 **Block mapping.** *Screen* runs in the `screen` job, and through it the *Subcommands*, *Outcomes*,
@@ -777,6 +777,7 @@ Thinness, in the name of Safety. The ranking of the goals settles it — that is
 | RISK-03 | medium | With a `knock` older than 0.13.0, nothing is remediated, and nothing says why. | low × medium | The overlay pins `knock` by digest; the bench runs 0.16.0 |
 | RISK-05 | low | The journal volume is `ReadWriteOnce`: a reading pod waits for the end of the snapshot or the merge of a screening that runs on another node — the only pods that mount it. Between a placement and the merge, the journal on the volume lags behind what was placed. | likely × low | Wait; the decision is already durable in the artifact repository before its placement, and a failed merge fails the parent and replays (`argo retry`). The snapshot leaves the mark `.pending-merge/<run>`, which only a successful merge clears: while it stays, the next screening fails at its snapshot, naming the run, and never judges on a lagging journal (`Forbid` alone is not enough: a failed parent is finished, and the `CronWorkflow` starts the next one). The storage no longer needs to be shared: no child mounts the volume, whatever the ceilings. A line written by hand during that lag escapes the child, which may place the image that the line quarantines: the merge then refuses the child's lines on that digest, names them, fails and keeps the mark — the conflict is visible (fail-visible), the placement is not undone |
 | RISK-06 | low | On the bench, `buildkitd` listens in cleartext on the cluster network. | certain × low, on the bench only | Outside the bench: mTLS or a `NetworkPolicy` |
+| RISK-12 | low | On the GitHub Actions runner, `uv tool install git+…` does not read `uv.lock`: the workflow resolves `uske`'s dependencies at install time. There is one, PyYAML (`>=6.0.2`), with no dependencies of its own. | low × medium | Accepted (change `screen-workflow-followups`, 2026-10-17): pinning it would mean exporting `uv.lock` on the caller's runner for a single package. Revisit when `uske` gains a second dependency |
 | RISK-10 | low | On the GitHub Actions runner, keyless signing writes the name and digest of every placed image to the public Rekor log. | certain × low | The `cosign-key` secret signs without a public log |
 | RISK-07 | medium | One child Workflow per policy: beyond 10,000 policies, a screening creates more than 10,000 `Workflow` objects every 5 minutes, which load the Argo controller and etcd; each `resource` step that waits for its child holds a pod, and each successful child starts one more pod for its `done/` mark. The list of policies is passed as a parameter to the parent's single `withParam`: the size of the parent's status at 10,000 is not known. No measurement exists. | possible × medium | `ttlStrategy` (one day) and `podGC: OnPodSuccess` on the child; the parent owns the children and takes them with it; the waiting pods are bounded by the ceiling of policies. The volume spike of 2026-10-19 measures it; if it does not hold, split into several `CronWorkflow`s over subdirectories of `policies` |
 

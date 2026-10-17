@@ -215,7 +215,7 @@ Keep `id-token: write` in the caller even then.
 ## Read the journal
 
 The workflow keeps the journal on the branch `uske-journal` of your repository. Set `journal-branch`
-to use another name. You do not create it: the first run creates the branch as an orphan, with no shared history. Each
+to use another name. The workflow clones it outside your checkout, so your repository may hold a `results/` directory of its own. You do not create it: the first run creates the branch as an orphan, with no shared history. Each
 step then adds a commit, and the workflow pushes it before the next placement.
 
 The branch is append-only, so do not protect it in a way that blocks the workflow: no required pull
@@ -239,7 +239,8 @@ Each journal line for a verdict or a placement has a `run` field, the URL of the
 To find the report for a line:
 
 1. Open the run from the `run` URL.
-2. Download the artifact `uske-reports-<policy name>`. It holds `reports.tar`.
+2. Download the artifact `uske-reports-<policy name>-<attempt>`. It holds `reports.tar`. A re-run
+   job uploads one artifact per attempt; the line's report is in the attempt that wrote it.
 3. Extract it. Each report sits at the path the journal line cites, relative to the journal.
 
 The artifact lives for `report-retention-days` days, 90 by default. GitHub caps it at 90 days on a

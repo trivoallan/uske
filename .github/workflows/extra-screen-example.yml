@@ -8,6 +8,11 @@ on:
       policy:
         type: string
         default: examples/github/policies/alpine.yaml
+      signer:
+        # `key` signe avec la clé jetable des secrets BENCH_COSIGN_* (RISK-11).
+        type: choice
+        options: [keyless, key]
+        default: keyless
   pull_request:
     paths:
       - .github/workflows/extra-screen.yml
@@ -32,3 +37,6 @@ jobs:
       journal-branch: uske-journal-example
       package-mirrors: '{"public": {"apt": "http://deb.debian.org", "apk": "https://dl-cdn.alpinelinux.org"}}'
       uske-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+    secrets:
+      cosign-key: ${{ inputs.signer == 'key' && secrets.BENCH_COSIGN_KEY || '' }}
+      cosign-password: ${{ inputs.signer == 'key' && secrets.BENCH_COSIGN_PASSWORD || '' }}

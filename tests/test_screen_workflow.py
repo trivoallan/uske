@@ -508,6 +508,59 @@ class Shape(unittest.TestCase):
         ):
             self.assertIn(flag, compose["run"])
 
+    def test_results_live_outside_the_workspace(self) -> None:
+        # Change screen-workflow-followups : un dépôt appelant qui suit `results/` ne doit pas
+        # gêner la naissance ni le clone de la branche du journal.
+        self.assertNotIn("RESULTS", self.screen.get("env", {}))
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "env"
+            subprocess.run(
+                ["bash", "-e", "-c", step(self.workflow, "screen", "scripts")["run"]],
+                check=True,
+                env={**os.environ, "RUNNER_TEMP": tmp, "GITHUB_ENV": str(out)},
+            )
+            self.assertEqual(
+                out.read_text().splitlines(), [f"RESULTS={tmp}/uske-results"]
+            )
+        for s in self.screen["steps"]:
+            self.assertNotIn("github.workspace", str(s.get("env", "")), s.get("name"))
+        self.assertIn(
+            'USKE_RESULTS="$RESULTS"', step(self.workflow, "screen", "final")["run"]
+        )
+
+    def test_the_grype_db_is_saved_before_the_screening(self) -> None:
+        # Exigence « la base grype est partagée d'un run à l'autre, même après un échec ».
+        steps = self.screen["steps"]
+        uses = [s.get("uses", "").split("@")[0] for s in steps]
+        self.assertNotIn("actions/cache", uses)
+        restore = step(self.workflow, "screen", "grype-restore")
+        save = next(
+            s for s in steps if s.get("uses", "").startswith("actions/cache/save@")
+        )
+        self.assertTrue(restore["uses"].startswith("actions/cache/restore@"))
+        self.assertEqual(restore["uses"].split("@")[1], save["uses"].split("@")[1])
+        self.assertEqual(restore["with"], save["with"])
+        self.assertEqual(save["if"], "steps.grype-restore.outputs.cache-hit != 'true'")
+        names = [s.get("name") for s in steps]
+        self.assertLess(steps.index(save), names.index("Cribler"))
+        self.assertLess(
+            names.index("Remplir la base grype une fois par jour"), steps.index(save)
+        )
+
+    def test_each_attempt_keeps_its_own_reports(self) -> None:
+        # Exigence « les rapports partent en archive attachée au run » : un job rejoué ne se
+        # heurte pas au nom de l'archive de la tentative précédente, ni ne l'efface.
+        upload = next(
+            s
+            for s in self.screen["steps"]
+            if s.get("uses", "").startswith("actions/upload-artifact@")
+        )
+        self.assertEqual(
+            upload["with"]["name"],
+            "uske-reports-${{ needs.name.outputs.name }}-${{ github.run_attempt }}",
+        )
+        self.assertNotIn("overwrite", upload["with"])
+
     def test_buildkit_listens_on_loopback_only(self) -> None:
         self.assertIn(
             "-p 127.0.0.1:1234:1234", step(self.workflow, "screen", "tools")["run"]
@@ -543,6 +596,29 @@ class Example(unittest.TestCase):
     def test_the_example_playbooks_pass_the_startup_check(self) -> None:
         self.assertTrue(list((EXAMPLE / "playbooks").glob("*.yaml")))
         playbooks.check(EXAMPLE / "playbooks")
+
+    def test_the_bench_can_sign_with_a_throwaway_key(self) -> None:
+        # RISK-11 : un `workflow_dispatch` en `signer: key` éprouve le mode clé ; sinon, sans clé.
+        bench = load(WORKFLOWS / "extra-screen-example.yml")
+        signer = bench[True]["workflow_dispatch"]["inputs"]["signer"]
+        self.assertEqual(
+            (signer["default"], signer["options"]), ("keyless", ["keyless", "key"])
+        )
+        self.assertEqual(
+            bench["jobs"]["screen"]["secrets"],
+            {
+                "cosign-key": "${{ inputs.signer == 'key' && secrets.BENCH_COSIGN_KEY || '' }}",
+                "cosign-password": (
+                    "${{ inputs.signer == 'key' && secrets.BENCH_COSIGN_PASSWORD || '' }}"
+                ),
+            },
+        )
+
+    def test_the_example_playbooks_are_only_track_files(self) -> None:
+        # `uske` ne lit que les fichiers à la racine : un sous-répertoire n'est lu par rien.
+        entries = list((EXAMPLE / "playbooks").iterdir())
+        self.assertEqual([e for e in entries if not e.is_file()], [])
+        self.assertEqual([e for e in entries if e.suffix != ".yaml"], [])
 
     def test_each_example_policy_resolves_its_playbook(self) -> None:
         found, errors = policies.load_dir(str(EXAMPLE / "policies"))

@@ -49,8 +49,8 @@ The workflow has no outputs. It produces:
 
 | Product | Where | Content |
 | --- | --- | --- |
-| Journal | Branch `journal-branch` | `<metadata.name>.jsonl`. Each line carries `run`, the URL of the run. |
-| Reports | Artifact `uske-reports-<metadata.name>` | `reports.tar`, holding `reports/<name>/<digest>/…`. Kept `report-retention-days` days, at most 90 on a public repository. |
+| Journal | Branch `journal-branch`, cloned under `$RUNNER_TEMP`, outside your checkout | `<metadata.name>.jsonl`. Each line carries `run`, the URL of the run. |
+| Reports | Artifact `uske-reports-<metadata.name>-<attempt>` | `reports.tar`, holding `reports/<name>/<digest>/…`. `<attempt>` is `github.run_attempt`: a re-run job uploads its own artifact and keeps the earlier ones. Kept `report-retention-days` days, at most 90 on a public repository. |
 
 ## Concurrency
 
@@ -80,7 +80,8 @@ exists from `v0.11`.
 | `v1` | The latest 1.x release. | From 1.0 on. |
 
 The release also pins the versions of `regis`, `knock` and BuildKit the workflow runs. The workflow
-installs `uske` at the version recorded in the file.
+installs `uske` at the version recorded in the file. Its one dependency, PyYAML, is resolved at
+install time and is not pinned (RISK-12).
 
 ## Keyless verification identity
 
