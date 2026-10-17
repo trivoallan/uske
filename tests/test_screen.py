@@ -46,6 +46,16 @@ def without_ts(lines: list[dict]) -> list[dict]:
     return [{k: v for k, v in line.items() if k != "ts"} for line in lines]
 
 
+def report_folders(lines: list[dict]) -> list[dict]:
+    """The steps name a report after the run, `uske screen` after the epoch (review, finding 3)."""
+    return [
+        {**line, "report": str(Path(line["report"]).parent)}
+        if "report" in line
+        else line
+        for line in lines
+    ]
+
+
 class Fakes(unittest.TestCase):
     """A temporary directory, the fakes first on PATH, and their calls logged."""
 
@@ -251,7 +261,10 @@ class Parity(Fakes):
                     .read_text()
                     .splitlines()
                 ]
-                self.assertEqual(without_ts(self.journal(name)), without_ts(by_steps))
+                self.assertEqual(
+                    report_folders(without_ts(self.journal(name))),
+                    report_folders(without_ts(by_steps)),
+                )
         self.assertEqual(len(self.journal("fixture-standard")), 6)
 
 
@@ -318,34 +331,34 @@ class Reports(Fakes):
         """*Un rapport cité par un chemin relatif*."""
         code, _, _ = self.screen("--policy", str(REDISTRIBUTION), "--run", "41")
         self.assertEqual(code, 0)
-        relative = f"reports/fixture-redistribution/{D4}/41.md"
+        relative = f"reports/fixture-redistribution/{D4}/{EPOCH}.md"
         self.assertTrue((self.results / relative).is_file())
         self.assertTrue((self.results / relative).with_suffix(".html").is_file())
         self.assertEqual(self.journal("fixture-redistribution")[0]["report"], relative)
 
-    def test_without_a_run_the_epoch_names_the_report(self):
-        self.screen("--policy", str(REDISTRIBUTION))
-        self.assertEqual(
-            self.journal("fixture-redistribution")[0]["report"],
-            f"reports/fixture-redistribution/{D4}/{EPOCH}.md",
-        )
-
-    def test_a_run_given_as_a_url_becomes_a_file_name(self):
+    def test_the_run_never_names_the_report(self):
         self.screen(
             "--policy", str(REDISTRIBUTION), "--run", "https://ci.example/runs/77/"
         )
         line = self.journal("fixture-redistribution")[0]
         self.assertEqual(
-            line["report"],
-            f"reports/fixture-redistribution/{D4}/https_ci.example_runs_77.md",
+            line["report"], f"reports/fixture-redistribution/{D4}/{EPOCH}.md"
         )
         self.assertEqual(line["run"], "https://ci.example/runs/77/")
 
-    def test_a_run_of_dots_falls_back_to_the_epoch(self):
-        self.screen("--policy", str(REDISTRIBUTION), "--run", "../..")
+    def test_a_judgment_never_rewrites_an_earlier_report(self):
+        """*Une empreinte rejugée sous le même epoch*."""
+        folder = self.results / "reports" / "fixture-redistribution" / D4
+        folder.mkdir(parents=True)
+        (folder / f"{EPOCH}.md").write_text("earlier")
+        code, _, _ = self.screen("--policy", str(REDISTRIBUTION))
+        self.assertEqual(code, 0)
+        self.assertEqual((folder / f"{EPOCH}.md").read_text(), "earlier")
+        self.assertFalse((folder / f"{EPOCH}.html").exists())
+        self.assertTrue((folder / f"{EPOCH}-2.html").is_file())
         self.assertEqual(
             self.journal("fixture-redistribution")[0]["report"],
-            f"reports/fixture-redistribution/{D4}/{EPOCH}.md",
+            f"reports/fixture-redistribution/{D4}/{EPOCH}-2.md",
         )
 
     def test_a_json_only_report_is_copied_and_cited(self):
@@ -358,7 +371,7 @@ class Reports(Fakes):
         wrapper.chmod(0o755)
         os.environ["USKE_REGIS_CMD"] = str(wrapper)
         self.screen("--policy", str(REDISTRIBUTION), "--run", "41")
-        relative = f"reports/fixture-redistribution/{D4}/41.json"
+        relative = f"reports/fixture-redistribution/{D4}/{EPOCH}.json"
         self.assertEqual(self.journal("fixture-redistribution")[0]["report"], relative)
         self.assertTrue((self.results / relative).is_file())
 
@@ -374,7 +387,7 @@ class Reports(Fakes):
         self.screen("--policy", str(REDISTRIBUTION), "--run", "41")
         self.assertEqual(
             self.journal("fixture-redistribution")[0]["report"],
-            f"reports/fixture-redistribution/{D4}/41.html",
+            f"reports/fixture-redistribution/{D4}/{EPOCH}.html",
         )
 
 
@@ -744,6 +757,30 @@ class Hook(Fakes):
         # after the verdicts, then after the placement line
         self.assertEqual(calls.count(f"hook fixture-redistribution {self.results}"), 2)
         self.assertTrue(calls[-1].startswith("hook"))
+
+    def steps(self) -> list[str]:
+        return (self.tmp / "steps").read_text().split()
+
+    def test_the_hook_knows_the_step_that_wrote(self):
+        """*Le crochet sait quelle étape l'appelle*."""
+        only_a_source_to_repair(self.tmp)
+        self.verdicts(**{D2: "repairable", held(D2): "direct"})
+        os.environ["USKE_AFTER_RECORD"] = f'echo "$USKE_STEP" >> "{self.tmp}/steps"'
+        code, _, _ = self.screen("--policy", str(STANDARD), "--transit", "transit")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.steps(), ["record", "record-held", "record-promoted"])
+
+    def test_the_hook_after_a_source_left_without_transit(self):
+        """*Une source à réparer sans transit*."""
+        self.verdicts(**{D2: "repairable"})
+        os.environ["USKE_AFTER_RECORD"] = f'echo "$USKE_STEP" >> "{self.tmp}/steps"'
+        self.screen("--policy", str(STANDARD))
+        self.assertEqual(self.steps()[:2], ["record", "record-approve"])
+
+    def test_the_hook_after_a_placement(self):
+        os.environ["USKE_AFTER_RECORD"] = f'echo "$USKE_STEP" >> "{self.tmp}/steps"'
+        self.screen("--policy", str(REDISTRIBUTION))
+        self.assertEqual(self.steps(), ["record", "record-applied"])
 
     def test_a_failing_hook_stops_the_placement(self):
         """*Le crochet échoue*."""

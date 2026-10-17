@@ -211,7 +211,7 @@ class _Screening:
         if self.judge_only:  # judged, never recorded nor placed
             return
         # record
-        self.record(lines=p.lines)
+        self.record("record", lines=p.lines)
         # approve
         approved, count = approve_plan(
             self.policy,
@@ -234,7 +234,7 @@ class _Screening:
                 file=sys.stderr,
             )
         # record-approve
-        self.record(lines=p.approve_lines)
+        self.record("record-approve", lines=p.approve_lines)
         if not count["approved"]:
             return
         # place, place-staged: the transit only when the plan carries an order
@@ -256,7 +256,7 @@ class _Screening:
             ]
         )
         # record-applied: what was placed is recorded, even when the apply failed
-        self.record(applied=p.applied)
+        self.record("record-applied", applied=p.applied)
         # second-gate
         if count["ordered"]:
             self.second_gate(playbook)
@@ -273,7 +273,7 @@ class _Screening:
         for item in held:
             self.evaluate(item, playbook, p.staged_lines, "")
         # record
-        self.record(lines=p.staged_lines)
+        self.record("record-held", lines=p.staged_lines)
         # approve
         approved, count = approve_staged(self.policy, self.results, p.staged)
         p.staged_approved.write_text(json.dumps(approved, indent=2))
@@ -291,7 +291,7 @@ class _Screening:
         ):
             raise Failure(f"knock promote failed for {self.policy.name}")
         # record-promoted
-        self.record(promoted=p.staged_approved)
+        self.record("record-promoted", promoted=p.staged_approved)
         self.summary["promoted"] = count["approved"]
 
     def journal(self) -> list[dict]:
@@ -351,8 +351,9 @@ class _Screening:
         """Copy the reports next to the journal, before the line that cites them is written (D5).
 
         The line cites the Markdown, else the HTML, else the JSON, relative to the results
-        directory. A judged-only screening writes nothing there: its line cites the report in the
-        work directory.
+        directory. The report is named after the epoch, or the first free name after it
+        (`<epoch>-2`, `<epoch>-3`…): a report already there is never rewritten. A judged-only
+        screening writes nothing there: its line cites the report in the work directory.
         """
         written = [ext for ext in ("md", "html") if (out / f"report.{ext}").is_file()]
         if not written and (out / "report.json").is_file():
@@ -361,19 +362,22 @@ class _Screening:
             return None
         if self.judge_only:
             return str(out / f"report.{written[0]}")
-        # a run may be a URL (SDR-0018): a file name, never a path
-        stem = _file_name(self.run) or _file_name(self.epoch) or "report"
+        # the epoch names the report, never the run: one judgment, one file, never rewritten
         relative = Path("reports") / self.policy.name / digest
-        inside(self.results / relative, self.results / "reports")
-        (self.results / relative).mkdir(parents=True, exist_ok=True)
+        folder = inside(self.results / relative, self.results / "reports")
+        folder.mkdir(parents=True, exist_ok=True)
+        stem = _free_stem(folder, _file_name(self.epoch) or "report")
         for ext in written:
-            shutil.copyfile(
-                out / f"report.{ext}", self.results / relative / f"{stem}.{ext}"
-            )
+            with (
+                (out / f"report.{ext}").open("rb") as src,
+                (folder / f"{stem}.{ext}").open("xb") as dst,
+            ):  # exclusive: fails rather than rewrite a cited report
+                shutil.copyfileobj(src, dst)
         return str(relative / f"{stem}.{written[0]}")
 
     def record(
         self,
+        step: str,
         *,
         lines: Path | None = None,
         applied: Path | None = None,
@@ -385,9 +389,9 @@ class _Screening:
         for message in stale:
             print(message, file=sys.stderr)
         if written:
-            self.hook()
+            self.hook(step)
 
-    def hook(self) -> None:
+    def hook(self, step: str) -> None:
         """`USKE_AFTER_RECORD`, by the shell. The policy's name reaches it through the
         environment only: never interpolated into the command (review, finding 5)."""
         if not self.after_record:
@@ -395,6 +399,7 @@ class _Screening:
         env = {
             **os.environ,
             "USKE_POLICY": self.policy.name,
+            "USKE_STEP": step,
             "USKE_RESULTS": str(self.results),
         }
         if launch(["sh", "-c", self.after_record], env):
@@ -403,6 +408,18 @@ class _Screening:
 
 def _file_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._")
+
+
+REPORT_EXTS = ("md", "html", "json")
+
+
+def _free_stem(folder: Path, base: str) -> str:
+    """The first name no report carries yet in `folder`: `base`, then `base-2`, `base-3`…"""
+    stem, n = base, 1
+    while any((folder / f"{stem}.{ext}").exists() for ext in REPORT_EXTS):
+        n += 1
+        stem = f"{base}-{n}"
+    return stem
 
 
 def screen_policy(
