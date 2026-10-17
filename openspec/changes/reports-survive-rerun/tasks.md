@@ -21,4 +21,7 @@ puis `make lint` et `make test` verts. Ce change modifie une exigence que modifi
       politique du job.
 - [x] 3. La branche naît par un commit vide, sans `.gitignore`.
 - [x] 4. Docs (plan ci-dessus).
-- [ ] 5. PR verte.
+- [x] 5. Banc : run 39028551786, une empreinte jugée, job rejoué ; le rapport cité reste dans le
+      commit de sa ligne. La tentative 2 a montré que l'archive reprenait toute la branche :
+      corrigé (témoin `.git/uske-cloned`).
+- [ ] 6. PR verte.

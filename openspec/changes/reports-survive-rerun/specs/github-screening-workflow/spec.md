@@ -77,8 +77,8 @@ faire échouer le job si ce dernier push échoue.
 Le workflow SHALL commiter les rapports qu'`uske` a gardés pour la politique sous
 `reports/<metadata.name>/`, sur `journal-branch`, dans le commit qui porte la première ligne qui
 les cite, au chemin exact qu'elle cite. Il MUST NOT commiter les rapports d'une autre politique.
-Il SHALL aussi les publier, sous la forme d'une archive attachée au run, nommée d'après le
-`metadata.name` de la politique, même quand le job échoue, avec la rétention de l'entrée
+Il SHALL aussi publier ceux que le run a écrits, et eux seuls, sous la forme d'une archive
+attachée au run, nommée d'après le `metadata.name` de la politique, même quand le job échoue, avec la rétention de l'entrée
 `report-retention-days`.
 
 #### Scenario: Un refus
@@ -94,6 +94,12 @@ Il SHALL aussi les publier, sous la forme d'une archive attachée au run, nommé
 - **GIVEN** une première tentative qui a poussé une ligne de refus et son rapport
 - **WHEN** le job est rejoué, et que GitHub supprime l'archive de la première tentative
 - **THEN** le rapport que cite la ligne reste sur la branche
+
+#### Scenario: L'archive ne reprend pas la branche
+
+- **GIVEN** une branche `journal-branch` qui porte déjà les rapports d'un run précédent
+- **WHEN** le run juge une empreinte nouvelle
+- **THEN** l'archive du run ne contient que le rapport de cette empreinte
 
 #### Scenario: Une branche née avant ce change
 

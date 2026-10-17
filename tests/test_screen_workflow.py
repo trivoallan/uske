@@ -157,6 +157,28 @@ class Scripts(unittest.TestCase):
         self.assertEqual(self.record(results, "x"), 0)
         self.assertIn(cited, self.remote_files())
 
+    def test_the_archive_holds_only_the_reports_of_this_run(self) -> None:
+        # Le clone porte les rapports commités : l'archive n'en reprend aucun, sans quoi elle
+        # grossirait à chaque run.
+        first = self.born("r1")
+        old = self.report(first, "x")
+        self.assertEqual(self.record(first, "x"), 0)
+        second = self.born("r2")
+        self.assertTrue((second / old).is_file())
+        new = "reports/x/sha256:cd/1.md"
+        (second / new).parent.mkdir(parents=True)
+        (second / new).write_text("report")
+        archive = step(load(SCREEN), "screen", "archive")["run"]
+        env = {**self.env, "RESULTS": str(second), "RUNNER_TEMP": str(self.tmp)}
+        subprocess.run(["bash", "-e", "-c", archive], check=True, env=env)
+        listed = subprocess.run(
+            ["tar", "-tf", str(self.tmp / "reports.tar")],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.split()
+        self.assertEqual(listed, [new])
+
     def test_the_hook_rebases_on_a_concurrent_push(self) -> None:
         first, second = self.born("r1"), self.born("r2")
         self.assertEqual(self.record(second, "y"), 0)

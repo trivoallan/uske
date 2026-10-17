@@ -153,6 +153,8 @@ jobs:
                 clone
               fi
             fi
+            # Témoin du clone : l'archive ne reprend que les rapports écrits après lui.
+            touch "$RESULTS/.git/uske-cloned"
           HOOK: |
             #!/bin/sh
             # USKE_AFTER_RECORD : commite le journal de la politique et ses rapports, puis les
@@ -263,10 +265,15 @@ jobs:
         run: |
           [ -f "$RESULTS/$USKE_POLICY.jsonl" ] || exit 0
           USKE_RESULTS="$RESULTS" "$RUNNER_TEMP/after-record.sh"
-      - name: Archiver les rapports
+      - id: archive
+        name: Archiver les rapports
         if: always()
+        # Ceux de ce run seulement : le clone porte déjà les rapports commités avant lui.
         run: |
-          [ ! -d "$RESULTS/reports" ] || tar -C "$RESULTS" -cf "$RUNNER_TEMP/reports.tar" reports
+          [ -f "$RESULTS/.git/uske-cloned" ] && [ -d "$RESULTS/reports" ] || exit 0
+          cd "$RESULTS"
+          find reports -type f -newer .git/uske-cloned > "$RUNNER_TEMP/reports.list"
+          [ ! -s "$RUNNER_TEMP/reports.list" ] || tar -cf "$RUNNER_TEMP/reports.tar" -T "$RUNNER_TEMP/reports.list"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

@@ -245,7 +245,8 @@ git fetch origin uske-journal
 git show "origin/uske-journal:reports/<policy name>/<digest>/<epoch>.md"
 ```
 
-The run also attaches a copy, the artifact `uske-reports-<policy name>`, which holds `reports.tar`.
+The run also attaches a copy of the reports it wrote, the artifact `uske-reports-<policy name>`,
+which holds `reports.tar`.
 It lives for `report-retention-days` days, at most 90 on a public repository, and re-running the
 job deletes the copy of the attempt before it. The branch keeps the reports either way: you can
 re-run a failed job.

@@ -44,6 +44,9 @@ retirer casserait les appelants. L'archive n'est plus qu'une commodité de tél�
   `<nom>.jsonl` et `reports/<nom>/`. `uske` copie le rapport avant d'écrire la ligne qui le cite
   (D5 d'origine), donc le commit qui porte la ligne porte aussi son rapport. L'étape finale passe
   par le même crochet.
+- **L'archive ne reprend que les rapports du run** : le clone porte désormais les rapports
+  commités, et l'archive les recopierait tous, à chaque run. Un témoin posé après le clone
+  (`.git/uske-cloned`) borne `find -newer`. Vu sur le banc (run 39028551786, tentative 2).
 - **La branche naît sans `.gitignore`** : un commit vide. Une branche née en `v0.11.0` garde son
   `.gitignore`, que `-f` contourne.
 - **Docs** : le guide dit où trouver un rapport sur la branche et retire « lancer un nouveau run

@@ -51,7 +51,7 @@ The workflow has no outputs. It produces:
 | --- | --- | --- |
 | Journal | Branch `journal-branch`, cloned under `$RUNNER_TEMP`, outside your checkout | `<metadata.name>.jsonl`. Each line carries `run`, the URL of the run. |
 | Reports | Branch `journal-branch` | `reports/<metadata.name>/<digest>/…`, committed with the first line that cites them, at the path it cites. |
-| Reports copy | Artifact `uske-reports-<metadata.name>` | `reports.tar`, holding the same paths. Re-running the job deletes the copy of its earlier attempt, not the reports on the branch. Kept `report-retention-days` days, at most 90 on a public repository. |
+| Reports copy | Artifact `uske-reports-<metadata.name>` | `reports.tar`, holding the reports this run wrote, at the same paths. Re-running the job deletes the copy of its earlier attempt, not the reports on the branch. Kept `report-retention-days` days, at most 90 on a public repository. |
 
 ## Concurrency
 
