@@ -389,25 +389,48 @@ def cmd_export(args) -> None:
     _json({"exported": count, "out": args.out})
 
 
+def cmd_snapshot(args) -> None:
+    try:
+        listed = json.loads(Path(args.listed).read_text("utf-8"))
+        fanned = merge.snapshot(listed, Path(args.results), Path(args.out), args.run_id)
+        expected = Path(args.expected)
+        expected.parent.mkdir(parents=True, exist_ok=True)
+        expected.write_text(json.dumps([p["name"] for p in fanned]) + "\n")
+    except (merge.ArchiveError, OSError, ValueError, KeyError, TypeError) as exc:
+        raise Failure(str(exc)) from exc
+    _json(fanned)
+
+
 def cmd_merge(args) -> None:
     try:
         found = merge.archives(Path(args.source))
+        if args.pending:
+            merge.check_run(args.pending)
     except merge.ArchiveError as exc:
         raise Failure(str(exc)) from exc
     merged, failed = {}, []
-    for archive in found:  # one bad archive never keeps the others out of the journal
-        try:
-            policy, written, stale = merge.merge_one(archive, Path(args.results))
-        except merge.ArchiveError as exc:
-            print(f"error: {archive.name}: {exc}", file=sys.stderr)
-            failed.append(archive.name)
-            continue
-        for message in stale:
-            print(f"{policy}: {message}", file=sys.stderr)
-        merged[policy] = written
+    # one bad archive never keeps the other policies out of the journal; within a policy, the
+    # archives after it wait, or their lines would make its own stale on the replay
+    for policy, files in found:
+        for n, archive in enumerate(files):
+            name = f"{policy}/{archive.name}"
+            try:
+                written, stale = merge.merge_one(policy, archive, Path(args.results))
+            except merge.ArchiveError as exc:
+                print(f"error: {name}: {exc}", file=sys.stderr)
+                failed += [f"{policy}/{a.name}" for a in files[n:]]
+                break
+            for message in stale:
+                print(f"{policy}: {message}", file=sys.stderr)
+            merged[policy] = merged.get(policy, 0) + written
     _json(merged)
     if failed:
         raise Failure(f"not merged: {', '.join(failed)}")
+    if args.pending:
+        try:
+            merge.merged(Path(args.results), args.pending)
+        except OSError as exc:
+            raise Failure(str(exc)) from exc
 
 
 SCREEN_EPILOG = """\
@@ -747,6 +770,25 @@ def parser() -> argparse.ArgumentParser:
     s.set_defaults(run=cmd_export)
 
     s = sub.add_parser(
+        "snapshot",
+        help="the parent's snapshot: copy the journals, mark the run pending, count each policy's lines",
+    )
+    s.add_argument("--listed", required=True, help="`uske list`'s output, as a file")
+    s.add_argument("--results", required=True, help="where the journals are")
+    s.add_argument("--out", required=True, help="the directory to copy the journals to")
+    s.add_argument(
+        "--expected", required=True, help="where to write the listed policies' names"
+    )
+    s.add_argument(
+        "--run",
+        dest="run_id",
+        required=True,
+        help="the screening: its mark stays in <results>/.pending-merge until `merge --pending` "
+        "clears it, and another run's mark fails the snapshot",
+    )
+    s.set_defaults(run=cmd_snapshot)
+
+    s = sub.add_parser(
         "merge",
         help="append the children's archives to the journals; replaying it appends nothing",
     )
@@ -755,7 +797,12 @@ def parser() -> argparse.ArgumentParser:
         "--from",
         dest="source",
         required=True,
-        help="a directory of <policy>.tgz, written by `uske export`",
+        help="a directory of <policy>/<archive>.tgz, written by `uske export`, merged by name",
+    )
+    s.add_argument(
+        "--pending",
+        default="",
+        help="the screening whose snapshot mark to clear once every archive has merged",
     )
     s.set_defaults(run=cmd_merge)
 

@@ -1,10 +1,12 @@
 """A screening spread over pods that share no volume: each child exports its new lines, one pod merges.
 
-A child works on a copy of its policy's journal, taken from the parent's snapshot. `export` packs
-what the child added beyond that snapshot, with the reports those lines cite; `merge` appends each
-archive to the real journal by `results.append`, the same forward-only rule as `uske record` (D9,
-D12). An archive is checked whole before anything is written: a member or a policy name never
-leads outside the results directory.
+The parent's `snapshot` copies the journals for its children and leaves a mark, `.pending-merge/<run>`,
+beside them; a screening that finds another run's mark refuses to start. A child works on a copy of
+its policy's journal, taken from that snapshot. `export` packs what the child added beyond the
+snapshot, with the reports those lines cite; `merge` appends each archive to the real journal by
+`results.append`, the same forward-only rule as `uske record` (D9, D12), then clears the mark. An
+archive is checked whole before anything is written: a member or a policy name never leads outside
+the results directory.
 """
 
 from __future__ import annotations
@@ -12,9 +14,10 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 import tarfile
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from uske import policies, results
@@ -22,6 +25,9 @@ from uske import policies, results
 LINES = "lines.jsonl"
 REPORTS = "reports"
 SUFFIX = ".tgz"
+# beside the journals, never a `*.jsonl`: snapshot, merge and `decisions` read only those
+PENDING = ".pending-merge"
+RUN_MAX = 253  # a Workflow's name: a DNS-1123 subdomain
 # where the lines say a report lives once merged: the journal volume's mount point (D9)
 MOUNT = PurePosixPath("/results")
 
@@ -139,11 +145,16 @@ def _keep(content: bytes, dest: Path) -> None:
         os.unlink(tmp.name)
 
 
-def merge_one(archive: Path, results_dir: Path) -> tuple[str, int, list[str]]:
-    """Merge one `<policy>.tgz`: (policy, lines written, stale messages)."""
-    policy = archive.name.removesuffix(SUFFIX)
+def _check_policy(policy: str) -> None:
     if len(policy) > policies.NAME_MAX or not policies.NAME.fullmatch(policy):
-        raise ArchiveError(f"{policy!r} is not a policy name (DNS-1123)")
+        raise ArchiveError(
+            f"{policy!r} is not a policy name (a DNS-1123 subdomain, at most 63 characters)"
+        )
+
+
+def merge_one(policy: str, archive: Path, results_dir: Path) -> tuple[int, list[str]]:
+    """Merge one archive of `policy`: (lines written, stale messages)."""
+    _check_policy(policy)
     lines, reports = _read(archive, policy)
     root = results_dir.resolve()
     try:
@@ -156,13 +167,76 @@ def merge_one(archive: Path, results_dir: Path) -> tuple[str, int, list[str]]:
         written, stale = results.append(results.path_for(results_dir, policy), lines)
     except OSError as exc:
         raise ArchiveError(str(exc)) from exc
-    return policy, written, stale
+    return written, stale
 
 
-def archives(source: Path) -> list[Path]:
-    """The `<policy>.tgz` files of `source`, by name; none when it does not exist."""
+def archives(source: Path) -> list[tuple[str, list[Path]]]:
+    """`source/<policy>/*.tgz`: each policy's archives, by name, so in its children's creation order.
+
+    A child names its archive `<creation time>-<child>.tgz`: a child re-created by `argo retry`, or
+    resubmitted, adds an archive and never overwrites one not yet merged. Only regular files count:
+    a missing optional input can show up as an empty directory. None when `source` does not exist.
+    """
     if not source.exists():
         return []
     if not source.is_dir():
         raise ArchiveError(f"{source}: not a directory")
-    return sorted(p for p in source.iterdir() if p.name.endswith(SUFFIX))
+    found = []
+    for directory in sorted(p for p in source.iterdir() if p.is_dir()):
+        files = sorted(
+            p for p in directory.iterdir() if p.is_file() and p.name.endswith(SUFFIX)
+        )
+        if files:
+            found.append((directory.name, files))
+    return found
+
+
+def check_run(run: str) -> None:
+    if len(run) > RUN_MAX or not policies.NAME.fullmatch(run):
+        raise ArchiveError(f"{run!r} is not a Workflow name (a DNS-1123 subdomain)")
+
+
+def pending(results_dir: Path) -> list[str]:
+    """The screenings whose merge has not succeeded yet: their marks, by name."""
+    marks = results_dir / PENDING
+    if not marks.is_dir():
+        return []
+    return sorted(p.name for p in marks.iterdir() if p.is_file())
+
+
+def snapshot(listed: list[dict], results_dir: Path, out: Path, run: str) -> list[dict]:
+    """Copy the journals to `out`, mark `run` pending, and return `listed` with each line count.
+
+    Refuses while another screening's merge is pending: its children may have placed images
+    whose lines are not in the journal yet, and a snapshot without them would judge them again.
+    """
+    check_run(run)
+    others = [name for name in pending(results_dir) if name != run]
+    if others:
+        raise ArchiveError(
+            f"the merge of {', '.join(others)} is pending: its lines are not in the journal "
+            f"yet. Replay it with `argo retry {others[0]}`; once it has merged, the next "
+            f"screening starts (to give its lines up, remove {results_dir / PENDING}/<run>)"
+        )
+    out.mkdir(parents=True, exist_ok=True)
+    for journal in sorted(results_dir.glob("*.jsonl")):
+        if journal.is_file():
+            shutil.copyfile(journal, out / journal.name)
+    fanned = []
+    for policy in listed:
+        _check_policy(policy["name"])
+        copy = results.path_for(out, policy["name"])
+        # Non-blank lines, as results.read counts them: what the child's export skips.
+        text = copy.read_text("utf-8") if copy.exists() else ""
+        lines = sum(1 for line in text.split("\n") if line.strip())
+        fanned.append({**policy, "lines": lines})
+    mark = results_dir / PENDING / run
+    mark.parent.mkdir(exist_ok=True)
+    mark.write_text(datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
+    return fanned
+
+
+def merged(results_dir: Path, run: str) -> None:
+    """Clear `run`'s mark: its lines are all in the journal."""
+    check_run(run)
+    (results_dir / PENDING / run).unlink(missing_ok=True)
