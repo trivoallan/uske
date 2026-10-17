@@ -461,9 +461,10 @@ environment:
   USKE_KNOCK_CMD     the placer's command, likewise. Default: knock, from PATH.
                        USKE_KNOCK_CMD="docker run --rm -v $PWD:$PWD --env-file knock.env knock:1"
   USKE_AFTER_RECORD  run by `sh -c` after each step that wrote the journal, before the next one,
-                     with USKE_POLICY and USKE_RESULTS set; a failure stops the policy.
+                     with USKE_POLICY, USKE_RESULTS and USKE_STEP set; a failure stops
+                     the policy.
                        USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A &&
-                         git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY)"'
+                         git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY): $USKE_STEP"'
 
 Paths are handed to the tools as uske sees them: a container mounts them at the same path.
 An unreadable policy file under --policies is reported `skipped:` and leaves the exit code as is.

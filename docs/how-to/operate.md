@@ -63,8 +63,8 @@ their exit codes. Three environment variables change that:
 # A prefix replaces the command name; the arguments are appended.
 export USKE_REGIS_CMD="docker run --rm -v $PWD:$PWD ghcr.io/trivoallan/regis:VERSION"
 export USKE_KNOCK_CMD="docker run --rm -v $PWD:$PWD --env-file knock.env ghcr.io/trivoallan/knock:VERSION"
-# Run by `sh -c`, with USKE_POLICY and USKE_RESULTS set, after each step that wrote the journal.
-export USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A && git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY)"'
+# Run by `sh -c`, with USKE_POLICY, USKE_RESULTS and USKE_STEP set, after each step that wrote the journal.
+export USKE_AFTER_RECORD='git -C "$USKE_RESULTS" add -A && git -C "$USKE_RESULTS" commit -qm "journal($USKE_POLICY): $USKE_STEP"'
 ```
 
 `uske` hands the tools the paths it sees: mount the work directory and the results directory
@@ -76,15 +76,25 @@ The hook runs after each journal write and before the placement that follows: co
 journal there, as `base-images` does, and no image is placed without its decision committed. A
 hook that fails stops its policy, with nothing more placed.
 
+`USKE_STEP` names the step that just wrote: `record` (the verdicts), `record-approve` (a source
+left to repair without a transit), `record-applied` (the placements), `record-held` (the verdicts
+on the held images, at the second gate) or `record-promoted` (the promotions). The hook runs only
+after a step that wrote at least one line, so a screening rarely goes through all five: a copy
+gives `record` then `record-applied`, a repair through the transit `record`, `record-held` and
+`record-promoted`.
+
 On stdout, one JSON object per policy: `policy`, `judged`, `approved`, `ordered`, `promoted` and
 `outcome` (`ok` or `failed`); with `--judge-only`, the verdict lines. Exit 0 when every policy
 went through, whatever its verdicts (`quarantine` and `inconclusive` included); 1 when one failed
 (a missing tool, a journal write, the hook, `--apply-plan` or `promote`), after the others were
 screened; 2 for a usage error. A missing tool is checked before anything is written.
 
-Reports are copied to `reports/<policy>/<digest>/<run>.<ext>`, relative to `--results`, where
-`<run>` is `--run` or the epoch; the journal line cites the Markdown one (the HTML without it) by
-that relative path, so the journal can travel in a git repository.
+Reports are copied to `reports/<policy>/<digest>/<epoch>.<ext>`, relative to `--results`. When
+the digest already has a report under that epoch, as when a second attempt of the same run judges
+an `inconclusive` digest again, the copy takes the first free name, `<epoch>-2`, `<epoch>-3` and so
+on: a cited report is never rewritten. The run stays on the line, in `run`. The journal line cites
+the Markdown one (the HTML without it) by that relative path, so the journal can travel in a git
+repository.
 
 ## The workflow
 
