@@ -106,7 +106,11 @@ def _python3_has_zstd() -> bool:
     )
 
 
-@unittest.skipUnless(_python3_has_zstd(), "tarfile 'w:zst' needs Python 3.14")
+needs_zstd = unittest.skipUnless(
+    _python3_has_zstd(), "tarfile 'w:zst' needs Python 3.14"
+)
+
+
 class Script(unittest.TestCase):
     """The refresh script run against a fake grype, with WORK redirected to a temp dir."""
 
@@ -150,12 +154,14 @@ class Script(unittest.TestCase):
         self.assertIn("6", names)
         self.assertIn("6/vulnerability.db", names)
 
+    @needs_zstd
     def test_a_new_database_is_published(self) -> None:
         """*Le rafraîchissement planifié distribue une nouvelle base*."""
         proc, work, _ = self.run_script(pointer=json.dumps(OLD))
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertPublished(work)
 
+    @needs_zstd
     def test_the_first_run_publishes(self) -> None:
         proc, work, _ = self.run_script()
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -180,11 +186,21 @@ class Script(unittest.TestCase):
         self.assertEqual(list((work / "out").iterdir()), [])
 
     def test_a_malformed_pointer_does_not_block_the_refresh(self) -> None:
+        """The refresh goes as far as the download (made to fail: no packing needed here)."""
         for pointer in ("{not json", "{}", "[]", '{"checksum": 3}'):
             with self.subTest(pointer=pointer):
-                proc, work, _ = self.run_script(pointer=pointer)
-                self.assertEqual(proc.returncode, 0, proc.stderr)
-                self.assertPublished(work)
+                proc, work, calls = self.run_script(
+                    pointer=pointer, FAKE_UPDATE_FAIL="1"
+                )
+                self.assertIn("db update", calls)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertEqual(list((work / "out").iterdir()), [])
+
+    @needs_zstd
+    def test_a_malformed_pointer_is_replaced_by_a_new_publication(self) -> None:
+        proc, work, _ = self.run_script(pointer="{not json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertPublished(work)
 
     def test_no_active_database_fails(self) -> None:
         proc, work, _ = self.run_script(FAKE_LIST="[]")
