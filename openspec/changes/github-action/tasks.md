@@ -919,10 +919,10 @@ Renovate le suivra.
 
 ## 8. Clôture
 
-- [ ] 8.1 Lancer : `make test`. Attendu : code 0, avec une couverture globale et par fichier d'au
+- [x] 8.1 Lancer : `make test`. Attendu : code 0, avec une couverture globale et par fichier d'au
   moins 90 % (aucun fichier d'`uske/` n'a changé).
-- [ ] 8.2 Lancer : `openspec validate github-action --type change --strict`. Attendu :
+- [x] 8.2 Lancer : `openspec validate github-action --type change --strict`. Attendu :
   `Change 'github-action' is valid`.
-- [ ] 8.3 Revenir à `review.md` : marquer traités les findings 12, 14 et 17.
-- [ ] 8.4 Titre de la PR, en Conventional Commit sans portée :
+- [x] 8.3 Revenir à `review.md` : marquer traités les findings 12, 14 et 17.
+- [x] 8.4 Titre de la PR, en Conventional Commit sans portée :
   `feat: cribler une politique depuis GitHub Actions par un workflow réutilisable`.

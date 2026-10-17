@@ -76,3 +76,16 @@ La revue est close quand :
 - **Restent pour `tasks.md`** : la mesure de la variante de `regis` (finding 12), en tête du plan ;
   l'épreuve du double premier run sur le banc (finding 14) ; le déclencheur du banc réservé aux PR
   du même dépôt (finding 17).
+
+## Clôture (2026-10-17, implémentation)
+
+- **Finding 12** : mesuré (tâche 1) ; `-full` retenu, et la mesure a montré une base grype
+  téléchargée à chaque jugement : D2 la partage par un cache quotidien.
+- **Finding 14** : la naissance de la branche, l'identité git, `git -C` et `USKE_STEP` sont dans le
+  crochet ; le double premier run échoue à la naissance, avant tout placement
+  (`test_a_refused_birth_is_not_retried`).
+- **Finding 17** : le banc ne se déclenche que sur les PR du même dépôt.
+- **Revues de tâche** : trois décisions de Tristan ont amendé la spec et la conception en cours de
+  route — un jeton de registre facultatif (`registry-token`), la signature sans clé par défaut avec
+  clé facultative et l'entrée `package-mirrors` (D2bis), et l'identité vérifiée à la promotion
+  sans clé. Le banc a éprouvé 5.1 à 5.11 sur GitHub, reconstruction promue comprise.
