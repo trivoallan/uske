@@ -47,10 +47,10 @@ interface.
 
 ## 1. Mesurer la variante de `regis` (finding 12)
 
-- [ ] 1.1 Prendre le digest d'une image de test.
+- [x] 1.1 Prendre le digest d'une image de test.
   Lancer : `docker buildx imagetools inspect docker.io/library/alpine:3.22 --format '{{json .Manifest.Digest}}'`.
   Attendu : une chaîne `"sha256:…"`, notée `D`.
-- [ ] 1.2 Chronométrer la variante slim, deux fois de suite, en conteneur neuf à chaque fois :
+- [x] 1.2 Chronométrer la variante slim, deux fois de suite, en conteneur neuf à chaque fois :
   ```bash
   for i in 1 2; do /usr/bin/time -p docker run --rm \
     -v "$PWD/tests/fixtures/repo/playbooks:/pb:ro" -v /tmp/r$i:/out \
@@ -58,13 +58,13 @@ interface.
     --playbook /pb/version/playbook.yaml -D /out -o 'report.{format}' --html; done
   ```
   Attendu : deux lignes `real` ; noter les deux durées.
-- [ ] 1.3 Refaire la même mesure avec `ghcr.io/trivoallan/regis:0.41.0-full`, et noter les deux
+- [x] 1.3 Refaire la même mesure avec `ghcr.io/trivoallan/regis:0.41.0-full`, et noter les deux
   durées.
-- [ ] 1.4 Écrire le résultat dans `design.md`, sous D2, au point « `regis` tourne en variante
+- [x] 1.4 Écrire le résultat dans `design.md`, sous D2, au point « `regis` tourne en variante
   `-full` » : les quatre durées et le choix qui en découle. Si `-full` est plus lent que slim au
   second run, D2 retient slim avec un cache de la base grype monté depuis
   `$RUNNER_TEMP/grype-db`, et la tâche 3.1 en tient compte.
-- [ ] 1.5 Commit : `docs: mesurer la variante de regis pour le workflow GitHub`.
+- [x] 1.5 Commit : `docs: mesurer la variante de regis pour le workflow GitHub`.
 
 ## 2. Les scripts du workflow, par leurs tests
 

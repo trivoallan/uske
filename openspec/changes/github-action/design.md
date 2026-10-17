@@ -117,6 +117,13 @@ job screen   needs: name ; concurrency: uske-screen-<name>, cancel-in-progress: 
   les scanners et la base grype, et l'on paie ce coût à chaque empreinte. Les trois images sont
   tirées une fois, avant le screening. La mesure de la tâche 1 confirme ce choix, ou ajoute un cache
   de la base grype monté depuis l'hôte.
+  Mesure (regis 0.41.0, `docker run --rm`, linux/arm64 sous Docker Desktop, images déjà tirées,
+  `alpine:3.22`, playbook `version`) : slim 167 s puis 217 s, `-full` 195 s puis 213 s.
+  `-full` n'est pas plus lent que slim au second run : le choix `-full` est retenu.
+  L'écart entre les deux variantes est dans le bruit. Dans les deux, grype télécharge sa base à
+  chaque run (de 160 à 210 s sur ces mesures) : aucune des deux images ne l'embarque. La tâche 3.1
+  doit donc monter un cache `$RUNNER_TEMP/grype-db` sur le répertoire de cache de grype dans le
+  conteneur, à lire (non vérifié : `/home/regis/.cache/grype`, ou `GRYPE_DB_CACHE_DIR`).
 
 ### D3 — Un trio épinglé par version d'`uske`, suivi par Renovate sans toucher au socle
 
