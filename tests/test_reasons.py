@@ -7,7 +7,7 @@ from pathlib import Path
 from uske import outcomes
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE = ROOT / "docs" / "reference" / "raisons.md"
+PAGE = ROOT / "docs" / "reference" / "reasons.md"
 
 
 class ReasonsTest(unittest.TestCase):
@@ -25,5 +25,5 @@ class ReasonsTest(unittest.TestCase):
         self.assertEqual(
             PAGE.read_text(),
             outcomes.reference(),
-            "regenerate: uv run python -m uske.outcomes > docs/reference/raisons.md",
+            "regenerate: uv run python -m uske.outcomes > docs/reference/reasons.md",
         )

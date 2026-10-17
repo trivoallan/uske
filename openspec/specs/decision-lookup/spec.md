@@ -109,7 +109,7 @@ références complètes ; la sortie standard n'en est pas changée.
 Les lignes SHALL être rendues groupées par politique puis par empreinte, et, dans un groupe, dans
 l'ordre du fichier, qui fait foi puisque le journal n'est qu'en ajout. Les groupes se suivent dans
 l'ordre de leur première ligne. Une ligne dont le `ts` est antérieur à celui d'une ligne précédente
-du même groupe MUST être marquée comme antidatée en `text` et en `md`, et porter `"backdated": true`
+du même groupe MUST porter la marque `backdated` en `text` et en `md`, et porter `"backdated": true`
 en `json`.
 
 #### Scenario: Une même empreinte sous deux politiques
@@ -124,7 +124,7 @@ en `json`.
 - **GIVEN** un groupe dont la dernière ligne du fichier porte un `ts` antérieur à la ligne
   précédente
 - **WHEN** il est rendu en `text`
-- **THEN** cette ligne reste en dernier et porte la marque « antidatée »
+- **THEN** cette ligne reste en dernier et porte la marque `backdated`
 
 ### Requirement: Filtrer par état et par date
 
@@ -162,7 +162,7 @@ forme `clé: valeur` dans l'ordre du fichier — `arbitration` compris, sans que
 vocabulaire. L'état MUST toujours être rendu avec sa raison, qui lève l'ambiguïté de `quarantine`
 (SDR-0016) ; une raison absente se rend `—`. Une ligne dont l'état n'est pas l'un des quatre que
 `uske` écrit, ou dont la raison est `uske/reopened`, et qui ne porte pas d'`arbitration`, MUST être
-marquée « arbitrage absent ».
+marquée `no arbitration`.
 
 #### Scenario: Texte sur la fixture
 
@@ -175,7 +175,7 @@ marquée « arbitrage absent ».
 
 - **GIVEN** une ligne `inconclusive` de raison `uske/reopened` sans `arbitration`
 - **WHEN** elle est rendue en `text`
-- **THEN** elle porte la marque « arbitrage absent »
+- **THEN** elle porte la marque `no arbitration`
 
 ### Requirement: Le Markdown porte une chronologie Mermaid et le tableau complet
 

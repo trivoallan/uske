@@ -194,8 +194,8 @@ def marks(line: dict) -> list[str]:
     return [
         mark
         for mark, on in (
-            ("antidatée", line.get("backdated")),
-            ("arbitrage absent", unsigned(line)),
+            ("backdated", line.get("backdated")),
+            ("no arbitration", unsigned(line)),
         )
         if on
     ]

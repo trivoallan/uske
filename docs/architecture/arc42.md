@@ -1,6 +1,6 @@
 ---
 date: 2026-09-20
-title: uske — document d'architecture
+title: uske — architecture document
 ---
 
 **About arc42**
@@ -15,254 +15,251 @@ contributors. See <https://arc42.org>.
 
 # Introduction and Goals
 
-> État de ce document au 2026-10-17 : les douze sections sont rédigées, au niveau **LEAN** —
-> des tables plutôt que des diagrammes, et rien de ce que le code ne fait pas encore. Une section
-> se reprend quand un change déplace ce qu'elle décrit.
+> State of this document on 2026-10-17: all twelve sections are written, at the **LEAN** level —
+> tables rather than diagrams, and nothing the code does not do yet. A section is revised when a
+> change moves what it describes.
 
 ## Requirements Overview
 
-`uske` joue ensemble un outil qui **juge** une image de conteneur et un outil qui la **place**
-dans un registre. Sur planification, il conduit un *screening* sur chaque politique active d'un dépôt et
-consigne chaque décision. Il ne juge rien et ne place rien : il appelle, il attend, il écrit.
+`uske` runs together a tool that **judges** a container image and a tool that **places** it in a
+registry. On a schedule, it runs a *screening* on each active policy of a repository and records
+each decision. It judges nothing and places nothing: it calls, it waits, it writes.
 
 ### Essential Features
 
-- Lister les politiques actives, tenues dans un dépôt à part, extrait à chaque screening.
-- Faire écrire au placeur son plan : chaque import, mise à jour ou reconstruction qu'il s'apprête
-  à faire, avec l'empreinte de la source.
-- Faire juger chaque empreinte encore due d'une décision, avec le jeu de règles que le régime de
-  la politique appelle.
-- Classer chaque verdict en l'une de quatre issues : placement direct, transformation requise,
-  quarantaine, non concluant.
-- Rendre au placeur le plan, moins les opérations refusées ; il n'applique que cela. Une source
-  refusée sur des règles que son régime déclare réparables y reste, avec un ordre de réparation.
-- Faire retenir dans un transit ce que le placeur construit, le faire juger par sa propre
-  empreinte, et ne lui rendre pour promotion que ce qui ressort en placement direct.
-- Ajouter une ligne par décision à un fichier de résultats. Les lignes s'ajoutent, ne se
-  réécrivent jamais.
-- Recenser le registre : ce qui y est, moins ce qui a été admis, donne le contournement.
-- Envoyer au suivi des vulnérabilités les inventaires signés par le placeur, et en retirer ce
-  qui a quitté le registre.
+- List the active policies, kept in a separate repository that is checked out at each screening.
+- Have the placer write its plan: each import, update or rebuild it is about to perform, with the
+  digest of the source.
+- Have each digest that still awaits a decision judged, with the playbook that the policy's track
+  calls for.
+- Classify each verdict into one of four outcomes: direct placement, transformation required,
+  quarantine, inconclusive.
+- Return the plan to the placer, minus the refused operations; the placer applies only that. A
+  source refused on rules that its track declares repairable stays in the plan, with a remediation
+  order.
+- Have the placer hold what it builds in a transit, have it judged by its own digest, and return
+  to the placer for promotion only what comes out as direct placement.
+- Append one line per decision to a journal. Lines are appended, never rewritten.
+- Run a census of the registry: what is in it, minus what was admitted, gives the bypass.
+- Send the inventories signed by the placer to the vulnerability tracker, and remove from it what
+  has left the registry.
 
 ### Business Context
 
-Aujourd'hui, les images entrent dans un registre par des scripts et des chaînes d'intégration
-maison, écrits équipe par équipe : jugement et placement y sont mêlés, rien n'est planifié de
-façon uniforme, et rien n'est contestable après coup. **Le mal est d'abord l'absence
-d'automatisation ; la contestabilité vient ensuite.** `uske` sert la personne qui tient le
-registre — les images entrent seules, selon des règles déclarées —, puis celles qui subissent
-ou vérifient une décision : l'équipe dont l'image est refusée, l'auditeur qui doit prouver ce
-qui a été admis.
+Today, images enter a registry through in-house scripts and CI pipelines, written team by team:
+judging and placing are mixed together, nothing is scheduled in a uniform way, and nothing can be
+contested after the fact. **The first problem is the lack of automation; contestability comes
+second.** `uske` serves the person who runs the registry — images enter on their own, according to
+declared rules — and then the people who are subject to a decision or verify one: the team whose
+image is refused, and the auditor who must prove what was admitted.
 
-**Hors périmètre** : devenir une colle générique pour d'autres juges ou d'autres placeurs ;
-toute interface graphique.
+**Out of scope**: becoming generic glue for other judges or other placers; any graphical
+interface.
 
 ### References
 
-- [`openspec/discovery.md`](../../openspec/discovery.md) — personas, parcours annoté contre le
-  code, priorités, stories. Ce document en reprend le périmètre et les objectifs, sans les
-  recopier au-delà.
-- [`README.md`](../../README.md) — ce que fait un screening, pas à pas.
+- [`openspec/discovery.md`](../../openspec/discovery.md) — personas, a journey annotated against
+  the code, priorities, stories. This document takes its scope and goals from there, and copies
+  nothing beyond them.
+- [`README.md`](../../README.md) — what a screening does, step by step.
 
 ## Quality Goals
 
-> Quatre objectifs, **ordonnés** : en cas de conflit, le rang le plus haut l'emporte. Chacun dit
-> ce à quoi il fait renoncer — un objectif qui ne coûte rien n'en est pas un. Toute décision
-> d'architecture les sert, dans cet ordre. Source et ordre : `openspec/discovery.md`, réponses
-> reçues le 2026-09-20.
+> Four goals, **ordered**: when they conflict, the higher rank wins. Each one states what it gives
+> up — a goal that costs nothing is not a goal. Every architecture decision serves them, in this
+> order. Source and order: `openspec/discovery.md`, answers received on 2026-09-20.
 
-| Rang | Objectif | Scénario vérifiable | Renonce à |
-|:----:|----------|---------------------|-----------|
-| 1 | **Sûreté** `#safe` — dans le doute, ne rien placer | Un verdict absent, illisible ou non concluant vaut refus : sur un screening où le juge ne répond pas, **zéro** opération est rendue au placeur pour les empreintes concernées. | La fraîcheur : une image saine peut attendre un screening de plus. |
-| 2 | **Contestabilité** `#secure` (non-répudiation) — toute décision est consignée, jamais réécrite, retrouvable | Un refus vieux de trois semaines se retrouve et s'explique **en une minute** — date, état, jeu de règles, raison ; et l'historique du fichier de résultats ne montre **aucune** ligne modifiée ou supprimée. | La compacité du journal, et toute correction en place d'une ligne fausse : on ajoute, on ne rature pas. |
-| 3 | **Opérabilité** `#operable` — un screening qui échoue se diagnostique et se rejoue sans dégât | **Une seule** personne rejoue un screening interrompu à n'importe quelle étape ; le rejeu ne place rien deux fois et ne perd aucune ligne de résultat. | La vitesse d'exécution : les étapes restent séparées, lisibles et rejouables plutôt que fondues. |
-| 4 | **Minceur** `#flexible` — `uske` ne juge ni ne place, et ne grossit pas | `uske` ne contient **aucune** règle de jugement et **aucun** geste de placement : retirer le juge ou le placeur le laisse sans rien à décider. | La commodité d'un outil qui ferait tout. Dernière du rang : quand la sûreté exige que `uske` vérifie lui-même quelque chose, il grossit. |
+| Rank | Goal | Verifiable scenario | Gives up |
+|:----:|------|---------------------|----------|
+| 1 | **Safety** `#safe` — when in doubt, place nothing | A missing, unreadable or inconclusive verdict counts as a refusal: in a screening where the judge does not answer, **zero** operations are returned to the placer for the affected digests. | Freshness: a sound image can wait one more screening. |
+| 2 | **Contestability** `#secure` (non-repudiation) — every decision is recorded, never rewritten, and can be found again | A refusal that is three weeks old is found and explained **in one minute** — date, state, playbook, reason; and the history of the journal shows **no** modified or deleted line. | A compact journal, and any in-place correction of a wrong line: you append, you do not cross out. |
+| 3 | **Operability** `#operable` — a failed screening can be diagnosed and replayed without damage | **One** person replays an interrupted screening at any step; the replay places nothing twice and loses no result line. | Execution speed: the steps stay separate, readable and replayable rather than merged. |
+| 4 | **Thinness** `#flexible` — `uske` neither judges nor places, and does not grow | `uske` contains **no** judging rule and **no** placing action: removing the judge or the placer leaves it with nothing to decide. | The convenience of a tool that would do everything. Last in rank: when safety requires `uske` to check something itself, it grows. |
 
-Les scénarios mesurables sont en *Quality Requirements* (`QS-01` à `QS-07`).
+The measurable scenarios are in *Quality Requirements* (`QS-01` to `QS-07`).
 
 ## Stakeholders
 
 | Role/Name | Contact | Expectations |
 |-----------|---------|--------------|
-| **Responsable plateforme** — tient le registre ; persona principale | persona ; à défaut de personne réelle, répond : le mainteneur | Qu'un screening tourne sur planification sans elle, que rien de douteux n'entre, et qu'elle comprenne assez l'enchaînement des étapes pour rejouer seule un screening échoué. |
-| **Équipe applicative** — attend une image pour livrer | persona ; répond : le mainteneur | Savoir pourquoi son image n'est pas arrivée : la raison du refus et la règle appliquée, sans archéologie. |
-| **Auditeur sécurité / conformité** | persona ; répond : le mainteneur | Un journal qui fait foi : pour une image et une date, la décision, le jeu de règles et la raison ; et la preuve qu'aucune ligne n'a été réécrite. |
-| **Auteur et mainteneur** | dépôt `trivoallan/uske` | Savoir où poser du code et ce qui a le droit de dépendre de quoi ; retrouver pourquoi une décision a été prise. Premier utilisateur réel, sur un seul registre. |
-| **Agents qui écrivent les changes** | contexte d'agent du dépôt | Lire les objectifs et les décisions en un lieu, sans les déduire du code. |
+| **Platform owner** — runs the registry; main persona | persona; with no real person in the role, the maintainer answers | A screening runs on schedule without them, nothing doubtful gets in, and they understand the sequence of steps well enough to replay a failed screening on their own. |
+| **Application team** — waits for an image to ship | persona; the maintainer answers | To know why its image did not arrive: the reason for the refusal and the rule applied, without digging. |
+| **Security / compliance auditor** | persona; the maintainer answers | A journal that is authoritative: for an image and a date, the decision, the playbook and the reason; and proof that no line was rewritten. |
+| **Author and maintainer** | repository `trivoallan/uske` | To know where to put code and what may depend on what; to find why a decision was made. First real user, on a single registry. |
+| **Agents that write the changes** | the repository's agent context | To read the goals and the decisions in one place, without deducing them from the code. |
 
-**Ces cinq rôles sont les parties prenantes du système, pas le lectorat de ce document.** Trois
-d'entre eux sont des personas : aucune personne réelle ne les tient aujourd'hui, et c'est le
-mainteneur qui répond à leur place. Le lectorat de la documentation, lui, est fixé par
-[`SDR-0019`](../adr/SDR-0019-documentation-publique.md) à `public` : le document se lit hors de
-l'organisation, et les termes du métier — `screening`, `régime`, `contournement`, `juge`,
-`placeur` — sont définis en *Glossary*.
+**These five roles are the stakeholders of the system, not the readership of this document.**
+Three of them are personas: no real person holds them today, and the maintainer answers in their
+place. The readership of the documentation is set to `public` by
+[`SDR-0019`](../adr/SDR-0019-documentation-publique.md): the document is read outside the
+organisation, and the domain terms — `screening`, `track`, `bypass`, `judge`, `placer` — are
+defined in *Glossary*.
 
-**Validation des objectifs qualité** : le mainteneur, qui en a fixé l'ordre le 2026-09-20.
+**Approval of the quality goals**: the maintainer, who set their order on 2026-09-20.
 
 # Architecture Constraints
 
-> Ce qu'un développeur ne peut pas défaire seul. Le test appliqué à chaque ligne : *en sortir
-> demande-t-il une décision d'organisation ?* Si un change suffit à s'en affranchir, ce n'est pas
-> une contrainte, c'est une décision — et sa place est en *Architecture Decisions*.
+> What a developer cannot undo alone. The test applied to each line: *does getting out of it
+> require an organisational decision?* If a change is enough to break free of it, it is not a
+> constraint but a decision — and it belongs in *Architecture Decisions*.
 
-| Contrainte | Nature | Ce qu'elle impose | Comment en sortir |
-|------------|--------|-------------------|-------------------|
-| **La méthode `surdesrails`** — posée en dépendance de développement du dépôt | organisationnelle | Le format des décisions (MADR), leur numérotation `SDR-nnnn`, le schéma qui refuse une décision non statuée, et le jeu de questions auxquelles tout dépôt qui l'adopte doit répondre. | Retirer la dépendance et répondre à chaque question à la main. Ce n'est pas un change : c'est renoncer à la méthode. |
-| **Un ADR `accepted` est gelé** — [`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md) | organisationnelle | Le corps d'une décision statuée ne se corrige pas. Tout ce qui en découle — le français par défaut, le langage, le modèle de branches, le seuil de couverture — n'est pas rouvrable par un change. | Un nouvel ADR qui nomme l'ancien dans son `supersedes:`. L'ancien reste au répertoire. |
-| **`regis` et `knock` sont des dépôts tiers** | technique | `uske` ne les connaît que par leur ligne de commande et leur code de sortie ; il ne partage avec eux ni code ni modèle de données. Leurs cycles de version ne sont pas les siens. | Rien ici : c'est la séparation que sert l'objectif de **Minceur**, et l'abandonner viderait `uske` de sa raison d'être. |
+| Constraint | Kind | What it imposes | How to get out of it |
+|------------|------|-----------------|----------------------|
+| **The `surdesrails` method** — installed as a development dependency of the repository | organisational | The format of decisions (MADR), their `SDR-nnnn` numbering, the schema that rejects an undecided decision, and the set of questions that every repository adopting it must answer. | Remove the dependency and answer each question by hand. That is not a change: it means giving up the method. |
+| **An `accepted` ADR is frozen** — [`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md) | organisational | The body of a decided decision is not corrected. Everything that follows from one — French as the default, the programming language, the branching model, the coverage threshold — cannot be reopened by a change. | A new ADR that names the old one in its `supersedes:`. The old one stays in the directory. |
+| **`regis` and `knock` are third-party repositories** | technical | `uske` knows them only by their command line and their exit code; it shares neither code nor data model with them. Their release cycles are not its own. | Nothing here: this is the separation that the **Thinness** goal serves, and giving it up would empty `uske` of its purpose. |
 
-**La méthode est une contrainte, pas une décision, et c'est ce qui explique la forme de
-*Architecture Decisions*.** Les onze ADR hérités de la méthode n'ont pas été choisis : ils ont
-été posés, avec leurs numéros et leurs questions. Ce que ce dépôt décide, c'est la **réponse** à
-chacun — pas l'existence de la question. Un lecteur qui prendrait le journal des décisions pour une
-délibération libre se tromperait sur ce qui a réellement été arbitré ici.
+**The method is a constraint, not a decision, and that explains the shape of *Architecture
+Decisions*.** The eleven ADRs inherited from the method were not chosen: they were laid down, with
+their numbers and their questions. What this repository decides is the **answer** to each one —
+not whether the question exists. A reader who took the decision log for a free deliberation would
+misjudge what was actually decided here.
 
-**La voie de recours est nommée, et elle est asymétrique.** Une question qui ne se pose pas dans
-ce dépôt reçoit le verdict `rejected` avec son motif, ce qui la fait taire entièrement ; une
-règle particulière se déroge par un ADR local qui écrit son motif. Mais certaines clés n'admettent
-qu'une valeur, et celles-là ne se dérogent pas — elles se rejettent en bloc.
+**The way out is named, and it is asymmetric.** A question that does not arise in this repository
+gets the verdict `rejected` with its rationale, which silences it entirely; a single rule can be
+waived by a local ADR that writes down its rationale. But some keys accept only one value, and
+those cannot be waived — they are rejected as a whole.
 
 # Context and Scope
 
-> Niveau LEAN : un diagramme et une table par contexte. La frontière tient en une phrase —
-> `uske` et son journal sont dedans, tout ce qu'il appelle est dehors. Les diagrammes de ce
-> document sont en Mermaid, que GitHub affiche sans outil : c'est ce que
-> [`SDR-0019`](../adr/SDR-0019-documentation-publique.md) (`tool: aucun`) permet.
-> Les `IF-nn` sont ceux de ce document : un `IF-nn` cité dans le code vient du dossier de
-> référence, et ne désigne pas la même interface.
+> LEAN level: one diagram and one table per context. The boundary fits in one sentence — `uske`
+> and its journal are inside, everything it calls is outside. The diagrams in this document are in
+> Mermaid, which GitHub renders without a tool: that is what
+> [`SDR-0019`](../adr/SDR-0019-documentation-publique.md) (`tool: aucun`) allows.
+> The `IF-nn` identifiers are those of this document: an `IF-nn` cited in the code comes from the
+> reference dossier, and does not designate the same interface.
 
 ## Business Context
 
-`uske` est **au milieu et ne tient rien** : chaque partenaire ci-dessous juge, place, recense
-ou suit, et `uske` ne fait que leur passer ce que l'autre a produit. La seule chose qu'il
-possède est le **journal des résultats** — c'est pourquoi il est dedans, et non un partenaire.
+`uske` is **in the middle and holds nothing**: each partner below judges, places, counts or
+tracks, and `uske` only passes them what another one produced. The only thing it owns is the
+**results journal** — that is why the journal is inside, and not a partner.
 
 ```mermaid
 flowchart LR
-  U["<b>uske</b><br>et son journal"]
-  plan(["Planificateur"])
-  depot[("Dépôt des politiques<br>et des jeux de règles")]
-  knock["Placeur<br>knock"]
-  regis["Juge<br>regis"]
-  reg[("Registre")]
-  dt["Suivi des vulnérabilités"]
-  oracle["Oracle d'usage"]
-  rp(["Responsable plateforme"])
-  lect(["Équipe applicative,<br>auditeur"])
-  plan <-->|"IF-01 déclenchement / issue"| U
-  depot -->|"IF-02 politiques, jeux de règles"| U
-  knock <-->|"IF-03 plan / plan moins les refus"| U
-  regis <-->|"IF-04 verdict / empreinte, jeu de règles"| U
-  reg -->|"IF-05 ce qui y est"| U
-  U <-->|"IF-06 inventaires signés, retraits"| dt
-  U <-->|"IF-09 suspects / dernier usage"| oracle
-  rp <-->|"IF-07 rejeu, réouverture / chronologie"| U
-  lect <-->|"IF-08 une image / ses décisions"| U
+  U["<b>uske</b><br>and its journal"]
+  plan(["Scheduler"])
+  depot[("Policy and playbook<br>repository")]
+  knock["Placer<br>knock"]
+  regis["Judge<br>regis"]
+  reg[("Registry")]
+  dt["Vulnerability tracker"]
+  oracle["Usage oracle"]
+  rp(["Platform owner"])
+  lect(["Application team,<br>auditor"])
+  plan <-->|"IF-01 trigger / outcome"| U
+  depot -->|"IF-02 policies, playbooks"| U
+  knock <-->|"IF-03 plan / plan minus refusals"| U
+  regis <-->|"IF-04 verdict / digest, playbook"| U
+  reg -->|"IF-05 what is in it"| U
+  U <-->|"IF-06 signed inventories, removals"| dt
+  U <-->|"IF-09 suspects / last use"| oracle
+  rp <-->|"IF-07 replay, reopening / timeline"| U
+  lect <-->|"IF-08 an image / its decisions"| U
 ```
 
-| ID | Partenaire | Ce qui entre dans `uske` | Ce qui sort de `uske` |
-|----|------------|--------------------------|-----------------------|
-| IF-01 | **Planificateur** | Le déclenchement d'un screening | Une issue : réussi (refus et non-concluants compris) ou échec technique, à rejouer |
-| IF-02 | **Dépôt des politiques et des jeux de règles** | Les politiques actives et leur régime ; les jeux de règles | rien — lu, jamais écrit |
-| IF-03 | **Placeur** (`knock`) | Son plan ; ce qu'il a retenu en transit ; ce qu'il a placé | Le plan moins les opérations refusées ; la liste à promouvoir |
-| IF-04 | **Juge** (`regis`) | Un verdict et son rapport, par empreinte | Une empreinte et le jeu de règles que le régime appelle |
-| IF-05 | **Registre** | Ce qui y est | rien — lu, jamais écrit ; `uske` n'y place ni n'en retire rien |
-| IF-06 | **Suivi des vulnérabilités** | Ce qu'il suit déjà | Les inventaires signés par le placeur ; le retrait de ce qui a quitté le registre |
-| IF-07 | **Responsable plateforme** | Le rejeu d'un screening ; une ligne de réouverture ajoutée au journal | La chronologie des décisions d'une image |
-| IF-08 | **Équipe applicative, auditeur** | Une image, ou un état et une période | Les décisions, le jeu de règles et la raison de chacune — en lecture seule |
-| IF-09 | **Oracle d'usage** — la commande que la rétention de la maison lance déjà | La dernière fois qu'une image a servi, ou rien | Les seules images suspectes de contournement, une par une |
+| ID | Partner | What comes into `uske` | What goes out of `uske` |
+|----|---------|------------------------|-------------------------|
+| IF-01 | **Scheduler** | The trigger of a screening | An outcome: success (refusals and inconclusive results included) or technical failure, to replay |
+| IF-02 | **Policy and playbook repository** | The active policies and their track; the playbooks | nothing — read, never written |
+| IF-03 | **Placer** (`knock`) | Its plan; what it held in transit; what it placed | The plan minus the refused operations; the list to promote |
+| IF-04 | **Judge** (`regis`) | A verdict and its report, per digest | A digest and the playbook that the track calls for |
+| IF-05 | **Registry** | What is in it | nothing — read, never written; `uske` neither places anything in it nor removes anything from it |
+| IF-06 | **Vulnerability tracker** | What it already tracks | The inventories signed by the placer; the removal of what has left the registry |
+| IF-07 | **Platform owner** | The replay of a screening; a reopening line appended to the journal | The timeline of an image's decisions |
+| IF-08 | **Application team, auditor** | An image, or a state and a period | The decisions, the playbook and the reason for each one — read-only |
+| IF-09 | **Usage oracle** — the command that the in-house retention already runs | The last time an image was used, or nothing | Only the images suspected of bypass, one by one |
 
-**Hors frontière, même si on les croit dedans :**
+**Outside the boundary, even if you think they are inside:**
 
-- **Le transit.** `uske` le nomme au placeur, mais n'y lit ni n'y écrit : le placeur y retient,
-  le juge y lit. Le fermer aux consommateurs est le travail du registre.
-- **La signature et l'attestation** : c'est le placeur qui signe ; `uske` vérifie une signature
-  avant d'envoyer un inventaire (IF-06), il n'en produit aucune.
-- **Les règles de jugement** : elles sont dans les jeux de règles (IF-02) et chez le juge. La
-  seule table que `uske` tient est celle qui associe un régime à un jeu de règles.
+- **The transit.** `uske` names it to the placer, but neither reads nor writes it: the placer
+  holds images there, the judge reads them there. Closing it to consumers is the registry's job.
+- **Signing and attestation**: the placer signs; `uske` verifies a signature before sending an
+  inventory (IF-06), and produces none.
+- **The judging rules**: they live in the playbooks (IF-02) and in the judge. The only table that
+  `uske` keeps is the one that maps a track to a playbook.
 
-Le reste du hors-périmètre — colle générique, interface graphique — est fixé en *Business
-Context* de la première section.
+The rest of what is out of scope — generic glue, graphical interface — is set in the *Business
+Context* of the first section.
 
 ## Technical Context
 
-Chaque interface métier a un seul canal. **`uske` n'appelle ni `regis` ni `knock`** : chacun
-tourne dans sa propre image, à sa propre étape du workflow, et les étapes se passent des fichiers
-sur le volume `/work` du screening (*Architecture Constraints*). `uske` ne parle HTTP qu'aux deux
-API qu'il connaît par leur nom.
+Each business interface has a single channel. **`uske` calls neither `regis` nor `knock`**: each
+one runs in its own image, at its own step of the workflow, and the steps pass files to each other
+on the screening's `/work` volume (*Architecture Constraints*). `uske` speaks HTTP only to the two
+APIs it knows by name.
 
-| ID | Canal | Format | Authentification |
-|----|-------|--------|------------------|
-| IF-01 | Argo Workflows : un `CronWorkflow` enchaîne les sous-commandes de `uske` ([`deploy/base`](../../deploy/base)) | Arguments en ligne de commande, JSON sur la sortie standard ; code de sortie 0 (issue métier) ou 1 (échec technique, qu'Argo rejoue) | Le compte de service du `CronWorkflow` |
-| IF-02 | `git` : le dépôt est extrait à chaque screening, à l'étape `checkout` | YAML (politiques, jeux de règles) | Celle du dépôt ; nommé par le paramètre `repository` de l'overlay |
-| IF-03 | Étapes Argo à part, image `knock` : `reconcile --plan-out`, `--apply-plan`, `--stage-to`, `promote` ; fichiers sur `/work` | JSON (plan, audit) | Les identifiants de registre de `knock` (`KNOCK_REGISTRIES`) |
-| IF-04 | Étape Argo à part, image `regis` : `regis analyze` ; son code de sortie est passé à `uske classify` (`--regis-exit`) | JSON (rapport), sur `/work` | Les identifiants de registre de `regis`, sur l'hôte de la destination |
-| IF-05 | HTTP, API Harbor `/api/v2.0` (`uske census`) | JSON | Basique : `HARBOR_URL`, `HARBOR_USER`, `HARBOR_PASSWORD` |
-| IF-06 | HTTP, API Dependency-Track `/api` (`uske dt-plan`, `dt-publish`, `dt-retire`) | JSON ; inventaires CycloneDX | Clé d'API : `DT_URL`, `DT_API_KEY` |
-| IF-07 | `kubectl` : un pod jetable qui monte le volume `uske-results` (README, *Why was an image not placed?*) | Une ligne JSON ajoutée au fichier de résultats ; Markdown en sortie de `uske decisions` | Les droits Kubernetes de la personne sur le namespace |
-| IF-08 | Le même pod, volume monté en lecture seule | Markdown (chronologie Mermaid et tableau) | Idem |
-| IF-09 | Processus enfant de `uske census` : la commande nommée par `KNOCK_USAGE_ORACLE_CMD` | JSON sur l'entrée standard ; `{"last_seen": …}` en sortie, code 0 pour répondre | Celle de la commande |
+| ID | Channel | Format | Authentication |
+|----|---------|--------|----------------|
+| IF-01 | Argo Workflows: a `CronWorkflow` chains the `uske` subcommands ([`deploy/base`](../../deploy/base)) | Command-line arguments, JSON on standard output; exit code 0 (business outcome) or 1 (technical failure, which Argo replays) | The `CronWorkflow` service account |
+| IF-02 | `git`: the repository is checked out at each screening, in the `checkout` step | YAML (policies, playbooks) | The repository's own; named by the overlay's `repository` parameter |
+| IF-03 | Separate Argo steps, `knock` image: `reconcile --plan-out`, `--apply-plan`, `--stage-to`, `promote`; files on `/work` | JSON (plan, audit) | `knock`'s registry credentials (`KNOCK_REGISTRIES`) |
+| IF-04 | Separate Argo step, `regis` image: `regis analyze`; its exit code is passed to `uske classify` (`--regis-exit`) | JSON (report), on `/work` | `regis`'s registry credentials, on the destination host |
+| IF-05 | HTTP, Harbor API `/api/v2.0` (`uske census`) | JSON | Basic: `HARBOR_URL`, `HARBOR_USER`, `HARBOR_PASSWORD` |
+| IF-06 | HTTP, Dependency-Track API `/api` (`uske dt-plan`, `dt-publish`, `dt-retire`) | JSON; CycloneDX inventories | API key: `DT_URL`, `DT_API_KEY` |
+| IF-07 | `kubectl`: a throwaway pod that mounts the `uske-results` volume (README, *Why was an image not placed?*) | A JSON line appended to the journal; Markdown output from `uske decisions` | The person's Kubernetes permissions on the namespace |
+| IF-08 | The same pod, with the volume mounted read-only | Markdown (Mermaid timeline and table) | Same |
+| IF-09 | Child process of `uske census`: the command named by `KNOCK_USAGE_ORACLE_CMD` | JSON on standard input; `{"last_seen": …}` on output, exit code 0 to answer | The command's own |
 
 # Solution Strategy
 
-> Niveau LEAN : ce qui a été choisi et le motif en une ligne. Le pourquoi complet est dans
-> l'ADR nommé ; une ligne sans ADR est une décision qui n'en a pas encore.
+> LEAN level: what was chosen and the rationale in one line. The full reasoning is in the named
+> ADR; a line without an ADR is a decision that does not have one yet.
 
-**Un enchaîneur de commandes qui échoue fermé.** Chaque étape d'un screening est une
-sous-commande courte de `uske` — elle lit des fichiers, appelle un outil, écrit du JSON — et
-c'est le planificateur qui les enchaîne. `uske` ne garde aucun état en mémoire d'une étape à
-l'autre : ce qui passe d'une étape à la suivante est un fichier, et ce qui reste après le
-screening est une ligne du journal. Tout ce qui n'est pas un verdict lisible de placement direct
-se lit comme un refus.
+**A command chainer that fails closed.** Each step of a screening is a short `uske` subcommand —
+it reads files, calls a tool, writes JSON — and the scheduler chains them. `uske` keeps no state in
+memory from one step to the next: what passes from one step to the next is a file, and what remains
+after the screening is a line in the journal. Anything that is not a readable direct placement
+verdict is read as a refusal.
 
-## Choix techniques
+## Technical choices
 
-| Sujet | Choix | Motif | Où |
-|-------|-------|-------|----|
-| Langage | Python ≥ 3.12 | L'un des trois que la méthode recommande ; celui de `regis` et `knock`, donc un seul outillage pour les trois dépôts | [`SDR-0004`](../adr/SDR-0004-languages.md) |
-| Enchaînement | Argo Workflows : un `CronWorkflow`, une sous-commande par étape | Le rejeu, les reprises et la trace de chaque étape viennent de l'outil, pas de `uske` | **aucun ADR** — `DEBT-07` |
-| Intégration | `regis` et `knock` à leurs propres étapes du workflow, par fichiers ; Harbor et Dependency-Track par HTTP, en bibliothèque standard | Ne partager ni code ni image avec les outils enchaînés ; une seule dépendance d'exécution (`pyyaml`) | *Architecture Constraints* |
-| Persistance | Un fichier JSON Lines par politique, en ajout seul, sur un volume | Un fichier se lit, se copie et se conteste sans serveur ; l'ajout seul se vérifie dans son historique | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md) ; le support lui-même : **aucun ADR** — `DEBT-08` |
-| Structure du code | Hexagonale : le domaine sans entrée-sortie | Un agent modifie et teste une règle sans environnement qui tourne | [`SDR-0003`](../adr/SDR-0003-architecture.md) — non tenu, `DEBT-01` |
-| Validation | `pydantic` aux frontières, JSON Schema pour les fichiers | Un champ absent devient une erreur nommée, pas un défaut silencieux | [`SDR-0005`](../adr/SDR-0005-validation.md) — non tenu, `DEBT-02` |
+| Topic | Choice | Rationale | Where |
+|-------|--------|-----------|-------|
+| Language | Python ≥ 3.12 | One of the three that the method recommends; the one used by `regis` and `knock`, so one toolchain for all three repositories | [`SDR-0004`](../adr/SDR-0004-languages.md) |
+| Chaining | Argo Workflows: one `CronWorkflow`, one subcommand per step | Replay, retries and the trace of each step come from the tool, not from `uske` | **no ADR** — `DEBT-07` |
+| Integration | `regis` and `knock` at their own workflow steps, through files; Harbor and Dependency-Track over HTTP, with the standard library | Share neither code nor image with the chained tools; a single runtime dependency (`pyyaml`) | *Architecture Constraints* |
+| Persistence | One JSON Lines file per policy, append-only, on a volume | A file can be read, copied and contested without a server; append-only can be checked in its history | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md); the storage itself: **no ADR** — `DEBT-08` |
+| Code structure | Hexagonal: the domain without input/output | An agent changes and tests a rule without a running environment | [`SDR-0003`](../adr/SDR-0003-architecture.md) — not met, `DEBT-01` |
+| Validation | `pydantic` at the boundaries, JSON Schema for files | A missing field becomes a named error, not a silent default | [`SDR-0005`](../adr/SDR-0005-validation.md) — not met, `DEBT-02` |
 
-## Approche par objectif qualité
+## Approach per quality goal
 
-| Objectif | Mécanisme principal | Où |
-|----------|---------------------|----|
-| 1. **Sûreté** `#safe` | **Échec fermé** : un rapport absent ou illisible devient `inconclusive` (`outcomes.py`, D-23 du dossier de référence). N'est rendu au placeur que le placement direct, et la transformation requise quand `uske` ordonne une réparation (règles réparables du régime, `playbooks.REPAIRABLE`). Le placeur n'applique une opération que si son empreinte source n'a pas changé depuis le plan (`gate.py`, D-30). Ce qu'il reconstruit passe une **seconde porte**, depuis un transit obligatoire. | `SDR-0016` ; *Runtime View* R-2, R-3 ; QS-01, QS-02 |
-| 2. **Contestabilité** `#secure` | **Journal en ajout seul, qui n'avance que vers l'avant** : une ligne plus ancienne que la dernière du même digest n'est pas écrite. Chaque ligne porte son état, son jeu de règles, sa raison et son screening (`run`) ; `uske decisions` les rend lisibles. | `SDR-0016`, `SDR-0018` |
-| 3. **Opérabilité** `#operable` | **Des étapes séparées et rejouables** : JSON sur la sortie, code de sortie 0 pour toute issue métier et 1 pour un échec technique, qu'Argo rejoue. Le journal à sens unique rend un rejeu sans effet sur ce qui est déjà écrit ; une image retenue sans verdict est retentée trois fois au plus. | *Runtime View* R-4 ; *Deployment View* ; QS-05, QS-06 |
-| 4. **Minceur** `#flexible` | **Rien à juger, rien à placer** : la seule table métier est celle qui associe un régime à un jeu de règles (`playbooks.py`). Les autres outils ne sont connus que par leur ligne de commande ou leur API. | *Architecture Constraints* |
+| Goal | Main mechanism | Where |
+|------|----------------|-------|
+| 1. **Safety** `#safe` | **Fail closed**: a missing or unreadable report becomes `inconclusive` (`outcomes.py`, D-23 of the reference dossier). Only direct placement is returned to the placer, plus transformation required when `uske` orders a remediation (the track's repairable rules, `playbooks.REPAIRABLE`). The placer applies an operation only if its source digest has not changed since the plan (`gate.py`, D-30). What it rebuilds goes through a **second gate**, from a mandatory transit. | `SDR-0016`; *Runtime View* R-2, R-3; QS-01, QS-02 |
+| 2. **Contestability** `#secure` | **An append-only journal that only moves forward**: a line older than the last one for the same digest is not written. Each line carries its state, its playbook, its reason and its screening (`run`); `uske decisions` makes them readable. | `SDR-0016`, `SDR-0018` |
+| 3. **Operability** `#operable` | **Separate, replayable steps**: JSON on output, exit code 0 for any business outcome and 1 for a technical failure, which Argo replays. The one-way journal makes a replay have no effect on what is already written; an image held without a verdict is retried three times at most. | *Runtime View* R-4; *Deployment View*; QS-05, QS-06 |
+| 4. **Thinness** `#flexible` | **Nothing to judge, nothing to place**: the only business table is the one that maps a track to a playbook (`playbooks.py`). The other tools are known only by their command line or their API. | *Architecture Constraints* |
 
-**La Sûreté coûte déjà de la Minceur, et c'est voulu** : `gate.py` compte lui-même les
-tentatives et clôt une source dont la reconstruction a été refusée, ce qu'un `uske` réduit à un
-simple enchaînement ne ferait pas. Le rang des objectifs le permet ; la ligne 4 de *Quality Goals* l'avait annoncé.
+**Safety already costs some Thinness, and that is intended**: `gate.py` counts the attempts itself
+and closes a source whose rebuild was refused, which a `uske` reduced to a simple chain would not
+do. The ranking of the goals allows it; row 4 of *Quality Goals* announced it.
 
 # Building Block View
 
-> Niveau LEAN : le niveau 1 seul, en diagramme et en table. Un bloc est un groupe de modules de `uske/`, ou le
-> workflow de `deploy/base` ; aucun ne descend au fichier près plus qu'il ne le faut — le paquet
-> compte dix modules à plat, et quatre blocs n'en ont qu'un.
+> LEAN level: level 1 only, as a diagram and a table. A block is a group of `uske/` modules, or
+> the `deploy/base` workflow; none goes down to file level more than needed — the package has ten
+> flat modules, and four blocks have only one.
 
 ## Whitebox Overall System
 
-**Deux blocs au centre, sans entrée-sortie, et des adaptateurs autour.** *Issues* et *Porte*
-décident ; tout le reste lit, écrit ou parle à un partenaire. C'est la forme que vise
-[`SDR-0003`](../adr/SDR-0003-architecture.md), à moitié atteinte : les deux sont déjà purs, mais
-rien dans l'arborescence ne sépare le domaine des adaptateurs (`DEBT-01`).
+**Two blocks at the centre, without input/output, and adapters around them.** *Outcomes* and
+*Gate* decide; everything else reads, writes or talks to a partner. This is the shape that
+[`SDR-0003`](../adr/SDR-0003-architecture.md) aims for, half reached: both are already pure, but
+nothing in the directory tree separates the domain from the adapters (`DEBT-01`).
 
 ```mermaid
 flowchart TD
   W["Workflow<br><code>deploy/base/</code>"]
-  S["Sous-commandes<br><code>cli.py</code>"]
-  P["Porte<br><code>gate.py</code>"]:::pure
-  I["Issues<br><code>outcomes.py</code>"]:::pure
-  Pol["Politiques<br><code>policies.py</code>, <code>playbooks.py</code>"]
+  S["Subcommands<br><code>cli.py</code>"]
+  P["Gate<br><code>gate.py</code>"]:::pure
+  I["Outcomes<br><code>outcomes.py</code>"]:::pure
+  Pol["Policies<br><code>policies.py</code>, <code>playbooks.py</code>"]
   J["Journal<br><code>results.py</code>, <code>decisions.py</code>"]
-  R["Recensement<br><code>census.py</code>"]
-  Sy["Synchronisation du suivi<br><code>dtsync.py</code>"]
-  W -->|"ligne de commande"| S
+  R["Census<br><code>census.py</code>"]
+  Sy["Tracker sync<br><code>dtsync.py</code>"]
+  W -->|"command line"| S
   S --> P & I & Pol & J & R & Sy
   P --> I & Pol & J
   J --> I
@@ -270,45 +267,44 @@ flowchart TD
   classDef pure stroke-width:3px
 ```
 
-Trait épais : sans entrée-sortie. Chaque flèche est une dépendance d'import, sauf la première.
+Thick border: without input/output. Each arrow is an import dependency, except the first one.
 
-| Bloc | Responsabilité | Source | Dépend de | Interfaces | Entrées-sorties |
-|------|----------------|--------|-----------|------------|-----------------|
-| **Workflow** | Enchaîner les étapes d'un screening : extraire le dépôt, lancer `knock`, `regis` et les sous-commandes de `uske`, chacun dans son image, et leur passer des fichiers sur `/work` | `deploy/base/` | toutes les sous-commandes, par leur ligne de commande | IF-01, IF-02, IF-03, IF-04 | oui — c'est sa raison d'être |
-| **Sous-commandes** | Une sous-commande par étape : lire les fichiers et l'environnement, appeler le bloc qui décide, écrire du JSON, et traduire l'issue en code de sortie (0 métier, 1 technique) | `uske/cli.py` | tous les blocs ci-dessous | IF-01, IF-07, IF-08 | oui |
-| **Issues** | Ramener un rapport du juge à l'une des quatre issues, en échouant fermé | `uske/outcomes.py` | — | IF-04, par le rapport que lui passent les sous-commandes | **non** |
-| **Porte** | Rendre le plan moins les refus ; compter les tentatives d'une reconstruction et clore une source refusée | `uske/gate.py` | Issues, Politiques, Journal (les derniers états, déjà lus) | IF-03, par le plan que lui passent les sous-commandes | **non** |
-| **Politiques** | Lire les politiques ; associer un régime à un jeu de règles — la seule table métier de `uske` | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | lecture seule |
-| **Journal** | Écrire une ligne par décision, en ajout seul et vers l'avant ; relire le journal pour une personne | `uske/results.py`, `uske/decisions.py` | Issues | IF-07, IF-08 | oui |
-| **Recensement** | Compter le contournement : ce qui est au registre, moins ce qui est passé par la porte, puis demander l'usage des seuls suspects | `uske/census.py` | — | IF-05, IF-09 | oui |
-| **Synchronisation du suivi** | Envoyer au suivi des vulnérabilités les inventaires signés, après en avoir vérifié la signature ; retirer ce qui a quitté le registre | `uske/dtsync.py` | Politiques | IF-06 | oui |
+| Block | Responsibility | Source | Depends on | Interfaces | Input/output |
+|-------|----------------|--------|------------|------------|--------------|
+| **Workflow** | Chain the steps of a screening: check out the repository, run `knock`, `regis` and the `uske` subcommands, each in its own image, and pass them files on `/work` | `deploy/base/` | all the subcommands, through their command line | IF-01, IF-02, IF-03, IF-04 | yes — that is its purpose |
+| **Subcommands** | One subcommand per step: read the files and the environment, call the block that decides, write JSON, and turn the outcome into an exit code (0 business, 1 technical) | `uske/cli.py` | all the blocks below | IF-01, IF-07, IF-08 | yes |
+| **Outcomes** | Reduce a judge report to one of the four outcomes, failing closed | `uske/outcomes.py` | — | IF-04, through the report that the subcommands pass to it | **no** |
+| **Gate** | Return the plan minus the refusals; count the attempts of a rebuild and close a refused source | `uske/gate.py` | Outcomes, Policies, Journal (the latest states, already read) | IF-03, through the plan that the subcommands pass to it | **no** |
+| **Policies** | Read the policies; map a track to a playbook — the only business table in `uske` | `uske/policies.py`, `uske/playbooks.py` | — | IF-02 | read-only |
+| **Journal** | Write one line per decision, append-only and forward-only; read the journal back for a person | `uske/results.py`, `uske/decisions.py` | Outcomes | IF-07, IF-08 | yes |
+| **Census** | Count the bypass: what is in the registry, minus what went through the gate, then ask for the usage of the suspects only | `uske/census.py` | — | IF-05, IF-09 | yes |
+| **Tracker sync** | Send the signed inventories to the vulnerability tracker, after verifying their signature; remove what has left the registry | `uske/dtsync.py` | Policies | IF-06 | yes |
 
-**Aucune dépendance circulaire.** *Issues*, *Politiques* et *Recensement* n'importent rien de
-`uske` ; le *Journal* ne dépend que d'*Issues*, et la *Porte* de trois blocs qui ne dépendent pas
-d'elle. *Issues* est un bloc à part pour cette raison : rangé avec la *Porte*,
-il faisait un cycle — la *Porte* lit le *Journal*, et le *Journal* écrit des issues.
+**No circular dependency.** *Outcomes*, *Policies* and *Census* import nothing from `uske`; the
+*Journal* depends only on *Outcomes*, and the *Gate* on three blocks that do not depend on it.
+*Outcomes* is a separate block for this reason: placed with the *Gate*, it created a cycle — the
+*Gate* reads the *Journal*, and the *Journal* writes outcomes.
 
-**Le Journal appartient à `uske`, et c'est le seul bloc à garder un état** d'un screening à
-l'autre. Tout le reste se recalcule : *Issues* et la *Porte* d'un rapport et d'un plan, le Recensement et la
-Synchronisation du registre lui-même.
+**The Journal belongs to `uske`, and it is the only block that keeps state** from one screening to
+the next. Everything else is recomputed: *Outcomes* and the *Gate* from a report and a plan, the
+Census and the Tracker sync from the registry itself.
 
-**Ce que la table dit de `DEBT-01`.** La colonne *Entrées-sorties* trace la frontière que
-l'hexagone demande : seules *Issues*, la *Porte* et la table des régimes en sont déjà du bon côté. Le
-Journal et les Politiques mêlent une règle (n'écrire que vers l'avant, lire un régime) et la
-lecture d'un fichier ; le Recensement et la Synchronisation mêlent une règle (soustraire, planifier)
-et un appel HTTP. Rapprocher le code, c'est séparer ces deux moitiés dans chacun des quatre.
+**What the table says about `DEBT-01`.** The *Input/output* column traces the boundary that the
+hexagon requires: only *Outcomes*, the *Gate* and the track table are already on the right side of
+it. The Journal and the Policies mix a rule (write only forward, read a track) with reading a file;
+the Census and the Tracker sync mix a rule (subtract, plan) with an HTTP call. Bringing the code in
+line means separating these two halves in each of the four.
 
 # Runtime View
 
-> Niveau LEAN : cinq scénarios en prose numérotée ; les deux portes, R-1 et R-2, ont aussi leur
-> diagramme de séquence. Les noms en italique sont
-> les blocs de *Building Block View* ; les `IF-nn`, les interfaces de *Context and Scope*. Chaque
-> étape nommée en `code` est une étape de [`deploy/base/workflowtemplate.yaml`](../../deploy/base/workflowtemplate.yaml).
+> LEAN level: five scenarios in numbered prose; the two gates, R-1 and R-2, also have their
+> sequence diagram. Names in italics are the blocks of *Building Block View*; the `IF-nn` are the
+> interfaces of *Context and Scope*. Each step named in `code` is a step of
+> [`deploy/base/workflowtemplate.yaml`](../../deploy/base/workflowtemplate.yaml).
 
-## R-1 — Un screening, une copie placée
+## R-1 — A screening, a copy placed
 
-Le cas nominal : une image saine, copiée telle quelle. Le diagramme montre aussi la branche de
-R-3.
+The nominal case: a sound image, copied as is. The diagram also shows the branch of R-3.
 
 ```mermaid
 sequenceDiagram
@@ -316,49 +312,49 @@ sequenceDiagram
   participant W as Workflow
   participant K as knock
   participant R as regis
-  participant S as Sous-commandes
+  participant S as Subcommands
   participant J as Journal
   W->>S: list
-  loop chaque politique, une à la fois
+  loop each policy, one at a time
     W->>K: reconcile --plan-out
-    K-->>W: plan, sur /work
+    K-->>W: plan, on /work
     W->>S: pending, resolve
-    S->>J: ce qui est déjà décidé
-    loop chaque empreinte encore due
+    S->>J: what is already decided
+    loop each digest still due
       W->>R: regis analyze
-      R-->>W: rapport et code de sortie
-      W->>S: classify (Issues)
-      alt rapport lisible
-        S-->>W: l'issue du verdict
-      else juge en échec, rapport illisible (R-3)
+      R-->>W: report and exit code
+      W->>S: classify (Outcomes)
+      alt readable report
+        S-->>W: the verdict's outcome
+      else judge failed, unreadable report (R-3)
         S-->>W: inconclusive
       end
     end
     W->>S: record
-    S->>J: ajoute les lignes
-    W->>S: approve (Porte)
-    S-->>W: plan moins les refus
+    S->>J: appends the lines
+    W->>S: approve (Gate)
+    S-->>W: plan minus refusals
     W->>K: reconcile --apply-plan
-    K-->>W: ce qui a été placé
+    K-->>W: what was placed
     W->>S: record-applied
-    S->>J: lien source vers placé
+    S->>J: link from source to placed
   end
 ```
 
 
-1. Le planificateur lance un screening (IF-01) ; le *Workflow* extrait le dépôt des politiques
-   (`checkout`, IF-02), puis `list` en tire les politiques actives.
-2. Pour chaque politique, une à la fois (un verrou par politique) : `prepare`, puis le placeur
-   écrit son plan sans rien placer (`plan`, IF-03).
-3. `pending` retire du plan ce que le *Journal* a déjà décidé ; `resolve` demande aux
-   *Politiques* le jeu de règles que le régime appelle.
-4. Pour chaque empreinte encore due, le juge l'analyse (`regis`, IF-04) ; *Issues* ramène son
-   rapport à une issue, et `classify` en écrit la ligne sur `/work`.
-5. `record` ajoute ces lignes au *Journal* ; `approve` demande à la *Porte* le plan moins les
-   refus ; le placeur n'applique que cela (`place`, IF-03).
-6. `record-applied` consigne ce qui a été placé. Le screening se termine en succès.
+1. The scheduler starts a screening (IF-01); the *Workflow* checks out the policy repository
+   (`checkout`, IF-02), then `list` extracts the active policies from it.
+2. For each policy, one at a time (one lock per policy): `prepare`, then the placer writes its
+   plan without placing anything (`plan`, IF-03).
+3. `pending` removes from the plan what the *Journal* has already decided; `resolve` asks the
+   *Policies* for the playbook that the track calls for.
+4. For each digest still due, the judge analyses it (`regis`, IF-04); *Outcomes* reduces its report
+   to an outcome, and `classify` writes the line for it on `/work`.
+5. `record` appends these lines to the *Journal*; `approve` asks the *Gate* for the plan minus the
+   refusals; the placer applies only that (`place`, IF-03).
+6. `record-applied` records what was placed. The screening ends in success.
 
-## R-2 — Une source à réparer, et la seconde porte
+## R-2 — A source to remediate, and the second gate
 
 ```mermaid
 sequenceDiagram
@@ -366,366 +362,368 @@ sequenceDiagram
   participant W as Workflow
   participant K as knock
   participant R as regis
-  participant S as Sous-commandes
+  participant S as Subcommands
   participant J as Journal
-  W->>S: approve (Porte)
-  S-->>W: plan approuvé, avec un ordre de réparation
+  W->>S: approve (Gate)
+  S-->>W: approved plan, with a remediation order
   W->>K: reconcile --apply-plan --stage-to transit
-  K-->>W: images retenues dans le transit
-  loop chaque image retenue
-    W->>R: regis analyze, par son empreinte
-    R-->>W: rapport
-    W->>S: classify (Issues)
+  K-->>W: images held in transit
+  loop each held image
+    W->>R: regis analyze, by its digest
+    R-->>W: report
+    W->>S: classify (Outcomes)
   end
-  W->>S: record, puis approve
-  S->>J: lignes de la seconde porte
-  alt placement direct
-    S-->>W: liste à promouvoir
+  W->>S: record, then approve
+  S->>J: second gate lines
+  alt direct placement
+    S-->>W: list to promote
     W->>K: promote
     W->>S: record-promoted
-  else refusée
-    S->>J: quarantine, uske/remediation-refused : la source est close
+  else refused
+    S->>J: quarantine, uske/remediation-refused: the source is closed
   end
 ```
 
 
-1. Comme R-1 jusqu'à l'étape 4 ; le verdict est *transformation requise*, et chaque règle
-   critique en échec figure parmi les règles réparables du régime (`playbooks.REPAIRABLE`).
-2. La *Porte* rend l'opération avec un ordre de réparation, seulement si le workflow nomme un
-   transit ; sans transit, la source est consignée `inconclusive` (`uske/no-transit`) et rejugée
-   au screening suivant. Les copies et les reconstructions par simple transformation, elles, sont
-   placées directement, sans seconde porte.
-3. Le placeur répare et retient l'image dans le transit (`place-staged`), sans la placer.
-4. `second-gate` : le juge analyse l'image retenue **par sa propre empreinte**. Seule une issue
-   *placement direct* est rendue au placeur pour promotion.
-5. Une réparation refusée clôt sa source : une ligne `quarantine`, raison
-   `uske/remediation-refused` (les lignes plus anciennes disent `uske/rebuild-refused`), et la
-   source n'est plus réparée. Un ordre sur un import qui ne déclare aucun `remediate:` la clôt
-   aussi (`uske/remediation-undeclared`). Une image retenue sans verdict
-   est retentée, trois fois au plus.
+1. As in R-1 up to step 4; the verdict is *transformation required*, and each failed critical rule
+   is among the track's repairable rules (`playbooks.REPAIRABLE`).
+2. The *Gate* returns the operation with a remediation order, only if the workflow names a
+   transit; without a transit, the source is recorded as `inconclusive` (`uske/no-transit`) and
+   judged again at the next screening. Copies and rebuilds by simple transformation are placed
+   directly, without a second gate.
+3. The placer remediates and holds the image in transit (`place-staged`), without placing it.
+4. `second-gate`: the judge analyses the held image **by its own digest**. Only a *direct
+   placement* outcome is returned to the placer for promotion.
+5. A refused remediation closes its source: a `quarantine` line, reason
+   `uske/remediation-refused` (older lines say `uske/rebuild-refused`), and the source is no longer
+   remediated. An order on an import that declares no `remediate:` also closes it
+   (`uske/remediation-undeclared`). An image held without a verdict is retried, three times at
+   most.
 
-## R-3 — Le juge ne répond pas
+## R-3 — The judge does not answer
 
-Le scénario qui démontre l'objectif de **Sûreté**.
+The scenario that demonstrates the **Safety** goal.
 
-1. `regis` échoue, ou son rapport est vide, illisible, ou sans tier connu. L'étape échoue sans
-   arrêter le screening (`continueOn: failed`).
-2. `classify` reçoit son code de sortie (`--regis-exit`) ; *Issues* rend `inconclusive`.
-3. La *Porte* ne rend **aucune** opération pour cette empreinte : rien n'est placé.
-4. Le screening se termine en succès — un non-concluant est une issue métier, code 0 — et le
-   suivant juge à nouveau l'empreinte, puisque le *Journal* ne la tient pas pour décidée.
+1. `regis` fails, or its report is empty, unreadable, or has no known tier. The step fails without
+   stopping the screening (`continueOn: failed`).
+2. `classify` receives its exit code (`--regis-exit`); *Outcomes* returns `inconclusive`.
+3. The *Gate* returns **no** operation for this digest: nothing is placed.
+4. The screening ends in success — an inconclusive result is a business outcome, exit code 0 — and
+   the next one judges the digest again, since the *Journal* does not consider it decided.
 
-## R-4 — Une étape tombe, et on rejoue
+## R-4 — A step fails, and you replay
 
-Le scénario qui démontre l'objectif d'**Opérabilité**.
+The scenario that demonstrates the **Operability** goal.
 
-1. Une étape échoue techniquement (code 1 : politique illisible, registre injoignable). Argo
-   la relance deux fois, à 10 puis 20 secondes ; c'est l'étape seule qui est rejouée, jamais
-   la politique entière.
-2. Si elle échoue encore, le screening échoue. La responsable plateforme le relance tel quel.
-3. Le rejeu ne place rien deux fois : `pending` ne garde que ce qui est encore dû, et `record`
-   n'écrit pas une ligne plus ancienne que la dernière du même digest — une source close reste
-   close.
-4. Si c'est l'application du placeur qui échoue, ce qui a été placé est consigné d'abord
-   (`continueOn`), puis `place-failed` fait échouer le screening : l'échec reste visible, et rien
-   de ce qui a été placé n'est perdu. Une opération approuvée mais non placée est réapprouvée au
-   screening suivant, sans rejuger.
+1. A step fails technically (exit code 1: unreadable policy, unreachable registry). Argo retries
+   it twice, after 10 and then 20 seconds; only the step is replayed, never the whole policy.
+2. If it fails again, the screening fails. The platform owner starts it again as is.
+3. The replay places nothing twice: `pending` keeps only what is still due, and `record` does not
+   write a line older than the last one for the same digest — a closed source stays closed.
+4. If the placer's apply fails, what was placed is recorded first (`continueOn`), then
+   `place-failed` makes the screening fail: the failure stays visible, and nothing that was placed
+   is lost. An operation that was approved but not placed is approved again at the next screening,
+   without judging it again.
 
-## R-5 — Retrouver pourquoi une image n'est pas arrivée
+## R-5 — Finding why an image did not arrive
 
-Le scénario qui démontre l'objectif de **Contestabilité**.
+The scenario that demonstrates the **Contestability** goal.
 
-1. Une équipe ou un auditeur demande la décision sur une image (IF-08).
-2. La responsable plateforme lance `uske decisions` dans un pod jetable qui monte le volume du
-   journal en lecture seule (README, *Why was an image not placed?*).
-3. Le *Journal* relit toutes les lignes de l'image, dans l'ordre du fichier, et rend une
-   chronologie et un tableau : date, état, jeu de règles, raison, screening, rapport.
-4. Une référence courte reçoit les références complètes en suggestion ; le volume est
-   `ReadWriteOnce` : pendant un screening sur un autre nœud, la lecture attend.
+1. A team or an auditor asks for the decision on an image (IF-08).
+2. The platform owner runs `uske decisions` in a throwaway pod that mounts the journal volume
+   read-only (README, *Why was an image not placed?*).
+3. The *Journal* reads back all the lines for the image, in file order, and returns a timeline and
+   a table: date, state, playbook, reason, screening, report.
+4. A short reference gets the full references as suggestions; the volume is `ReadWriteOnce`: while
+   a screening runs on another node, the read waits.
 
 # Deployment View
 
-> Niveau LEAN. **`uske` n'est déployé nulle part aujourd'hui** (README, *Status*) : la seule
-> infrastructure qui tourne est le banc local. Cette section décrit donc ce que tout environnement
-> reçoit — [`deploy/base`](../../deploy/base) —, puis ce que le banc y ajoute. La production
-> s'écrira avec son premier overlay.
+> LEAN level. **`uske` is not deployed anywhere today** (README, *Status*): the only
+> infrastructure that runs is the local test bench. This section therefore describes what every
+> environment receives — [`deploy/base`](../../deploy/base) — and then what the bench adds to it.
+> Production will be written with its first overlay.
 
 ## Infrastructure Level 1
 
-Un namespace Kubernetes, avec Argo Workflows. Rien d'autre ne tourne en permanence : chaque
-screening est une suite de pods qui meurent avec lui.
+A Kubernetes namespace, with Argo Workflows. Nothing else runs permanently: each screening is a
+series of pods that die with it.
 
 ```mermaid
 flowchart LR
-  subgraph ns["Namespace Kubernetes, avec Argo Workflows"]
-    c1["CronWorkflow <code>uske</code><br>toutes les 5 min, Forbid"]
-    c2["CronWorkflow <code>dt-sync</code><br>toutes les 15 min"]
+  subgraph ns["Kubernetes namespace, with Argo Workflows"]
+    c1["CronWorkflow <code>uske</code><br>every 5 min, Forbid"]
+    c2["CronWorkflow <code>dt-sync</code><br>every 15 min"]
     wt["WorkflowTemplate<br><code>uske-screening</code>"]
-    pods["Pods d'étape<br>images uske, regis, knock, git"]
-    work[("<code>work</code> 1 Gi RWO<br>un par screening")]
-    res[("<code>uske-results</code> 5 Gi RWO<br>journal, rapports HTML")]
+    pods["Step pods<br>uske, regis, knock, git images"]
+    work[("<code>work</code> 1 Gi RWO<br>one per screening")]
+    res[("<code>uske-results</code> 5 Gi RWO<br>journal, HTML reports")]
     sec["Secrets<br><code>uske-repository</code>, <code>uske-harbor</code>,<br><code>uske-knock</code>, <code>uske-dt</code>"]
     c1 --> wt --> pods
     c2 --> pods
     pods --- work
     pods --- res
-    sec -.->|"environnement"| pods
+    sec -.->|"environment"| pods
   end
-  pods -->|"HTTPS"| git[("Dépôt des politiques")]
-  pods -->|"HTTPS"| reg[("Registre")]
+  pods -->|"HTTPS"| git[("Policy repository")]
+  pods -->|"HTTPS"| reg[("Registry")]
   pods -->|"HTTPS"| dt["Dependency-Track"]
 ```
 
-| Élément | Ce qu'il porte | Réglage qui compte |
-|---------|----------------|--------------------|
-| `CronWorkflow` `uske` | Un screening toutes les 5 minutes | `concurrencyPolicy: Forbid` : jamais deux screenings à la fois |
-| `WorkflowTemplate` `uske-screening` | Les étapes de R-1 à R-4 | `parallelism: 1` ; un verrou par politique ; deux relances par étape conteneur |
-| `CronWorkflow` de `dt-sync` | La synchronisation du suivi (IF-06) | Toutes les 15 minutes |
-| Volume `work`, 1 Gi, `ReadWriteOnce` | Les fichiers passés d'une étape à l'autre | Créé et détruit avec chaque screening |
-| Volume `uske-results`, 5 Gi, `ReadWriteOnce` | Le journal, un fichier par politique, et un rapport HTML par décision | Survit aux screenings ; seul `record` y écrit les lignes |
-| Compte de service `uske` | Les pods du screening | Un seul droit : rapporter les sorties d'étape à Argo |
-| Secrets | `uske-repository` (jeton du dépôt), `uske-harbor` (identifiants du registre), `uske-knock` (identifiants et clé de signature du placeur), `uske-dt` (Dependency-Track) | Lus par l'environnement des seuls conteneurs qui en ont besoin ; aucun n'est un paramètre du workflow |
+| Element | What it carries | Setting that matters |
+|---------|-----------------|----------------------|
+| `CronWorkflow` `uske` | One screening every 5 minutes | `concurrencyPolicy: Forbid`: never two screenings at once |
+| `WorkflowTemplate` `uske-screening` | The steps of R-1 to R-4 | `parallelism: 1`; one lock per policy; two retries per container step |
+| `CronWorkflow` for `dt-sync` | The tracker sync (IF-06) | Every 15 minutes |
+| Volume `work`, 1 Gi, `ReadWriteOnce` | The files passed from one step to the next | Created and destroyed with each screening |
+| Volume `uske-results`, 5 Gi, `ReadWriteOnce` | The journal, one file per policy, and one HTML report per decision | Outlives the screenings; only `record` writes lines to it |
+| Service account `uske` | The screening pods | A single permission: report step outputs to Argo |
+| Secrets | `uske-repository` (repository token), `uske-harbor` (registry credentials), `uske-knock` (the placer's credentials and signing key), `uske-dt` (Dependency-Track) | Read through the environment of only the containers that need them; none is a workflow parameter |
 
-**Correspondance des blocs.** Le *Workflow* est le `WorkflowTemplate` et ses deux
-`CronWorkflow`. Les *Sous-commandes*, *Issues*, la *Porte*, les *Politiques*, le *Journal* et la
-*Synchronisation du suivi* tournent dans l'image `uske`, un pod par étape ; le *Journal* écrit sur
-`uske-results`. Le *Recensement* est dans la même image mais **n'est planifié par aucun
-workflow** : il se lance à la main. `regis` et `knock` tournent dans leurs propres images,
-épinglées par empreinte dans l'overlay.
+**Block mapping.** The *Workflow* is the `WorkflowTemplate` and its two `CronWorkflow`s. The
+*Subcommands*, *Outcomes*, the *Gate*, the *Policies*, the *Journal* and the *Tracker sync* run in
+the `uske` image, one pod per step; the *Journal* writes to `uske-results`. The *Census* is in the
+same image but **is scheduled by no workflow**: it is run by hand. `regis` and `knock` run in their
+own images, pinned by digest in the overlay.
 
-**TLS.** `uske` n'en termine aucun : il est client de chaque partenaire. Harbor et
-Dependency-Track sont joints par les URL que l'overlay donne ; le chiffrement est leur
-affaire. Le dépôt est cloné en HTTPS.
+**TLS.** `uske` terminates none: it is a client of each partner. Harbor and Dependency-Track are
+reached through the URLs that the overlay gives; encryption is their concern. The repository is
+cloned over HTTPS.
 
-**Ce qui sert l'Opérabilité ici** : les relances d'étape, l'interdiction de deux screenings
-simultanés, et un volume de travail neuf à chaque screening — un rejeu ne trouve jamais l'état
-d'un autre.
+**What serves Operability here**: step retries, the ban on two simultaneous screenings, and a fresh
+work volume at each screening — a replay never finds the state of another one.
 
 ## Infrastructure Level 2
 
-### Banc local (`deploy/kind`)
+### Local test bench (`deploy/kind`)
 
-`deploy/kind/up.sh` monte un cluster kind, Argo Workflows, et Zot à la place de Harbor (TLS,
-autorité de certification auto-signée, que chaque outil reçoit par `SSL_CERT_FILE`). Le
-`CronWorkflow` y est suspendu : les screenings se lancent à la main. `regis` 0.41.0 et `knock`
-0.16.0 y sont épinglés par empreinte. `up.sh repair` ajoute `buildkitd` et deux sources à
-réparer ; `buildkitd` y écoute **en clair** sur le réseau du cluster, ce qui ne vaut que pour un
-cluster jetable (RISK-06).
+`deploy/kind/up.sh` sets up a kind cluster, Argo Workflows, and Zot in place of Harbor (TLS, with a
+self-signed certificate authority that each tool receives through `SSL_CERT_FILE`). The
+`CronWorkflow` is suspended there: screenings are started by hand. `regis` 0.41.0 and `knock`
+0.16.0 are pinned there by digest. `up.sh repair` adds `buildkitd` and two sources to remediate;
+`buildkitd` listens **in cleartext** on the cluster network there, which is acceptable only for a
+throwaway cluster (RISK-06).
 
 # Cross-cutting Concepts
 
-> Niveau LEAN : seuls les concepts qui touchent au moins deux blocs.
+> LEAN level: only the concepts that touch at least two blocks.
 
-## Échec fermé
+## Fail closed
 
-Tout ce qui n'est pas une réponse lisible vaut refus. *Issues* rend `inconclusive` pour un
-rapport absent, vide, illisible ou sans tier connu ; la *Porte* ne rend rien pour une empreinte
-non concluante ; un fichier d'application absent veut dire que rien n'a été appliqué ; une
-politique au régime inconnu n'est jamais envoyée au juge. Le *Recensement* fait l'inverse, et le
-dit : une image dont l'usage reste sans réponse est comptée à part, pour ne pas faire baisser en
-silence le chiffre qu'il publie.
+Anything that is not a readable answer counts as a refusal. *Outcomes* returns `inconclusive` for
+a report that is missing, empty, unreadable or has no known tier; the *Gate* returns nothing for an
+inconclusive digest; a missing apply file means that nothing was applied; a policy with an unknown
+track is never sent to the judge. The *Census* does the opposite, and says so: an image whose usage
+stays unanswered is counted separately, so that the figure it publishes does not drop silently.
 
-## Un journal qui n'avance que vers l'avant
+## A journal that only moves forward
 
-Le *Journal* ajoute, ne réécrit jamais, et refuse une ligne plus ancienne que la dernière du
-même digest. La *Porte* et `pending` lisent les derniers états de ce journal pour décider de ce
-qui est encore dû. C'est ce qui rend un rejeu sûr (R-4), et une décision contestable (R-5).
-Corriger une ligne fausse, c'est en ajouter une, datée de maintenant — la réouverture d'une
-source en est le seul usage écrit.
+The *Journal* appends, never rewrites, and refuses a line older than the last one for the same
+digest. The *Gate* and `pending` read the latest states of this journal to decide what is still
+due. That is what makes a replay safe (R-4), and a decision contestable (R-5). Correcting a wrong
+line means appending a new one, dated now — reopening a source is the only written use of this.
 
-## Issue métier, échec technique
+## Business outcome, technical failure
 
-Toutes les *Sous-commandes* suivent la même règle : une issue métier — refus, quarantaine,
-non-concluant — sort en code 0 ; seul un échec technique sort en code 1, et c'est lui qu'Argo
-rejoue. Une issue métier n'est donc jamais rejouée par erreur, et un échec technique n'est jamais
-pris pour un refus.
+All the *Subcommands* follow the same rule: a business outcome — refusal, quarantine,
+inconclusive — exits with code 0; only a technical failure exits with code 1, and that is what
+Argo replays. A business outcome is therefore never replayed by mistake, and a technical failure is
+never taken for a refusal.
 
-## Des fichiers entre les étapes
+## Files between the steps
 
-Aucun bloc ne garde d'état en mémoire d'une étape à l'autre. Le *Workflow* passe des fichiers
-sur `/work`, dans des formats que les autres outils écrivent (le plan et l'audit de `knock`, le
-rapport de `regis`) ou que `uske` écrit en JSON. Chaque étape se relit, se rejoue et se teste
-avec ses seuls fichiers d'entrée.
+No block keeps state in memory from one step to the next. The *Workflow* passes files on `/work`,
+in formats that the other tools write (`knock`'s plan and audit, `regis`'s report) or that `uske`
+writes as JSON. Each step can be reread, replayed and tested with its input files alone.
 
-## Ce qui n'est pas dans le code
+## What is not in the code
 
-Les politiques, leurs propriétaires et leurs régimes sont dans le dépôt des politiques ; les
-adresses et les secrets, dans l'environnement. La seule connaissance métier que `uske` porte est
-la table d'un régime vers un jeu de règles (`playbooks.py`), lue par les *Politiques* et par
-tout ce qui en dépend.
+The policies, their owners and their tracks are in the policy repository; the addresses and the
+secrets, in the environment. The only business knowledge that `uske` carries is the table from a
+track to a playbook (`playbooks.py`), read by the *Policies* and by everything that depends on
+them.
 
-## Sécurité
+## Security
 
-- **Les secrets** arrivent par l'environnement, depuis des `Secret` Kubernetes, et ne sont
-  jamais des paramètres du workflow : ils ne s'affichent pas dans l'interface d'Argo.
-- **Le moindre droit** : le compte de service ne peut que rapporter les sorties d'étape. Le
-  journal se lit par un volume monté en lecture seule.
-- **Rien n'est cru sur parole** : la *Synchronisation du suivi* vérifie l'attestation CycloneDX
-  du placeur, avec sa clé publique, avant d'envoyer un inventaire.
-- **Ce que `uske` ne protège pas** : le transit, que le registre doit fermer aux consommateurs
-  (RISK-04), et le journal contre une écriture directe sur son volume (RISK-01).
+- **Secrets** arrive through the environment, from Kubernetes `Secret`s, and are never workflow
+  parameters: they do not show in the Argo interface.
+- **Least privilege**: the service account can only report step outputs. The journal is read
+  through a volume mounted read-only.
+- **Nothing is taken on trust**: the *Tracker sync* verifies the placer's CycloneDX attestation,
+  with its public key, before sending an inventory.
+- **What `uske` does not protect**: the transit, which the registry must close to consumers
+  (RISK-04), and the journal against a direct write to its volume (RISK-01).
 
 # Architecture Decisions
 
 ## Overview
 
-Les décisions d'architecture de ce dépôt vivent dans [`docs/adr/`](../adr/), une par fichier, au
-format MADR. Cette section est leur **journal** : elle y renvoie, et ne recopie ni leur contexte,
-ni leurs options, ni leurs valeurs — chaque ADR dit que ses valeurs s'écrivent chez lui « et
-nulle part ailleurs », et c'est ce qui les empêche d'être contredites ici.
+The architecture decisions of this repository live in [`docs/adr/`](../adr/), one per file, in
+MADR format. This section is their **log**: it points to them, and copies neither their context,
+nor their options, nor their values — each ADR says that its values are written in it "and nowhere
+else", and that is what keeps them from being contradicted here.
 
-Quinze ADR à ce jour, tous statués, dont trois dépassés — deux par `SDR-0017`, un par
-`SDR-0019` ; douze sont donc en vigueur. Onze sont hérités de la méthode — voir *Architecture
-Constraints* : dix questions qu'elle pose à tout dépôt qui l'adopte, et la règle qui dit comment
-on y répond. Quatre sont propres à `uske` : `SDR-0016` à `SDR-0019`. Une nouvelle décision s'écrit
-quand un choix est cher à défaire, touche plusieurs blocs, arbitre entre deux objectifs qualité
-ou contraint les changes suivants.
+Seventeen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`, one each
+by `SDR-0019`, `SDR-0020` and `SDR-0022`; twelve are therefore in force. Eleven are inherited from the method — see *Architecture
+Constraints*: ten questions that it asks every repository adopting it, and the rule that says how
+to answer them. Six are specific to `uske`: `SDR-0016` to `SDR-0020`, and `SDR-0022`. A new decision is written
+when a choice is expensive to undo, touches several blocks, arbitrates between two quality goals,
+or constrains the following changes.
 
-**La numérotation est celle de la méthode, trous compris.** Elle saute de `SDR-0011` à
-`SDR-0016`. **`SDR-0012` n'existe pas en amont non plus** — vérifié le 2026-09-20 dans les
-ressources du paquet, où ce numéro ne sert que de nom d'ADR orphelin dans un test de l'outil.
-**`SDR-0013` a été retiré le 2026-10-16, avant l'ouverture du dépôt** : il résumait des
-prescriptions internes de l'employeur, et la question qu'il posait (le front) ne se pose pas
-ici, puisque `uske` ne sert aucune interface. `SDR-0014` et `SDR-0015` n'ont jamais été écrits
-dans ce dépôt. Un trou dans la suite ne signale donc **aucune décision perdue**, et ce dépôt ne
-renumérote pas : il porterait alors des numéros que la méthode ne reconnaîtrait plus.
+**The numbering is the method's, gaps included.** It jumps from `SDR-0011` to `SDR-0016`.
+**`SDR-0012` does not exist upstream either** — checked on 2026-09-20 in the package resources,
+where this number is used only as the name of an orphan ADR in a test of the tool. **`SDR-0013` was
+withdrawn on 2026-10-16, before the repository was opened**: it summarised internal requirements of
+the employer, and the question it asked (the frontend) does not arise here, since `uske` serves no
+interface. `SDR-0014` and `SDR-0015` were never written in this repository. A gap in the sequence
+therefore signals **no lost decision**, and this repository does not renumber: it would then carry
+numbers that the method no longer recognises.
 
-**Ce journal liste aussi les questions encore ouvertes.** Un ADR `proposed` est une question
-posée et non tranchée : il ne contraint rien, et le dépôt ne s'y conforme ni ne s'en écarte. Il
-figure quand même au journal — savoir ce qui reste à décider vaut autant que savoir ce qui l'a
-été.
+**This log also lists the questions that are still open.** A `proposed` ADR is a question asked and
+not settled: it constrains nothing, and the repository neither conforms to it nor departs from it.
+It still appears in the log — knowing what remains to be decided is worth as much as knowing what
+has been.
 
-**Un ADR `accepted` ne se corrige pas** : son corps est gelé
-([`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md)). Pour revenir sur une décision,
-un nouvel ADR la nomme dans son `supersedes:` ; l'ancien reste au répertoire, qui est un journal
-et non la liste de ce qui est en vigueur. À ce jour, deux en dépassent d'autres : `SDR-0017`
-dépasse `SDR-0006` et `SDR-0010`, et `SDR-0019` dépasse `SDR-0008`.
+**An `accepted` ADR is not corrected**: its body is frozen
+([`SDR-0001`](../adr/SDR-0001-record-architecture-decisions.md)). To go back on a decision, a new
+ADR names it in its `supersedes:`; the old one stays in the directory, which is a log and not the
+list of what is in force. To date, four supersede others: `SDR-0017` supersedes `SDR-0006` and
+`SDR-0010`, `SDR-0019` supersedes `SDR-0008`, `SDR-0020` supersedes `SDR-0002`, and `SDR-0022`
+supersedes `SDR-0020`.
 
 ## Decision Log
 
-| ID | Décision | Statut | Date | Objectif qualité servi | Le dépôt s'y conforme ? |
-|----|----------|--------|------|------------------------|-------------------------|
-| [SDR-0001](../adr/SDR-0001-record-architecture-decisions.md) | Comment les décisions se consignent | accepted | 2026-08-29 | Contestabilité | oui |
-| [SDR-0002](../adr/SDR-0002-localization.md) | Langue de chaque support | accepted | 2026-09-20 | Opérabilité | en partie — `DEBT-09` |
-| [SDR-0003](../adr/SDR-0003-architecture.md) | Pattern d'architecture, et où vit ce document | accepted | 2026-09-20 | Sûreté, Opérabilité | **non** — `DEBT-01` |
-| [SDR-0004](../adr/SDR-0004-languages.md) | Langage principal | accepted | 2026-09-20 | Opérabilité | oui |
-| [SDR-0005](../adr/SDR-0005-validation.md) | Validation aux frontières et des fichiers de données | accepted | 2026-09-20 | Sûreté, contre Minceur | **non** — `DEBT-02` |
-| [SDR-0006](../adr/SDR-0006-commits.md) | Portées des commits, et ce qui tient le format | accepted — dépassé par SDR-0017 | 2026-09-20 | Contestabilité | sans objet — dépassé |
-| [SDR-0007](../adr/SDR-0007-tests.md) | Seuil de couverture | accepted | 2026-09-20 | Sûreté | oui — 91 % mesuré le 2026-10-16 |
-| [SDR-0008](../adr/SDR-0008-documentation.md) | Outil, racine et audience de la documentation | accepted — dépassé par SDR-0019 | 2026-09-20 | Minceur | sans objet — dépassé |
-| [SDR-0009](../adr/SDR-0009-branching.md) | Modèle de branches et de fusion | accepted | 2026-09-20 | Contestabilité, Opérabilité | oui |
-| [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, chaîne d'intégration, et ce qu'un rouge empêche | accepted — dépassé par SDR-0017 | 2026-09-20 | Opérabilité | sans objet — dépassé |
-| [SDR-0011](../adr/SDR-0011-delivery.md) | Environnements servis, et ce qui fabrique une version | accepted | 2026-09-20 | Contestabilité | oui — release-please branché le 2026-10-16 |
-| [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Vocabulaire du journal pour une reconstruction, et transit obligatoire | accepted | 2026-10-10 | Sûreté, Contestabilité | oui — première décision propre à `uske` |
-| [SDR-0017](../adr/SDR-0017-socle-commun.md) | Socle commun : format des titres tenu par la CI, CI bloquante | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui |
-| [SDR-0018](../adr/SDR-0018-journal-run.md) | Une ligne du journal nomme le screening qui l'a écrite (clé `run`) | accepted | 2026-10-16 | Contestabilité, Opérabilité | oui — `classify --run` reçoit `{{workflow.name}}` du `WorkflowTemplate` |
-| [SDR-0019](../adr/SDR-0019-documentation-publique.md) | Audience de la documentation : `public` | accepted | 2026-10-17 | Contestabilité | oui — pages relues le 2026-10-17 |
+| ID | Decision | Status | Date | Quality goal served | Does the repository conform? |
+|----|----------|--------|------|---------------------|------------------------------|
+| [SDR-0001](../adr/SDR-0001-record-architecture-decisions.md) | How decisions are recorded | accepted | 2026-08-29 | Contestability | yes |
+| [SDR-0002](../adr/SDR-0002-localization.md) | Language of each medium | accepted — superseded by SDR-0020 | 2026-09-20 | Operability | not applicable — superseded |
+| [SDR-0003](../adr/SDR-0003-architecture.md) | Architecture pattern, and where this document lives | accepted | 2026-09-20 | Safety, Operability | **no** — `DEBT-01` |
+| [SDR-0004](../adr/SDR-0004-languages.md) | Main programming language | accepted | 2026-09-20 | Operability | yes |
+| [SDR-0005](../adr/SDR-0005-validation.md) | Validation at the boundaries and of data files | accepted | 2026-09-20 | Safety, against Thinness | **no** — `DEBT-02` |
+| [SDR-0006](../adr/SDR-0006-commits.md) | Commit scopes, and what enforces the format | accepted — superseded by SDR-0017 | 2026-09-20 | Contestability | not applicable — superseded |
+| [SDR-0007](../adr/SDR-0007-tests.md) | Coverage threshold | accepted | 2026-09-20 | Safety | yes — 91 % measured on 2026-10-16 |
+| [SDR-0008](../adr/SDR-0008-documentation.md) | Documentation tool, root and audience | accepted — superseded by SDR-0019 | 2026-09-20 | Thinness | not applicable — superseded |
+| [SDR-0009](../adr/SDR-0009-branching.md) | Branching and merge model | accepted | 2026-09-20 | Contestability, Operability | yes |
+| [SDR-0010](../adr/SDR-0010-forge-and-ci.md) | Forge, CI pipeline, and what a red build blocks | accepted — superseded by SDR-0017 | 2026-09-20 | Operability | not applicable — superseded |
+| [SDR-0011](../adr/SDR-0011-delivery.md) | Environments served, and what produces a release | accepted | 2026-09-20 | Contestability | yes — release-please connected on 2026-10-16 |
+| [SDR-0016](../adr/SDR-0016-journal-et-transit.md) | Journal vocabulary for a rebuild, and mandatory transit | accepted | 2026-10-10 | Safety, Contestability | yes — first decision specific to `uske` |
+| [SDR-0017](../adr/SDR-0017-socle-commun.md) | Common foundation: title format enforced by CI, blocking CI | accepted | 2026-10-16 | Contestability, Operability | yes |
+| [SDR-0018](../adr/SDR-0018-journal-run.md) | A journal line names the screening that wrote it (`run` key) | accepted | 2026-10-16 | Contestability, Operability | yes — `classify --run` receives `{{workflow.name}}` from the `WorkflowTemplate` |
+| [SDR-0019](../adr/SDR-0019-documentation-publique.md) | Documentation audience: `public` | accepted | 2026-10-17 | Contestability | yes — pages reviewed on 2026-10-17 |
+| [SDR-0020](../adr/SDR-0020-readme-en-anglais.md) | The README in English, like those of `regis` and `knock` | accepted — superseded by SDR-0022 | 2026-10-17 | Contestability | not applicable — superseded |
+| [SDR-0022](../adr/SDR-0022-documentation-en-anglais.md) | Documentation in English; ADRs, discovery and commits in French | accepted | 2026-10-17 | Contestability | yes |
 
-## Écarts ouverts
+## Open gaps
 
-Les écarts entre ce que les décisions disent et ce que le dépôt fait portent un identifiant
-`DEBT-nn` et vivent dans *Risks and Technical Debts*. La colonne « Le dépôt s'y conforme ? » du
-journal y renvoie au lieu de redire l'état : deux endroits pour le même fait se contredisent tôt
-ou tard.
+The gaps between what the decisions say and what the repository does carry a `DEBT-nn` identifier
+and live in *Risks and Technical Debts*. The "Does the repository conform?" column of the log
+points there instead of restating the state: two places for the same fact contradict each other
+sooner or later.
 
-**Un arbitrage entre objectifs est déjà écrit** : `SDR-0005` ajoute une dépendance, contre la
-Minceur, au nom de la Sûreté. Le rang des objectifs tranche — c'est à cela qu'il sert.
+**One arbitration between goals is already written**: `SDR-0005` adds a dependency, against
+Thinness, in the name of Safety. The ranking of the goals settles it — that is what it is for.
 
 # Quality Requirements
 
-> Niveau LEAN : un scénario au moins par objectif de *Quality Goals*, avec la mesure qui dit
-> s'il est tenu. Les identifiants `QS-nn` sont stables : un scénario abandonné se marque
-> *Retired* et garde son numéro.
+> LEAN level: at least one scenario per goal of *Quality Goals*, with the measure that says whether
+> it is met. The `QS-nn` identifiers are stable: an abandoned scenario is marked *Retired* and keeps
+> its number.
 
 ## Quality Requirements Overview
 
-| Objectif | Scénarios |
-|----------|-----------|
-| 1. Sûreté `#safe` | QS-01, QS-02 |
-| 2. Contestabilité `#secure` | QS-03, QS-04 |
-| 3. Opérabilité `#operable` | QS-05, QS-06 |
-| 4. Minceur `#flexible` | QS-07 |
+| Goal | Scenarios |
+|------|-----------|
+| 1. Safety `#safe` | QS-01, QS-02 |
+| 2. Contestability `#secure` | QS-03, QS-04 |
+| 3. Operability `#operable` | QS-05, QS-06 |
+| 4. Thinness `#flexible` | QS-07 |
 
 ## Quality Scenarios
 
-| ID | Stimulus | Environnement | Réponse attendue | Mesure | Tenu ? |
-|----|----------|---------------|------------------|--------|--------|
-| QS-01 | Le juge échoue, ou rend un rapport vide, illisible ou sans tier connu | dégradé | La décision est `inconclusive` ; aucune opération n'est rendue au placeur pour cette empreinte | **0** opération rendue, sur les six cas du test | oui — `test_fail_closed` |
-| QS-02 | Une image réparée est refusée à la seconde porte | normal | La source est close et n'est plus réparée | **0** ordre de réparation pour cette source aux screenings suivants | oui — `test_a_refused_rebuild_closes_its_source` |
-| QS-03 | Une équipe conteste un refus vieux de trois semaines | normal | Date, état, jeu de règles et raison retrouvés par `uske decisions` | **1 minute** au plus, de la question à la réponse | **non mesuré** — aucun journal réel n'a trois semaines (RISK-02) |
-| QS-04 | On compare deux copies successives d'un fichier de résultats | normal | La plus ancienne est un préfixe de la plus récente | **0** ligne modifiée ou supprimée | en partie — `test_append_only_and_repeat_suppressed` couvre `uske` ; rien ne protège le volume lui-même (RISK-01) |
-| QS-05 | Une première porte est rejouée après la clôture d'une source | dégradé | La source reste close | **0** ligne qui la rouvre | oui — `test_replaying_the_first_gate_does_not_reopen_a_closed_source` |
-| QS-06 | Le placeur échoue en appliquant le plan approuvé | dégradé | Ce qui a été placé est consigné ; le reste est réapprouvé au screening suivant, sans rejuger | **0** ligne perdue, **0** appel au juge pour une opération déjà approuvée ; **une** personne relance | oui — `test_failed_placement_is_approved_again_without_regis` |
-| QS-07 | Le juge ou le placeur est retiré du dépôt | normal | `uske` n'a plus rien à décider | **0** règle de jugement dans `uske/` ; la seule table métier est `playbooks.py` | oui, par relecture — aucun test ne le vérifie |
+| ID | Stimulus | Environment | Expected response | Measure | Met? |
+|----|----------|-------------|-------------------|---------|------|
+| QS-01 | The judge fails, or returns a report that is empty, unreadable or has no known tier | degraded | The decision is `inconclusive`; no operation is returned to the placer for this digest | **0** operations returned, across the six cases of the test | yes — `test_fail_closed` |
+| QS-02 | A remediated image is refused at the second gate | normal | The source is closed and is no longer remediated | **0** remediation orders for this source in the following screenings | yes — `test_a_refused_rebuild_closes_its_source` |
+| QS-03 | A team contests a refusal that is three weeks old | normal | Date, state, playbook and reason found with `uske decisions` | **1 minute** at most, from question to answer | **not measured** — no real journal is three weeks old (RISK-02) |
+| QS-04 | Two successive copies of a journal file are compared | normal | The older one is a prefix of the newer one | **0** modified or deleted lines | partly — `test_append_only_and_repeat_suppressed` covers `uske`; nothing protects the volume itself (RISK-01) |
+| QS-05 | A first gate is replayed after a source was closed | degraded | The source stays closed | **0** lines that reopen it | yes — `test_replaying_the_first_gate_does_not_reopen_a_closed_source` |
+| QS-06 | The placer fails while applying the approved plan | degraded | What was placed is recorded; the rest is approved again at the next screening, without judging it again | **0** lines lost, **0** calls to the judge for an operation already approved; **one** person restarts | yes — `test_failed_placement_is_approved_again_without_regis` |
+| QS-07 | The judge or the placer is removed from the repository | normal | `uske` has nothing left to decide | **0** judging rules in `uske/`; the only business table is `playbooks.py` | yes, by review — no test checks it |
 
 # Risks and Technical Debts
 
-> Niveau LEAN. Les `RISK-nn` et `DEBT-nn` sont stables : un élément réglé se marque *Closed* et
-> garde son numéro, il ne disparaît pas de la table.
+> LEAN level. The `RISK-nn` and `DEBT-nn` identifiers are stable: a resolved item is marked
+> *Closed* and keeps its number; it does not disappear from the table.
 
 ## Risks
 
-| ID | Priorité | Risque | Probabilité × impact | Ce qui le réduit |
-|----|----------|--------|----------------------|------------------|
-| RISK-01 | **haute** | Le journal vit sur un volume, sans historique : une écriture directe sur le volume réécrit une ligne, et rien ne le voit. L'objectif de Contestabilité promet « aucune ligne modifiée » sans moyen de le prouver hors de `uske`. | possible × fort | Rien encore. Une copie datée du journal hors du volume rendrait QS-04 vérifiable ; le support est à décider (`DEBT-08`) |
-| RISK-04 | **haute** | Un transit que les consommateurs peuvent tirer expose une image reconstruite **avant** son jugement. `knock` refuse seulement un transit qui est aussi une destination. | possible × fort | Le registre ferme le transit aux consommateurs (README, *Rebuilds and repairs*) ; `uske` ne le vérifie pas |
-| RISK-02 | moyenne | `uske` n'est déployé nulle part : QS-03 n'a jamais été mesuré, et le rythme de 5 minutes n'a pas été confronté à un vrai registre. | certain × moyen | Le premier overlay de production, puis une mesure de QS-03 sur un refus réel |
-| RISK-03 | moyenne | Avec un `knock` antérieur à 0.13.0, rien n'est réparé, et rien ne dit pourquoi. | faible × moyen | L'overlay épingle `knock` par empreinte ; le banc tient 0.16.0 |
-| RISK-05 | basse | Le volume du journal est `ReadWriteOnce` : un pod de lecture attend la fin d'un screening qui tourne sur un autre nœud. | probable × faible | Attendre ; un stockage `ReadWriteMany` lèverait l'attente et le `parallelism: 1` |
-| RISK-06 | basse | Sur le banc, `buildkitd` écoute en clair sur le réseau du cluster. | certain × faible, sur le banc seulement | Hors du banc : mTLS ou une `NetworkPolicy` |
+| ID | Priority | Risk | Probability × impact | What reduces it |
+|----|----------|------|----------------------|-----------------|
+| RISK-01 | **high** | The journal lives on a volume, without history: a direct write to the volume rewrites a line, and nothing sees it. The Contestability goal promises "no modified line" with no way to prove it outside `uske`. | possible × severe | Nothing yet. A dated copy of the journal outside the volume would make QS-04 verifiable; the storage is still to be decided (`DEBT-08`) |
+| RISK-04 | **high** | A transit that consumers can pull from exposes a rebuilt image **before** it is judged. `knock` only refuses a transit that is also a destination. | possible × severe | The registry closes the transit to consumers (README, *Rebuilds and repairs*); `uske` does not check it |
+| RISK-02 | medium | `uske` is not deployed anywhere: QS-03 has never been measured, and the 5-minute rhythm has not been tested against a real registry. | certain × medium | The first production overlay, then a measurement of QS-03 on a real refusal |
+| RISK-03 | medium | With a `knock` older than 0.13.0, nothing is remediated, and nothing says why. | low × medium | The overlay pins `knock` by digest; the bench runs 0.16.0 |
+| RISK-05 | low | The journal volume is `ReadWriteOnce`: a reading pod waits for the end of a screening that runs on another node. | likely × low | Wait; `ReadWriteMany` storage would remove the wait and the `parallelism: 1` |
+| RISK-06 | low | On the bench, `buildkitd` listens in cleartext on the cluster network. | certain × low, on the bench only | Outside the bench: mTLS or a `NetworkPolicy` |
 
 ## Technical Debts
 
-Cinq dettes viennent d'une décision qui disait où le dépôt allait, pas où il était ; chacune écrit
-son écart sous son titre *Consequences*. `SDR-0017` en a refermé trois le 2026-10-16. Les autres
-viennent d'une revue.
+Five debts come from a decision that said where the repository was going, not where it was; each
+one writes its gap under its *Consequences* heading. `SDR-0017` closed three of them on 2026-10-16.
+The others come from a review.
 
-| ID | Écart | Bloc | Origine | Ce qui le referme |
-|----|-------|------|---------|-------------------|
-| DEBT-01 | L'arborescence du code contredit le pattern décidé ; un agent lit une structure que l'ADR dément, et suit l'ADR pour le code nouveau | *Journal*, *Politiques*, *Recensement*, *Synchronisation du suivi* | [`SDR-0003`](../adr/SDR-0003-architecture.md) | Le rapprochement du code existant, change après change |
-| DEBT-02 | La validation aux frontières se fait à la main ; un champ absent reste un défaut silencieux au lieu d'une erreur nommée | *Sous-commandes*, *Politiques* | [`SDR-0005`](../adr/SDR-0005-validation.md) | Les frontières existantes portées sur l'outil décidé |
-| DEBT-03 | Le format des messages de commit n'est tenu par rien ; un message hors format passe | — la chaîne | [`SDR-0006`](../adr/SDR-0006-commits.md) | *Closed* 2026-10-16 par [`SDR-0017`](../adr/SDR-0017-socle-commun.md) : le workflow `pr-title` vérifie le titre par une expression régulière ; `commitlint` n'a pas été installé. (Critère d'origine : `commitlint` installé et branché sur le titre de la demande de fusion.) |
-| DEBT-04 | La couverture de tests n'est pas mesurée : le seuil décidé n'est ni tenu ni démenti | — la chaîne | [`SDR-0007`](../adr/SDR-0007-tests.md) | *Closed* 2026-10-16. Un instrument branché, et une première mesure prise |
-| DEBT-05 | Rien ne fabrique une version : les livraisons ne se déduisent d'aucun commit | — la chaîne | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. L'outil de release installé — il dépend de DEBT-03 |
-| DEBT-06 | Le schéma des ADR n'est lancé par personne : une décision laissée vide ou non statuée passe sans que rien ne le dise | — la chaîne | revue du 2026-09-20 | Le contrôle ajouté à la cible `lint` du `Makefile`, ou dit manuel dans un ADR qui dépasse [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
-| DEBT-07 | Argo Workflows enchaîne les étapes, et rien ne dit pourquoi : c'est lui qui rend un rejeu possible, et le quitter réécrirait tout `deploy/` | *Workflow* | revue du 2026-10-17, en écrivant *Solution Strategy* | Un ADR qui statue le planificateur, options écartées comprises |
-| DEBT-08 | Le journal est un fichier JSON Lines par politique sur un volume, et rien ne dit pourquoi : `SDR-0016` fixe son vocabulaire, pas son support ; l'objectif de Contestabilité repose sur ce support (RISK-01) | *Journal* | revue du 2026-10-17, en écrivant *Solution Strategy* | Un ADR qui statue le support du journal, options écartées comprises |
-| DEBT-09 | `README.md` est en anglais d'abord, contre la règle du français par défaut | — la documentation | [`SDR-0002`](../adr/SDR-0002-localization.md) | Le README réécrit en français, ou l'écart accepté dans un ADR |
+| ID | Gap | Block | Origin | What closes it |
+|----|-----|-------|--------|----------------|
+| DEBT-01 | The code's directory tree contradicts the decided pattern; an agent reads a structure that the ADR refutes, and follows the ADR for new code | *Journal*, *Policies*, *Census*, *Tracker sync* | [`SDR-0003`](../adr/SDR-0003-architecture.md) | Bringing the existing code in line, change after change |
+| DEBT-02 | Validation at the boundaries is done by hand; a missing field stays a silent default instead of a named error | *Subcommands*, *Policies* | [`SDR-0005`](../adr/SDR-0005-validation.md) | The existing boundaries moved onto the decided tool |
+| DEBT-03 | Nothing enforces the commit message format; an off-format message gets through | — the pipeline | [`SDR-0006`](../adr/SDR-0006-commits.md) | *Closed* 2026-10-16 by [`SDR-0017`](../adr/SDR-0017-socle-commun.md): the `pr-title` workflow checks the title with a regular expression; `commitlint` was not installed. (Original criterion: `commitlint` installed and connected to the pull request title.) |
+| DEBT-04 | Test coverage is not measured: the decided threshold is neither met nor refuted | — the pipeline | [`SDR-0007`](../adr/SDR-0007-tests.md) | *Closed* 2026-10-16. An instrument connected, and a first measurement taken |
+| DEBT-05 | Nothing produces a release: deliveries cannot be deduced from any commit | — the pipeline | [`SDR-0011`](../adr/SDR-0011-delivery.md) | *Closed* 2026-10-16. The release tool installed — it depends on DEBT-03 |
+| DEBT-06 | Nobody runs the ADR schema: a decision left empty or undecided gets through without anything saying so | — the pipeline | review of 2026-09-20 | The check added to the `lint` target of the `Makefile`, or declared manual in an ADR that supersedes [`SDR-0017`](../adr/SDR-0017-socle-commun.md) |
+| DEBT-07 | Argo Workflows chains the steps, and nothing says why: it is what makes a replay possible, and leaving it would rewrite all of `deploy/` | *Workflow* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the scheduler, rejected options included |
+| DEBT-08 | The journal is one JSON Lines file per policy on a volume, and nothing says why: `SDR-0016` sets its vocabulary, not its storage; the Contestability goal rests on this storage (RISK-01) | *Journal* | review of 2026-10-17, while writing *Solution Strategy* | An ADR that decides the journal storage, rejected options included |
+| DEBT-09 | `README.md` is English-first, against the French-by-default rule | — the documentation | [`SDR-0002`](../adr/SDR-0002-localization.md) | *Closed* 2026-10-17 by [`SDR-0020`](../adr/SDR-0020-readme-en-anglais.md) for the README, then [`SDR-0022`](../adr/SDR-0022-documentation-en-anglais.md) for all documentation: it is in English; ADRs, discovery, OpenSpec artefacts and commit messages stay in French. (Original criterion: the README rewritten in French, or the gap accepted in an ADR.) |
 
-**Deux motifs reviennent, et ce sont eux qu'il faut surveiller.** Le premier : une
-vérification décidée sans être branchée — `DEBT-03`, refermé, et `DEBT-06`, ouvert ; un dépôt
-qui décide des contrôles sans les brancher finit par croire ses décisions tenues. Le second, son
-inverse : une décision branchée sans être décidée — `DEBT-07` et `DEBT-08`. Les deux trompent de
-la même façon : le journal des décisions ne dit pas ce que le dépôt fait.
+**Two patterns recur, and they are the ones to watch.** The first: a check decided without being
+connected — `DEBT-03`, closed, and `DEBT-06`, open; a repository that decides on checks without
+connecting them ends up believing its decisions are met. The second, its inverse: a decision
+connected without being decided — `DEBT-07` and `DEBT-08`. Both mislead in the same way: the
+decision log does not say what the repository does.
 
 # Glossary
 
-> L'audience est `public` ([`SDR-0019`](../adr/SDR-0019-documentation-publique.md)) : ce
-> glossaire définit les termes du métier, puis les identifiants et les sigles qu'un lecteur
-> rencontre dans ce document. Les noms de blocs sont définis dans la table de *Building Block
-> View*.
+> The audience is `public` ([`SDR-0019`](../adr/SDR-0019-documentation-publique.md)): this glossary
+> defines the domain terms, then the identifiers and acronyms that a reader meets in this document.
+> The block names are defined in the *Building Block View* table.
 
-| Terme | Définition |
-|-------|------------|
-| Juge | L'outil qui dit si une image peut entrer : `regis`. Il rend un verdict, il ne place rien. |
-| Placeur | L'outil qui fait entrer les images dans le registre, par copie ou par reconstruction, et qui atteste ce qu'il a fait : `knock`. Il ne juge rien. |
-| Politique | Un fichier du dépôt des politiques : une source à faire entrer au registre, sa destination et son régime (le label `admission-track`). Le placeur la lit pour écrire son plan. |
-| Régime | Le niveau d'exigence d'une politique. Il désigne le jeu de règles avec lequel le juge l'évalue (`playbooks.py`). |
-| Jeu de règles, *playbook* | Les règles qu'applique le juge, et les tiers auxquels elles mènent. |
-| Empreinte, *digest* | L'identifiant d'une image par son contenu. Un verdict porte sur une empreinte, pas sur une étiquette. |
-| Issue | Ce qu'un verdict décide pour une image : placement direct, transformation requise, quarantaine ou non concluant. |
-| Tier | Le nom que le jeu de règles donne à son verdict ; `uske` le ramène à une issue. |
-| Quarantaine | L'issue d'une image refusée : rien n'est placé. |
-| Non concluant, `inconclusive` | L'issue d'une évaluation qui n'a pas abouti : rien n'est décidé, rien n'est placé, et le screening suivant rejuge. |
-| Réparation, *remediation* | Une reconstruction ordonnée par `uske` pour une source refusée sur des règles que son régime déclare réparables. L'image réparée est jugée avant d'être placée. |
-| Transit | Le lieu où le placeur retient une image reconstruite tant qu'elle n'a pas son propre verdict. Les consommateurs ne doivent pas pouvoir y tirer. |
-| Seconde porte | Le jugement d'une image retenue dans le transit, par sa propre empreinte. |
-| Contournement | Ce qui est au registre sans être passé par `uske` : le recensement le compte. |
-| `D-nn` | Une décision du dossier de référence de l'espace de travail, pas de ce dépôt. Citée dans le code (`D-23`, `D-30`). |
-| `IF-nn` | Une interface de *Context and Scope*. Un `IF-nn` cité dans le code vient du dossier de référence, et n'est pas le même. |
-| `SDR-nnnn` | Un ADR de ce dépôt, numéroté par la méthode `surdesrails` ; les trous sont expliqués en *Architecture Decisions*. |
-| `QS-nn`, `RISK-nn`, `DEBT-nn` | Un scénario de qualité, un risque, une dette de ce document. Stables. |
-| ADR, MADR | *Architecture Decision Record* ; MADR en est le format, imposé par la méthode. |
-| JSON Lines | Un objet JSON par ligne : le format du journal. |
-| SBOM, CycloneDX | L'inventaire des composants d'une image ; CycloneDX en est le format, que le placeur signe et que le suivi des vulnérabilités reçoit. |
-| `ReadWriteOnce` | Un volume Kubernetes qu'un seul nœud monte à la fois. |
+| Term | French | Definition |
+|------|--------|------------|
+| judge | Juge | The tool that says whether an image can enter: `regis`. It returns a verdict; it places nothing. |
+| placer | Placeur | The tool that brings images into the registry, by copy or by rebuild, and attests what it did: `knock`. It judges nothing. |
+| policy | Politique | A file in the policy repository: a source to bring into the registry, its destination and its track (the `admission-track` label). The placer reads it to write its plan. |
+| track | Régime | The level of requirement of a policy. It designates the playbook with which the judge evaluates it (`playbooks.py`). |
+| playbook | Jeu de règles, *playbook* | The rules that the judge applies, and the tiers they lead to. |
+| digest | Empreinte, *digest* | The identifier of an image by its content. A verdict applies to a digest, not to a tag. |
+| outcome | Issue | What a verdict decides for an image: direct placement, transformation required, quarantine or inconclusive. |
+| tier | Tier | The name that the playbook gives to its verdict; `uske` reduces it to an outcome. |
+| quarantine | Quarantaine | The outcome of a refused image: nothing is placed. |
+| inconclusive | Non concluant, `inconclusive` | The outcome of an evaluation that did not complete: nothing is decided, nothing is placed, and the next screening judges again. |
+| remediation | Réparation, *remediation* | A rebuild ordered by `uske` for a source refused on rules that its track declares repairable. The remediated image is judged before it is placed. |
+| transit | Transit | The place where the placer holds a rebuilt image until it has its own verdict. Consumers must not be able to pull from it. |
+| second gate | Seconde porte | The judging of an image held in transit, by its own digest. |
+| bypass | Contournement | What is in the registry without having gone through `uske`: the census counts it. |
+| screening | Screening | One run of `uske` on a policy: the placer's plan, the judge's verdicts, then the placement of what is accepted. |
+| journal | Journal | The results file of a policy, append-only: one line per decision. |
+| rebuild | Reconstruction | An image rebuilt by the placer from its source, instead of a copy. |
+| direct placement | Placement direct | The outcome of an image accepted as is: the placer copies it. |
+| transformation required | Transformation requise | The outcome of an image that enters only after a rebuild. |
+| census | Recensement | The count of what is in the registry, which measures the bypass. |
+| arbitration | Arbitrage | The person and the rationale behind a decision taken by hand: placement by exception, abandonment, reopening. |
+| `D-nn` | — | A decision of the workspace's reference dossier, not of this repository. Cited in the code (`D-23`, `D-30`). |
+| `IF-nn` | — | An interface of *Context and Scope*. An `IF-nn` cited in the code comes from the reference dossier, and is not the same. |
+| `SDR-nnnn` | — | An ADR of this repository, numbered by the `surdesrails` method; the gaps are explained in *Architecture Decisions*. |
+| `QS-nn`, `RISK-nn`, `DEBT-nn` | — | A quality scenario, a risk, a debt of this document. Stable. |
+| ADR, MADR | — | *Architecture Decision Record*; MADR is its format, imposed by the method. |
+| JSON Lines | — | One JSON object per line: the format of the journal. |
+| SBOM, CycloneDX | — | The inventory of an image's components; CycloneDX is its format, which the placer signs and the vulnerability tracker receives. |
+| `ReadWriteOnce` | — | A Kubernetes volume that only one node mounts at a time. |

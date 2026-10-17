@@ -103,7 +103,7 @@ class Reason:
 
     code: str
     states: tuple[Outcome, ...]
-    meaning: str  # prose, so French (SDR-0002): docs/reference/raisons.md is generated from it
+    meaning: str  # documentation, so English (SDR-0022): docs/reference/reasons.md is built from it
     action: str
 
 
@@ -114,138 +114,135 @@ REASONS = (
     Reason(
         "<provider>/<criterion>",
         (Outcome.QUARANTINE, Outcome.TRANSFORMATION_REQUIRED),
-        "La première règle critique du playbook qui a échoué. C'est la première, pas la seule "
-        "cause : le report les donne toutes.",
-        "Lire la règle dans le report, et sa définition dans la référence des règles de "
-        "`regis` (`docs/reference/rules`).",
+        "The first critical rule of the playbook that failed. It is the first cause, not the "
+        "only one: the report lists them all.",
+        "Read the rule in the report, and its definition in the `regis` rules reference "
+        "(`docs/reference/rules`).",
     ),
     Reason(
         "<provider>/<criterion>",
         (Outcome.INCONCLUSIVE,),
-        "Une règle critique n'a pas abouti : un outil a échoué, ou une donnée manquait. "
-        "Rien n'est décidé sur l'image (D-23).",
-        "Lire dans le report pourquoi la règle est `incomplete`. Le prochain screening la rejuge.",
+        "A critical rule did not finish: a tool failed, or some data was missing. Nothing is "
+        "decided about the image (D-23).",
+        "Read in the report why the rule is `incomplete`. The next screening judges it again.",
     ),
     Reason(
         BETTER_TIER_MISSED + "<provider>/<criterion>",
         (Outcome.INCONCLUSIVE,),
-        "Aucune règle critique n'a échoué, mais cette règle non critique n'a pas abouti : "
-        "l'image a peut-être manqué un meilleur tier. Une évaluation qui ne conclut pas ne "
-        "décide rien (D-23).",
-        "Lire dans le report pourquoi la règle est `incomplete`. L'image est peut-être saine ; "
-        "le prochain screening la rejuge.",
+        "No critical rule failed, but this non-critical rule did not finish: the image may "
+        "have missed a better tier. An evaluation that does not conclude decides nothing "
+        "(D-23).",
+        "Read in the report why the rule is `incomplete`. The image may be sound; the next "
+        "screening judges it again.",
     ),
     Reason(
         "regis/exit-1",
         (Outcome.INCONCLUSIVE,),
-        "`regis` a échoué techniquement, après les nouvelles tentatives d'Argo. Ce n'est pas "
-        "un verdict sur l'image.",
-        "Lire les journaux de l'étape `regis` du workflow.",
+        "`regis` failed technically, after Argo's retries. This is not a verdict on the image.",
+        "Read the logs of the workflow's `regis` step.",
     ),
     Reason(
         "regis/exit-3",
         (Outcome.INCONCLUSIVE,),
-        "L'appel à `regis` était mal formé : les métadonnées ne satisfont pas un schéma "
-        "déclaré par le playbook. Ce n'est pas un verdict sur l'image.",
-        "Corriger le playbook ou les métadonnées ; le report liste les champs en défaut.",
+        "The call to `regis` was malformed: the metadata does not satisfy a schema the "
+        "playbook declares. This is not a verdict on the image.",
+        "Fix the playbook or the metadata; the report lists the failing fields.",
     ),
     Reason(
         "regis/exit-<N>",
         (Outcome.INCONCLUSIVE,),
-        "`regis` s'est arrêté sur un autre code (2 : ligne de commande refusée).",
-        "Lire les journaux de l'étape `regis` du workflow.",
+        "`regis` stopped on another code (2: command line rejected).",
+        "Read the logs of the workflow's `regis` step.",
     ),
     Reason(
         "regis/no-report",
         (Outcome.INCONCLUSIVE,),
-        "`regis` n'a laissé aucun report lisible.",
-        "Lire les journaux de l'étape `regis`, puis vérifier le volume de travail.",
+        "`regis` left no readable report.",
+        "Read the logs of the `regis` step, then check the work volume.",
     ),
     Reason(
         "regis/no-verdict",
         (Outcome.INCONCLUSIVE,),
-        "Le report ne contient aucun résultat de playbook.",
-        "Vérifier que le workflow passe bien un playbook à `regis`.",
+        "The report holds no playbook result.",
+        "Check that the workflow passes a playbook to `regis`.",
     ),
     Reason(
         "regis/unknown-tier",
         (Outcome.INCONCLUSIVE,),
-        "Le tier rendu n'est aucun de ceux que `uske` connaît : "
-        + ", ".join(f"`{name}`" for name in TIERS)
-        + ".",
-        "Aligner le nom des tiers du playbook sur cette liste.",
+        "The tier returned is none of those `uske` knows. They are named as the playbooks "
+        "write them: " + ", ".join(f"`{name}`" for name in TIERS) + ".",
+        "Align the playbook's tier names with this list.",
     ),
     Reason(
         "uske/unknown-track",
         (Outcome.INCONCLUSIVE,),
-        "La politique désigne un régime sans playbook connu : l'image n'a pas été évaluée "
-        "(D-21).",
-        "Ajouter le playbook de ce régime, ou corriger le régime de la politique.",
+        "The policy names a track with no known playbook: the image was not evaluated (D-21).",
+        "Add the playbook for this track, or fix the policy's track.",
     ),
     Reason(
         "uske/remediation-refused",
         (Outcome.QUARANTINE,),
-        "Ligne de clôture sur la source : son image réparée a été jugée et refusée. Une seule "
-        "tentative par source ; ce n'est pas un nouveau verdict sur la source (SDR-0016).",
-        "Lire le report de l'image réparée (clé `rebuilt`). Pour réessayer, rouvrir la source.",
+        "Closing line on the source: its remediated image was judged and refused. One attempt "
+        "per source; this is not a new verdict on the source (SDR-0016).",
+        "Read the report of the remediated image (key `rebuilt`). To try again, reopen the "
+        "source.",
     ),
     Reason(
         "uske/rebuild-refused",
         (Outcome.QUARANTINE,),
-        "Ancienne ligne de clôture, écrite avant la réparation sur ordre : l'image reconstruite "
-        "de la source a été jugée et refusée (SDR-0016). Les nouvelles lignes disent "
-        "`uske/remediation-refused`.",
-        "Lire le report de l'image reconstruite (clé `rebuilt`). Pour réessayer, rouvrir la "
+        "Older closing line, written before remediation on order: the source's rebuilt image "
+        "was judged and refused (SDR-0016). New lines say `uske/remediation-refused`.",
+        "Read the report of the rebuilt image (key `rebuilt`). To try again, reopen the "
         "source.",
     ),
     Reason(
         "uske/remediation-undeclared",
         (Outcome.QUARANTINE,),
-        "La source était réparable selon le régime, mais l'import de la politique ne déclare "
-        "aucune étape `remediate:` : `knock` a retenu l'opération.",
-        "Déclarer `remediate:` dans la politique, puis rouvrir la source ; ou retirer la règle "
-        "de la liste réparable du régime.",
+        "The track made the source repairable, but the policy's import declares no "
+        "`remediate:` step: `knock` held the operation back.",
+        "Declare `remediate:` in the policy, then reopen the source; or remove the rule from "
+        "the track's repairable list.",
     ),
     Reason(
         "uske/no-transit",
         (Outcome.INCONCLUSIVE,),
-        "La source était à réparer, mais aucun transit n'était configuré pour tenir l'image "
-        "réparée avant son verdict : l'opération a été retirée. Les copies du screening ont été "
-        "placées.",
-        "Nommer le transit du workflow. Le prochain screening rejuge la source.",
+        "The source needed remediation, but no transit was configured to hold the remediated "
+        "image until its verdict: the operation was withdrawn. The screening's copies were "
+        "placed.",
+        "Name the workflow's transit. The next screening judges the source again.",
     ),
     Reason(
         "uske/reopened",
         (Outcome.INCONCLUSIVE,),
-        "Ligne écrite à la main : une personne a rouvert la source (SDR-0016).",
-        "Rien : le prochain screening la rejuge.",
+        "Line written by hand: someone reopened the source (SDR-0016).",
+        "Nothing: the next screening judges it again.",
     ),
     Reason(
         "",
         (Outcome.DIRECT_PLACEMENT, Outcome.TRANSFORMATION_REQUIRED),
-        "Aucune raison. En `transformation-required`, le tier vient d'une condition du "
-        "playbook qui ne nomme aucune règle critique échouée.",
-        "Rien pour un placement direct ; sinon, lire le report.",
+        "No reason. Under `transformation-required`, the tier comes from a playbook condition "
+        "that names no failed critical rule.",
+        "Nothing for a direct placement; otherwise, read the report.",
     ),
 )
 
 
 def reference() -> str:
-    """docs/reference/raisons.md, generated: the page cannot drift from the code."""
+    """docs/reference/reasons.md, generated: the page cannot drift from the code."""
     out = [
-        "# Raisons du journal",
+        "# Journal reasons",
         "",
-        "<!-- Engendré par `uv run python -m uske.outcomes`. Ne pas modifier à la main. -->",
+        "<!-- Generated by `uv run python -m uske.outcomes`. Do not edit by hand. -->",
         "",
-        "Chaque ligne du journal porte un état et, souvent, une raison. **Lisez le couple** :",
-        "une même raison ne dit pas la même chose sous deux états. `<...>` marque une partie",
-        "remplie à l'écriture ; `<provider>/<criterion>` est une règle du playbook.",
+        "Every journal line carries a state and, often, a reason. **Read them as a pair**:",
+        "the same reason does not say the same thing under two states. `<...>` marks a part",
+        "filled in when the line is written; `<provider>/<criterion>` is a playbook rule.",
         "",
-        "| Raison | État | Ce qu'elle dit | Que faire |",
+        "| Reason | State | What it says | What to do |",
         "| --- | --- | --- | --- |",
     ]
     for r in REASONS:
-        code = f"`{r.code}`" if r.code else "*(aucune)*"
+        code = f"`{r.code}`" if r.code else "*(none)*"
         states = ", ".join(f"`{s.value}`" for s in r.states)
         out.append(f"| {code} | {states} | {r.meaning} | {r.action} |")
     return "\n".join(out) + "\n"

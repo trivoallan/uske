@@ -415,13 +415,13 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--results", required=True)
     s.set_defaults(run=cmd_pending)
 
-    s = sub.add_parser("resolve", help="the playbook for the policy's regime")
+    s = sub.add_parser("resolve", help="the playbook for the policy's track")
     s.add_argument("--policy", required=True)
     s.add_argument("--playbooks", default="playbooks")
     s.set_defaults(run=cmd_resolve)
 
     s = sub.add_parser("classify", help="one regis report -> one result line")
-    s.add_argument("--playbook", help="absent when the regime is unknown")
+    s.add_argument("--playbook", help="absent when the track is unknown")
     s.add_argument("--ref", required=True)
     s.add_argument("--digest", required=True)
     s.add_argument("--report", help="the regis report read to judge")
@@ -441,7 +441,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument(
         "--track",
         default="",
-        help="the policy's regime: its repairable rules mark a refusal `repairable`",
+        help="the policy's track: its repairable rules mark a refusal `repairable`",
     )
     s.add_argument(
         "--epoch",
