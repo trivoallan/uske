@@ -213,6 +213,6 @@ après `_file_name`), `tests/test_screen.py` (classe `Reports`).
   termine avec une couverture d'au moins 90 %, sans `FAIL Required test coverage`.
 - [x] 4.2 `openspec validate report-per-judgment --type change --strict`. Résultat attendu :
   `Change 'report-per-judgment' is valid`.
-- [ ] 4.3 Ouvrir la PR. Après la release suivante, retirer de la release 0.9.0 d'uske le problème
+- [x] 4.3 Ouvrir la PR. Après la release suivante, retirer de la release 0.9.0 d'uske le problème
   connu « Report names from `uske screen` », et ajuster `base-images` si son crochet existe déjà :
   `openspec/changes/uske-screen`, D4, et sa tâche 1.2.
