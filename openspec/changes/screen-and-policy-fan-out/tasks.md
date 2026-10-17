@@ -133,3 +133,25 @@
 - [x] 5.3 `openspec validate screen-and-policy-fan-out --type change --strict`. Attendu :
   `Change 'screen-and-policy-fan-out' is valid`.
 - [x] 5.4 Commit : `docs: dire le verbe screen et la répartition par politique`.
+
+## 6. Revue du code de la branche
+
+La revue de `feat/screen-and-policy-fan-out` a relevé un finding critique (C1), cinq importants
+(I2 à I6) et cinq mineurs (M1 à M5). I1 (un instantané périmé face à une ligne écrite à la main)
+attend une décision et n'est pas traité ici.
+
+- [x] 6.1 C1 : le jeton du dépôt n'est jamais écrit sur un disque. `checkout` (parent et enfant)
+  le passe en en-tête HTTP à la seule commande `git` ; l'enfant supprime `.git` par
+  `trap … EXIT`. `tests/test_manifests.py` refuse tout `${TOKEN}` dans une URL.
+- [x] 6.2 I2 : `uske snapshot` pose `.pending-merge/<run>` et échoue sur la marque d'un autre run ;
+  `uske merge --pending <run>` l'efface (D12). Scénario *Une fusion en souffrance bloque le
+  screening suivant*.
+- [x] 6.3 I3, M5 : une archive de lignes par enfant, `runs/<run>/out/<politique>/<création>-<enfant>.tgz`,
+  fusionnées dans l'ordre de création ; tout nom de politique suit un répertoire fixe (D9).
+- [x] 6.4 I4 : `update` sur `workflows/finalizers` dans le `Role` `uske-children` (D8).
+- [x] 6.5 I5 : aucune liste en paramètre hors `withParam` ; `summary` compte les marques `done/`.
+- [x] 6.6 I6 : `artifactGC` sur les deux templates, `Never` sur les lignes et les marques ;
+  `pending` et `resolve` ne rendent plus `work` ; la règle de cycle de vie dans `operate.md`.
+- [x] 6.7 M1 à M4 : `merge.archives` ne garde que les fichiers réguliers ; « sous-domaine DNS-1123,
+  63 caractères au plus » partout ; `knock` 0.16.0 ; la source saine close par
+  `uske/remediation-refused` sur un tag réparé (D11).

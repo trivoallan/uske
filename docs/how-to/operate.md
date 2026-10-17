@@ -30,8 +30,10 @@ deploy/kind/up.sh down
 check out.
 
 A policy's `metadata.name` names its journal, its reports and its child Workflow's label: it must
-be a DNS-1123 label of at most 63 characters (lowercase letters, digits, `-` and `.`). A policy
-named otherwise is skipped (`skipped:` on stderr), and `--policy` refuses it with exit 1.
+be a DNS-1123 subdomain, at most 63 characters (lowercase letters, digits, `-` and `.`, starting
+and ending with a letter or digit). A policy named otherwise is skipped with one `skipped:` line
+on stderr, and nothing else: no child, no journal line, and the screening stays green. Watch for
+that line. `--policy` refuses such a file with exit 1.
 
 ## Screen locally
 
@@ -114,14 +116,47 @@ placement. The overlay must provide the artifact repository: the configmap
 placed.
 
 After every child, failed ones included, the parent's `merge` step runs `uske merge`: the only
-pod that writes `uske-results`, under the `uske-journal` lock. It appends each child's lines by the
-journal's usual rule, so replaying it appends nothing. Until it has run, the journal on the volume
-lags behind what was placed; the decisions are in the artifact repository.
+pod that appends to `uske-results`, under the `uske-journal` lock. Each child uploads its new lines
+as an archive of its own, `runs/<run>/out/<policy>/<created>-<child>.tgz`; the merge appends every
+archive of a policy, in the order its children were created, by the journal's usual rule, so
+replaying it appends nothing. Until it has run, the journal on the volume lags behind what was
+placed; the decisions are in the artifact repository.
 
-- **A failed merge** fails the parent: `argo -n uske retry <parent>` replays it.
-- **One policy alone**: resubmit its child with `merge=true`, and it merges its own lines at the
-  end, under the same lock: `argo -n uske resubmit <child> -p merge=true`. Do it while the parent's
-  snapshot is still in the artifact repository; children are deleted a day after they finish.
+The snapshot leaves a mark, `.pending-merge/<run>`, beside the journals, and the merge clears it
+once every archive is in. A screening whose snapshot finds another run's mark **fails** at once,
+naming that run: its children may have placed images whose lines are not in the journal yet, and
+judging on that journal would judge them again. Every five minutes the next screening fails the
+same way, until the merge succeeds.
+
+- **A failed merge** fails the parent and keeps its mark: `argo -n uske retry <parent>` replays
+  it, and the next screening starts. `argo retry` on the parent also replays its failed children:
+  each one is re-created under a new name, uploads an archive of its own, and the merge takes
+  both, the first one's lines included.
+- **A parent that is gone** (deleted, or stopped before its merge) leaves its mark. Its children's
+  archives are still under `runs/<run>/out/`; to give their lines up, remove the mark from a pod
+  that mounts the volume: `rm /results/.pending-merge/<run>`.
+- **One policy alone**: resubmit its child with `merge=true`, and it merges its policy's lines at
+  the end, under the same lock: `argo -n uske resubmit <child> -p merge=true`. It does not clear
+  the parent's mark. Do it while the parent's snapshot is still in the artifact repository;
+  children are deleted a day after they finish.
+
+The mark is not a `*.jsonl`: `decisions`, the snapshot and the merge never read it as a journal.
+
+#### The artifact repository fills up
+
+A child's `work`, its judgements and reports go with it (`artifactGC: OnWorkflowDeletion`), a day
+after it finishes; the parent's snapshot and list go with the parent, when the `CronWorkflow`'s
+history limit deletes it. What the parent's merge and summary read after a child is gone, its
+`out/` archives and its `done/` mark, is never collected by Argo. Add a lifecycle rule on the
+bucket that expires `runs/` after a few days, longer than you would take to `argo retry` a failed
+merge:
+
+```bash
+mc ilm rule add --prefix runs/ --expire-days 7 <alias>/<bucket>   # MinIO; S3 has the same rule
+```
+
+Artifact GC needs the controller's finalizer on each Workflow and the `uske` account's right to
+report its GC tasks (Role `uske-executor`).
 
 The `policy-<name>` and `uske-journal` locks are namespace resources: run **one namespace per
 `uske-results` volume**, or two writers could meet on a journal.

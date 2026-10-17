@@ -117,7 +117,9 @@ politique : `{"policy", "judged", "approved", "ordered", "promoted", "outcome"}`
 `uske-screening` devient le parent :
 
 1. `checkout` extrait le dépôt et sort son commit (`git rev-parse HEAD`).
-2. `list` liste les politiques.
+2. `list` liste les politiques, dans un fichier rendu en artefact : la liste grandit avec les
+   politiques, au-delà de ce qu'une variable d'environnement tient (128 Kio par chaîne, environ
+   1 300 politiques).
 3. `policy`, en `withParam`, est un template `resource` : `action: create` d'un `Workflow` dont
    `workflowTemplateRef` vaut `uske-policy`, avec `setOwnerReference: true`, le label
    `uske.io/policy`, `successCondition: status.phase == Succeeded` et
@@ -125,9 +127,13 @@ politique : `{"policy", "judged", "approved", "ordered", "promoted", "outcome"}`
    politiques continuent.
 4. `merge` (D12) verse au journal les lignes de tous les enfants, en échec compris.
 5. `summary` écrit les politiques en échec et fait échouer le parent s'il y en a une, ou si la
-   fusion a échoué.
+   fusion a échoué. Il lit les noms attendus dans un artefact de `snapshot`, et les politiques
+   réussies dans les marques `runs/<run>/done/<politique>` que pose chaque enfant réussi : un
+   enfant en échec, en erreur ou jamais créé n'en laisse pas, et sa politique est nommée.
 
-Avant l'étape 3, `snapshot` publie en artefact les `*.jsonl` de `uske-results` (D9).
+Avant l'étape 3, `uske snapshot` publie en artefact les `*.jsonl` de `uske-results` (D9), les
+noms attendus, et sur sa sortie la liste que lit `withParam` ; il pose la marque de fusion en
+souffrance (D12). `withParam` est le seul endroit où la liste passe en paramètre.
 
 Le `spec.parallelism` du parent est le plafond de politiques ; celui de `uske-policy` est le
 plafond de jugements. Ces champs sont des entiers, pas des paramètres Argo : l'overlay les pose par
@@ -135,6 +141,10 @@ un patch kustomize.
 
 L'enfant reçoit `repository`, `commit`, `name`, `path`, `playbooks`, `transit`, `epoch` et `run`. Son
 `checkout` fait `git init`, `git fetch --depth 1 origin <commit>`, puis `git checkout FETCH_HEAD`.
+Le jeton n'est jamais écrit sur un disque : l'URL du remote n'en porte pas, il passe en en-tête
+HTTP à la seule commande `git` (`-c http.extraHeader`), et `.git` est supprimé par
+`trap … EXIT`, échec compris, car Argo téléverse `work` quel que soit le code de sortie. Le
+`checkout` du parent clone de même.
 Il garde le mutex `policy-<name>` et les étapes d'aujourd'hui, à ceci près que
 `{{workflow.name}}` devient le paramètre `run`, que l'epoch vient du parent, et que ses fichiers
 passent par artefacts (D9). Le parent passe `run = {{workflow.name}}` : toutes les lignes d'un screening portent le
@@ -149,7 +159,11 @@ volume du parent et la trace unique, ce qu'il s'agit de quitter.
 ### D8 — Le droit de créer des Workflows
 
 Le compte `uske` reçoit, dans son `Role`, `create`, `get`, `list`, `watch` et `patch` sur
-`workflows.argoproj.io`, ce que demande un template `resource`. Rien d'autre n'est élargi.
+`workflows.argoproj.io`, ce que demande un template `resource`, et `update` sur
+`workflows/finalizers` : `setOwnerReference` pose `blockOwnerDeletion: true`, que le contrôle
+d'admission `OwnerReferencesPermissionEnforcement` (OpenShift) n'admet que de qui peut mettre à
+jour les finaliseurs du propriétaire. Le `Role` `uske-executor` gagne de quoi rendre compte des
+tâches de ramassage d'artefacts (`workflowartifactgctasks`, D9). Rien d'autre n'est élargi.
 
 ### D9 — Rien de partagé : l'enfant passe son travail d'étape en étape par artefacts
 
@@ -163,7 +177,7 @@ de code. Le nombre de lignes de l'instantané est passé en paramètre `snapshot
 
 Les jugements répartis (`evaluate`, par empreinte) reçoivent `work` en lecture et rendent leur
 ligne et leur rapport dans des artefacts à clé fixe,
-`runs/{{run}}/{{name}}/<enfant>/lines/<key>.json` et `…/reports/…`, où `<enfant>` est le nom du
+`runs/{{run}}/policies/{{name}}/<enfant>/lines/<key>.json` et `…/reports/…`, où `<enfant>` est le nom du
 Workflow enfant (un enfant relancé ne relit pas les lignes du premier) ; l'étape `record` qui suit
 reçoit le préfixe `…/lines/` comme un répertoire. Argo sait charger
 un préfixe S3 comme un répertoire ; c'est ce qui remplace le répertoire partagé de la répartition.
@@ -171,11 +185,31 @@ Le rapport est rangé dans `work` à `/work/results/reports/<politique>/<emprein
 ligne cite toujours `/results/reports/…` : la fusion l'y copiera.
 
 Chaque étape qui écrit des lignes (`record`, `record-approve`, `record-applied`, et les mêmes de la
-seconde porte) rend aussi l'artefact `lines`, à clé fixe `runs/{{run}}/out/{{name}}.tgz` : les
-lignes de `/work/results/<politique>.jsonl` au-delà des `snapshot-lines` premières, et les
-rapports qu'elles citent. Argo téléverse les sorties d'une étape avant de lancer la suivante :
-une décision est donc durable avant le placement qu'elle permet. Une étape qui ne peut pas
-téléverser échoue, et l'étape `place` ne démarre pas.
+seconde porte) rend aussi l'artefact `lines`, à la clé de l'enfant
+`runs/{{run}}/out/{{name}}/<création>-<enfant>.tgz` : les lignes de
+`/work/results/<politique>.jsonl` au-delà des `snapshot-lines` premières, et les rapports
+qu'elles citent. La dernière écriture d'un enfant tient donc toutes ses lignes ; un enfant
+recréé (`argo retry` sur le parent) ou resoumis écrit sa propre archive et n'écrase jamais celles
+d'un autre, que la fusion n'a peut-être pas encore lues. `<création>` est l'instant de création de
+l'enfant (`AAAAMMJJTHHMMSSZ`) : l'ordre des noms est celui des enfants. Argo téléverse les sorties
+d'une étape avant de lancer la suivante : une décision est donc durable avant le placement
+qu'elle permet. Une étape qui ne peut pas téléverser échoue, et l'étape `place` ne démarre pas.
+
+Sous `runs/{{run}}/`, le nom d'une politique suit toujours un répertoire fixe : `out/` (les
+archives, que la fusion lit d'un bloc), `done/` (les marques de réussite, que `summary` lit d'un
+bloc) et `policies/` (ce qu'un enfant se passe d'étape en étape) ; à côté, `snapshot.tgz`,
+`listed.json` et `expected.json`, du parent. Une politique nommée `out` ou `snapshot.tgz` ne
+rencontre donc aucune autre clé. `out/` et `done/` restent séparés de `policies/` : la fusion et
+le bilan chargent leur préfixe entier, et n'ont pas à tirer le travail des enfants.
+
+`pending` et `resolve` lisent `work` sans le changer : ils ne le rendent pas, et les étapes qui
+suivent prennent celui de `plan` (ou l'entrée de `staged`). Les deux `WorkflowTemplate` déclarent
+`artifactGC: {strategy: OnWorkflowDeletion}` : le travail d'un enfant part avec lui, un jour après
+sa fin (`ttlStrategy`), et l'instantané avec le parent. Ce que le parent lit encore après la
+suppression d'un enfant, ses archives `out/` et sa marque `done/`, porte `artifactGC:
+{strategy: Never}` ; une règle de cycle de vie du seau sur `runs/` les expire, plus tard que le
+délai d'un `argo retry`. Argo ne sait pas faire supprimer par le parent des objets qu'il n'a pas
+écrits.
 
 *Écartée :* un volume `ReadWriteMany`. Réponse reçue : pas de RWX là où `uske` sera déployé.
 
@@ -201,6 +235,11 @@ nommé, et `no-transit` sans transit. Les causes `refused` et `attempts-exhauste
 marque. La règle vit dans `gate.py`, donc le workflow et `uske screen` la tiennent tous deux sans
 autre geste. L'image réparée est jugée à la seconde porte comme toute autre.
 
+Conséquence assumée : sur un tag réparé, une source que `regis` a jugée saine
+(`direct-placement`) est réparée quand même, et si l'image réparée est refusée, la source est
+close en `quarantine`, `uske/remediation-refused`, bien que son propre verdict fût sain. Le
+journal garde les deux lignes ; rouvrir la source la fait rejuger.
+
 *Écartée :* que `knock` renouvelle seul l'ordre quand il voit la marque. `knock` reste un exécutant
 (son ADR 0051) : décider d'une remédiation revient à l'orchestrateur, qui en écrit la trace.
 
@@ -210,9 +249,14 @@ forme d'une réparation, et la marque du plan est déjà là.
 ### D12 — La fusion : un pod, un verrou, la règle d'ajout de toujours
 
 Un verbe nouveau, `uske merge --results /results --from <répertoire>`, lit dans `<répertoire>`
-un `<politique>.tgz` par enfant (le dernier artefact `lines` qu'il a rendu), et pour chacun :
-vérifie le nom de la politique (DNS-1123, comme `policies.load`), ajoute ses lignes au journal par
-`results.append`, et copie ses rapports sous `/results/reports/` sans écraser un fichier existant.
+`<politique>/<création>-<enfant>.tgz`, une archive par enfant (le dernier artefact `lines` qu'il
+a rendu), et pour chacune, dans l'ordre des noms, donc de création des enfants : vérifie le nom
+de la politique, celui du répertoire (un sous-domaine DNS-1123 de 63 caractères au plus, comme
+`policies.load`), ajoute ses lignes au journal par `results.append`, et copie ses rapports sous
+`/results/reports/` sans écraser un fichier existant. Une archive illisible retient les
+suivantes de sa politique : versées avant elle, leurs lignes rendraient les siennes périmées au
+rejeu. Seuls les fichiers réguliers comptent : une entrée facultative absente peut apparaître
+comme un répertoire vide.
 `results.append` tient déjà ce qu'il faut : ajout seul, une ligne qui répète le dernier état d'une
 empreinte ou qui précède sa dernière ligne n'est pas écrite, et les lignes périmées sont dites sur
 la sortie d'erreur. La fusion est donc rejouable : sur les mêmes artefacts, elle n'ajoute rien.
@@ -220,15 +264,24 @@ Elle sort `{"<politique>": <écrites>, …}` et échoue (code 1) sur un artefact
 avoir fusionné les autres.
 
 L'étape `merge` du parent reçoit le préfixe `runs/{{run}}/out/` comme un répertoire, monte
-`uske-results` — c'est le seul pod du screening à le faire —, prend le mutex `uske-journal` et
-tourne après tous les enfants, en échec compris. Un enfant relancé seul a le paramètre `merge`
-à `true` et finit par la même étape, sur sa seule politique, sous le même mutex ; le parent le
-passe à `false`.
+`uske-results` — avec l'instantané, c'est le seul pod du screening à le faire —, prend le mutex
+`uske-journal` et tourne après tous les enfants, en échec compris. Un enfant relancé seul a le
+paramètre `merge` à `true` et finit par la même étape, sur les archives de sa seule politique
+(`runs/{{run}}/out/{{name}}/`), sous le même mutex ; le parent le passe à `false`.
 
 Tant que la fusion n'a pas tourné, le journal du volume retarde sur ce qui a été placé : la
 décision existe, durable, dans le dépôt d'artefacts. Une fusion échouée fait échouer le parent ;
-`argo retry` la rejoue. Le screening suivant ne part pas avant (`Forbid`), et son instantané
-contient donc les lignes fusionnées.
+`argo retry` la rejoue. `Forbid` ne suffit pas à retenir le screening suivant : un parent en
+échec est fini, et le `CronWorkflow` lance le suivant. Aussi l'instantané pose-t-il, sous le
+mutex `uske-journal`, la marque `<uske-results>/.pending-merge/<run>`, que `uske merge
+--pending <run>` efface une fois toutes les archives versées. Un instantané qui trouve la marque
+d'un autre run échoue (code 1), en nommant ce run et `argo retry <run>` : le screening suivant ne
+juge jamais sur un journal dont la fusion a échoué. La marque n'est pas un `*.jsonl` : ni
+l'instantané, ni la fusion, ni `uske decisions` ne la lisent comme un journal. La fusion d'un
+enfant relancé seul ne l'efface pas : elle n'a versé qu'une politique.
+
+*Écartée :* que l'instantané attende la fusion manquante. Le parent qui la doit peut ne jamais
+revenir ; un échec qui le nomme se voit, une attente non.
 
 *Écartée :* que chaque enfant fusionne lui-même. Chaque fusion attacherait le volume
 `ReadWriteOnce` sur le nœud de son pod : 10 000 attachements en série par screening.
@@ -254,7 +307,22 @@ support, `DEBT-08`, hors de ce change.
   c'est la Sûreté ; l'overlay le déclare, le banc l'installe.
 - [Le journal du volume retarde sur les placements jusqu'à la fusion] → la décision est durable
   dans le dépôt d'artefacts avant le placement ; la fusion échouée se voit sur le parent et se
-  rejoue ; `Forbid` empêche le screening suivant de juger sur un journal en retard.
+  rejoue ; la marque `.pending-merge/<run>` fait échouer le screening suivant tant qu'elle reste
+  (D12).
+- [Un parent supprimé ou arrêté avant sa fusion laisse sa marque : chaque screening suivant
+  échoue] → c'est voulu, l'échec nomme le run ; l'opératrice rejoue la fusion ou, pour abandonner
+  ses lignes, supprime la marque (`docs/how-to/operate.md`).
+- [`argo retry` sur le parent est supposé recréer les enfants en échec et rejouer la fusion qui
+  les suit] → à vérifier sur le banc (tâche 4.7) ; à défaut, chaque enfant se resoumet seul avec
+  `merge=true`.
+- [La liste des politiques passe encore en paramètre au `withParam` du parent, et Argo garde les
+  sorties dans le statut du `Workflow`] → aucune autre étape ne reçoit de liste en paramètre ; la
+  taille du statut du parent à 10 000 politiques est pour le spike.
+- [Chaque enfant réussi lance un pod de plus, pour sa marque `done/`] → un pod court, supprimé à
+  son succès ; le bilan reste juste quel que soit le nombre de politiques, ce qu'un paramètre
+  agrégé ne tenait pas.
+- [Les archives `out/` et les marques `done/` échappent au ramassage d'Argo] → une règle de cycle
+  de vie du seau sur `runs/`, que `docs/how-to/operate.md` donne.
 - [Un `place` en erreur de pod (et non en échec) ne rend pas `work` : `record-applied` échoue, et
   le lien source → digest placé manque au journal] → l'enfant échoue et se voit ; le placement
   lui-même n'est pas refait (le tag est déjà là), seul ce lien manque.

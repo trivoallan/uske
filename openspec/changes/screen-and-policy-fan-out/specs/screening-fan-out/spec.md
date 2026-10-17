@@ -47,15 +47,16 @@ sa branche.
 Aucun pod d'un Workflow enfant MUST NOT monter le volume `uske-results` ni un volume que monte un
 autre pod. Ce qui passe d'une étape de l'enfant à la suivante SHALL passer par les artefacts Argo,
 dans le dépôt d'artefacts que l'overlay déclare. Seules deux étapes du parent montent
-`uske-results` : l'instantané, en lecture, et la fusion, la seule à l'écrire ; toutes deux sous le
-verrou `uske-journal`. Le
-stockage peut donc rester `ReadWriteOnce` quels que soient les plafonds.
+`uske-results` : l'instantané, qui n'y écrit que sa marque de fusion en souffrance, et la fusion,
+la seule à écrire le journal ; toutes deux sous le verrou `uske-journal`. Le stockage peut donc
+rester `ReadWriteOnce` quels que soient les plafonds.
 
 #### Scenario: Le rendu des manifestes
 
 - **WHEN** `deploy/base` est rendu par kustomize
-- **THEN** seuls les templates d'instantané (en lecture) et de fusion montent `uske-results`, et
-  aucun template de `uske-policy` ne déclare de volume persistant, hors sa fusion
+- **THEN** seuls les templates d'instantané et de fusion montent `uske-results`, et aucun template
+  de `uske-policy` ne déclare de volume persistant, hors sa fusion
+- **AND** aucun template n'écrit le jeton du dépôt dans une URL
 
 ### Requirement: Un enfant juge sur un instantané du journal de sa politique
 
@@ -88,13 +89,15 @@ injoignable MUST faire échouer l'enfant avant tout placement.
 
 Le parent SHALL finir, après tous ses enfants, en échec ou non, par une étape de fusion : pour
 chaque enfant qui a produit un artefact de lignes, elle ajoute ces lignes au journal de sa
-politique sur `uske-results`, par la même règle d'ajout que `uske record` — en ajout seul, une
+politique sur `uske-results`, les enfants d'une même politique dans l'ordre de leur création, par
+la même règle d'ajout que `uske record` — en ajout seul, une
 ligne qui répète le dernier état d'une empreinte ou qui précède sa dernière ligne n'est pas écrite —,
 et copie les rapports à côté. Elle SHALL tenir le verrou `uske-journal`, que prend aussi la fusion
 d'un enfant relancé seul : deux fusions n'écrivent jamais en même temps. La fusion MUST être
 rejouable : la rejouer sur les mêmes artefacts n'ajoute aucune ligne. Un enfant relancé seul SHALL
-fusionner ses propres lignes quand son paramètre `merge` vaut `true` ; le parent le passe à
-`false`.
+fusionner les lignes de sa politique quand son paramètre `merge` vaut `true` ; le parent le passe
+à `false`. Chaque enfant SHALL rendre ses lignes dans un artefact qui lui est propre : un enfant
+recréé ou resoumis MUST NOT écraser les lignes d'un autre enfant.
 
 #### Scenario: Deux politiques, une fusion
 
@@ -116,6 +119,13 @@ fusionner ses propres lignes quand son paramètre `merge` vaut `true` ; le paren
 - **THEN** la ligne de l'enfant n'est pas écrite, et la fusion la signale comme périmée sur sa
   sortie d'erreur
 
+#### Scenario: Un enfant recréé ne fait pas perdre les lignes du premier
+
+- **GIVEN** un enfant de la politique P qui a placé une image puis échoué, et un second enfant de P
+  créé par `argo retry` sur le parent
+- **WHEN** la fusion tourne
+- **THEN** les lignes du premier puis celles du second rejoignent le journal de P
+
 #### Scenario: Un enfant en échec a placé une partie
 
 - **GIVEN** un enfant dont l'application a échoué après avoir placé une copie
@@ -127,7 +137,18 @@ fusionner ses propres lignes quand son paramètre `merge` vaut `true` ; le paren
 Deux Workflows MUST NOT travailler en même temps sur une même politique : le verrou par politique
 de l'enfant SHALL s'appliquer à travers tous les screenings du namespace, et le `CronWorkflow`
 SHALL interdire deux screenings simultanés. Seule la fusion écrit au journal, sous le verrou
-`uske-journal`.
+`uske-journal`. L'instantané d'un screening SHALL marquer sa fusion en souffrance à côté des
+journaux, et la fusion réussie SHALL effacer cette marque. Un instantané qui trouve la marque d'un
+autre screening MUST échouer, en nommant ce screening et la commande qui rejoue sa fusion : le
+screening suivant ne juge jamais sur un journal dont la fusion a échoué.
+
+#### Scenario: Une fusion en souffrance bloque le screening suivant
+
+- **GIVEN** un screening S1 dont la fusion a échoué
+- **WHEN** le `CronWorkflow` lance le screening S2
+- **THEN** l'instantané de S2 échoue avant de créer un enfant, et sa sortie nomme S1 et
+  `argo retry S1`
+- **AND** une fois la fusion de S1 rejouée avec succès, le screening suivant part
 
 #### Scenario: Une politique rejouée à la main pendant un screening
 

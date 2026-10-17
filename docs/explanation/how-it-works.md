@@ -54,12 +54,16 @@ again, even when the new source is sound: placed as is, the next upstream patch 
 undo the repair, and an image repaired to run without root would run as root again. Without a
 transit, the operation is withheld and its source recorded `inconclusive` (`uske/no-transit`). A
 refused or closed source stays withheld. `uske` never reads the destination to guess: it trusts
-the mark. That needs a `knock` that writes `remediated` in its plan (its current `main`); an older
+the mark. That needs `knock` 0.16.0 or later, which writes `remediated` in its plan; an older
 one does not write the key, and nothing is renewed. A
 repaired image that is judged and refused closes its source: the
 journal gets a `quarantine` line on the source digest, reason `uske/remediation-refused` (older
 lines say `uske/rebuild-refused`), and that source is not ordered again. An order on an import
-that declares no `remediate:` closes the source too (`uske/remediation-undeclared`). A held image
+that declares no `remediate:` closes the source too (`uske/remediation-undeclared`).
+This holds for a renewed repair too: when the tag carries a repair, a new source that `regis`
+judged sound is still ordered repaired, and if the repaired image is refused, the source is
+closed with `quarantine` and `uske/remediation-refused`, though its own verdict was sound. The
+journal keeps both lines: the source's `direct-placement` verdict, then the closing one. A held image
 left without a verdict is retried, three times at most.
 
 The journal keeps both verdicts and the link: the source's line, the held image's line (with its

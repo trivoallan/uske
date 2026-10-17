@@ -152,8 +152,8 @@ Markdown s'il existe, le HTML sinon, par un chemin relatif à `--results`.
 ### Requirement: Un nom de politique ne désigne jamais un chemin
 
 Le `metadata.name` d'une politique nomme des fichiers (journal, rapports, travail) et le label de
-son Workflow enfant : il MUST être un label DNS-1123 — minuscules, chiffres, `-` et `.`,
-commençant et finissant par un alphanumérique, 63 caractères au plus. Une politique dont le nom
+son Workflow enfant : il MUST être un sous-domaine DNS-1123 de 63 caractères au plus —
+minuscules, chiffres, `-` et `.`, commençant et finissant par un alphanumérique. Une politique dont le nom
 ne l'est pas MUST être refusée à la lecture : signalée `skipped:` par `--policies`, en `error:`
 et code 1 par `--policy`. Aucun chemin construit à partir d'un nom ou d'une empreinte MUST NOT
 sortir de `--work` ni de `--results`.
