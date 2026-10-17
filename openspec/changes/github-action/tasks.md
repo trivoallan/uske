@@ -1135,5 +1135,14 @@ Renovate le suivra.
 - [x] 9.6 Job `name` : l'erreur d'`uske list` arrête le job par elle-même ; tests `Name` par
   doublures. BuildKit reste lancé sans transit, car `transform:` reconstruit sans réparer (test
   `Tools`). `cosign-key` marqué non éprouvé (RISK-11) dans la référence.
-- [ ] 9.7 Réprouver sur GitHub : alpine (verdicts réels, pas `uske/unknown-track`), réparation
-  promue, entrée hostile.
+- [x] 9.7 Réprouver sur GitHub, au commit `ca30402` :
+  - alpine (PR, runs 39025003865 et 39025118769) : vert, contrôle des playbooks passé au
+    démarrage, `judged: 0` (toutes les empreintes 3.22.x étaient déjà décidées au journal) ;
+  - réparation (`workflow_dispatch`, run 39025122580) : la politique couvre aussi 3.22.1, encore
+    jamais jugée pour elle. `judged: 2, ordered: 1, promoted: 1` ; trois lignes neuves portent
+    ce run, sous le nouveau `ruleset` (`sha256:b02beb1d…`) : la source `transformation-required`
+    `repairable: true` (`cve-critical` tagué `curable`), l'image retenue `direct-placement`, puis
+    la source `placed: sha256:5ebbb496…`, l'empreinte que GHCR sert pour
+    `uske-example/alpine-repaired:3.22.1` ;
+  - entrée hostile (run 39025322938) : job `name` en échec, `screen` sauté, `PWNED` jamais
+    imprimé seul.
