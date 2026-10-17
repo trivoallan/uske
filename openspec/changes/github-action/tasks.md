@@ -81,6 +81,7 @@ interface.
 
   from __future__ import annotations
 
+  import json
   import os
   import re
   import shlex
@@ -92,10 +93,13 @@ interface.
 
   import yaml
 
+  from uske import playbooks, policies
+
   ROOT = Path(__file__).resolve().parent.parent
   WORKFLOWS = ROOT / ".github" / "workflows"
   SCREEN = WORKFLOWS / "extra-screen.yml"
   MAJOR_TAG = WORKFLOWS / "extra-major-tag.yml"
+  EXAMPLE = ROOT / "examples" / "github"
 
 
   def load(path: Path) -> dict:
@@ -223,11 +227,157 @@ interface.
           self.assertNotEqual(self.record(results, "x"), 0)
           self.assertEqual(len(counter.read_text().splitlines()), 4)
 
-      def test_a_refused_birth_is_not_retried(self) -> None:
+      def test_a_lost_birth_clones_the_winner(self) -> None:
+          # Deux premiers runs simultanés : un `git` posé devant le vrai fait naître la branche
+          # chez le gagnant juste avant le push de naissance du perdant, que le dépôt refuse
+          # (racines sans ancêtre commun). Le perdant doit reprendre la branche gagnante.
+          winner = self.tmp / "winner"
+          winner.mkdir()
+          (winner / "w.jsonl").write_text('{"state": "placed"}\n')
+          for args in (
+              ["init", "-q", "-b", "uske-journal"],
+              ["add", "w.jsonl"],
+              ["commit", "-q", "-m", "gagnant"],
+          ):
+              subprocess.run(
+                  ["git", "-C", str(winner), *args],
+                  check=True,
+                  env=self.env,
+                  capture_output=True,
+              )
+          bin_dir = self.tmp / "bin"
+          bin_dir.mkdir()
+          wrapper = bin_dir / "git"
+          wrapper.write_text(
+              "#!/bin/sh\n"
+              'case " $* " in *" push "*)\n'
+              f'  [ -e "{self.tmp}/raced" ] || {{ touch "{self.tmp}/raced"; '
+              f'"{shutil.which("git")}" -C "{winner}" push -q "{self.remote}" HEAD:uske-journal; }};;\n'
+              "esac\n"
+              f'exec "{shutil.which("git")}" "$@"\n'
+          )
+          wrapper.chmod(0o755)
+          results = self.tmp / "r1"
+          path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+          self.assertEqual(self.run_script("birth", results, PATH=path), 0)
+          self.assertTrue((self.tmp / "raced").exists())
+          self.assertEqual(self.remote_files(), ["w.jsonl"])
+          self.assertTrue((results / "w.jsonl").is_file())
+          self.assertEqual(
+              git("rev-parse", "HEAD", cwd=results),
+              git("--git-dir", str(self.remote), "rev-parse", "uske-journal"),
+          )
+          self.assertNotIn("extraheader", (results / ".git" / "config").read_text())
+
+      def test_a_refused_birth_without_a_winner_fails(self) -> None:
           hook = self.remote / "hooks" / "pre-receive"
           hook.write_text("#!/bin/sh\nexit 1\n")
           hook.chmod(0o755)
           self.assertNotEqual(self.run_script("birth", self.tmp / "r1"), 0)
+
+
+  def stub(directory: Path, name: str, body: str) -> None:
+      path = directory / name
+      path.write_text(f"#!/bin/sh\n{body}\n")
+      path.chmod(0o755)
+
+
+  class Name(unittest.TestCase):
+      """Le job `name` : du chemin de la politique à son `metadata.name` (exigence « le verrou
+      porte sur le nom de la politique »). `uv` et `uske` sont des doublures sur le PATH."""
+
+      LISTED = (
+          '[{"name": "x-name", "path": "policies/x.yaml"},'
+          ' {"name": "y-name", "path": "policies/y.yaml"}]'
+      )
+
+      def setUp(self) -> None:
+          self.tmp = Path(tempfile.mkdtemp())
+          self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+          (self.tmp / "policies").mkdir()
+          for name in ("x", "y", "z"):
+              (self.tmp / "policies" / f"{name}.yaml").write_text("{}\n")
+          self.bin = self.tmp / "bin"
+          self.bin.mkdir()
+          stub(self.bin, "uv", "exit 0")
+          self.listed(self.LISTED)
+          self.script = step(load(SCREEN), "name", "name")["run"]
+
+      def listed(self, text: str, rc: int = 0) -> None:
+          (self.tmp / "listed.json").write_text(text)
+          stub(self.bin, "uske", f'cat "{self.tmp}/listed.json"; exit {rc}')
+
+      def run_name(self, policy: str) -> tuple[int, str, str]:
+          out = self.tmp / "github-output"
+          out.write_text("")
+          done = subprocess.run(
+              ["bash", "-e", "-c", self.script],
+              cwd=self.tmp,
+              check=False,
+              capture_output=True,
+              text=True,
+              env={
+                  **os.environ,
+                  "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                  "POLICY": policy,
+                  "USKE_REF": "",
+                  "USKE_VERSION": "0.0.0",
+                  "GITHUB_OUTPUT": str(out),
+              },
+          )
+          return done.returncode, out.read_text(), done.stdout + done.stderr
+
+      def test_the_path_gives_the_name(self) -> None:
+          self.assertEqual(self.run_name("policies/x.yaml")[:2], (0, "name=x-name\n"))
+
+      def test_a_dot_slash_path_gives_the_same_name(self) -> None:
+          self.assertEqual(self.run_name("./policies/y.yaml")[:2], (0, "name=y-name\n"))
+
+      def test_a_path_uske_does_not_list_fails(self) -> None:
+          rc, output, log = self.run_name("policies/z.yaml")
+          self.assertNotEqual(rc, 0)
+          self.assertEqual(output, "")
+          self.assertIn("::error::", log)
+
+      def test_two_policies_at_one_path_fail(self) -> None:
+          self.listed(
+              '[{"name": "a", "path": "policies/x.yaml"},'
+              ' {"name": "b", "path": "./policies/x.yaml"}]'
+          )
+          rc, output, _ = self.run_name("policies/x.yaml")
+          self.assertNotEqual(rc, 0)
+          self.assertEqual(output, "")
+
+      def test_a_failed_listing_fails_on_its_own_error(self) -> None:
+          self.listed("", rc=1)
+          rc, output, log = self.run_name("policies/x.yaml")
+          self.assertNotEqual(rc, 0)
+          self.assertEqual(output, "")
+          self.assertNotIn("aucune politique lisible", log)
+
+
+  class Tools(unittest.TestCase):
+      """BuildKit démarre même sans transit : `transform:` reconstruit sans rien réparer
+      (exigence « la reconstruction est disponible sur un runner hébergé »)."""
+
+      def test_buildkit_starts_without_a_transit(self) -> None:
+          with tempfile.TemporaryDirectory() as tmp:
+              bin_dir, log = Path(tmp), Path(tmp) / "docker.log"
+              stub(bin_dir, "docker", f'echo "$*" >> "{log}"')
+              subprocess.run(
+                  ["bash", "-e", "-c", step(load(SCREEN), "screen", "tools")["run"]],
+                  check=True,
+                  env={
+                      **os.environ,
+                      "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                      "TRANSIT": "",
+                      "REGIS_VERSION": "r",
+                      "KNOCK_VERSION": "k",
+                      "BUILDKIT_VERSION": "b",
+                  },
+              )
+              calls = log.read_text().splitlines()
+          self.assertTrue([c for c in calls if c.startswith("run -d --name buildkitd")])
 
 
   class Shape(unittest.TestCase):
@@ -450,6 +600,35 @@ interface.
               self.assertRegex(lines[i - 1], r"# renovate: datasource=docker depName=\S+")
 
 
+  class Example(unittest.TestCase):
+      """Le banc : sa version d'uske et ses playbooks suivent le contrat de la release."""
+
+      def test_the_pinned_uske_is_the_released_one(self) -> None:
+          manifest = json.loads((ROOT / ".release-please-manifest.json").read_text())
+          env = load(SCREEN)["env"]
+          self.assertEqual(str(env["USKE_VERSION"]), manifest["."])
+
+      def test_the_judge_writes_the_tier_id(self) -> None:
+          # regis >= 0.42.0 écrit `tier_id`, que lit uske depuis la 0.10.
+          version = tuple(
+              int(n) for n in str(load(SCREEN)["env"]["REGIS_VERSION"]).split(".")
+          )
+          self.assertGreaterEqual(version, (0, 42, 0))
+
+      def test_the_example_playbooks_pass_the_startup_check(self) -> None:
+          self.assertTrue(list((EXAMPLE / "playbooks").glob("*.yaml")))
+          playbooks.check(EXAMPLE / "playbooks")
+
+      def test_each_example_policy_resolves_its_playbook(self) -> None:
+          found, errors = policies.load_dir(str(EXAMPLE / "policies"))
+          self.assertEqual(errors, [])
+          self.assertTrue(found)
+          for policy in found:
+              self.assertIsNotNone(
+                  playbooks.resolve(policy.track, EXAMPLE / "playbooks"), policy.name
+              )
+
+
   class MovingTag(unittest.TestCase):
       """Exigence « une étiquette mobile suit chaque version »."""
 
@@ -540,9 +719,9 @@ Renovate le suivra.
   permissions: {}
 
   env:
-    USKE_VERSION: 0.9.1 # x-release-please-version
+    USKE_VERSION: 0.10.0 # x-release-please-version
     # renovate: datasource=docker depName=ghcr.io/trivoallan/regis
-    REGIS_VERSION: 0.41.0
+    REGIS_VERSION: 0.42.0
     # renovate: datasource=docker depName=ghcr.io/trivoallan/knock
     KNOCK_VERSION: 0.16.0
     # renovate: datasource=docker depName=moby/buildkit
@@ -567,14 +746,18 @@ Renovate le suivra.
           run: |
             uv tool install -q "git+https://github.com/trivoallan/uske@${USKE_REF:-v$USKE_VERSION}"
             want="$(realpath -- "$POLICY")"
+            # Une affectation à part : `set -e` arrête le job sur l'erreur d'`uske list` elle-même.
+            out="$(uske list --policies "$(dirname -- "$POLICY")")"
+            rows="$(printf '%s' "$out" | jq -r '.[] | "\(.path)\t\(.name)"')"
             name=""
             count=0
             while IFS="$(printf '\t')" read -r path listed; do
+              [ -n "$path" ] || continue
               [ "$(realpath -- "$path")" = "$want" ] || continue
               name="$listed"
               count=$((count + 1))
             done <<EOF
-            $(uske list --policies "$(dirname -- "$POLICY")" | jq -r '.[] | "\(.path)\t\(.name)"')
+            $rows
             EOF
             [ "$count" -eq 1 ] || { echo "::error::$POLICY : aucune politique lisible à ce chemin"; exit 1; }
             echo "name=$name" >> "$GITHUB_OUTPUT"
@@ -613,12 +796,15 @@ Renovate le suivra.
             BIRTH: |
               #!/bin/sh
               # Extrait la branche du journal sous $RESULTS, ou la fait naître orpheline.
-              # Un push refusé n'est pas rejoué : deux premiers runs simultanés, le second échoue
-              # ici, avant tout placement.
+              # Deux premiers runs simultanés (D4) : la naissance du perdant est refusée ; s'il
+              # trouve alors la branche, il jette sa racine et clone celle du gagnant, sinon il
+              # échoue, avant tout placement.
               set -eu
               auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
-              if git -c "http.extraheader=$auth" ls-remote --exit-code --heads "$JOURNAL_REMOTE" "$JOURNAL_BRANCH" >/dev/null; then
-                git -c "http.extraheader=$auth" clone -q --single-branch --branch "$JOURNAL_BRANCH" "$JOURNAL_REMOTE" "$RESULTS"
+              exists() { git -c "http.extraheader=$auth" ls-remote --exit-code --heads "$JOURNAL_REMOTE" "$JOURNAL_BRANCH" >/dev/null; }
+              clone() { git -c "http.extraheader=$auth" clone -q --single-branch --branch "$JOURNAL_BRANCH" "$JOURNAL_REMOTE" "$RESULTS"; }
+              if exists; then
+                clone
               else
                 rc=$?
                 [ "$rc" -eq 2 ] || exit "$rc"
@@ -627,7 +813,11 @@ Renovate le suivra.
                 git -C "$RESULTS" add .gitignore
                 git -C "$RESULTS" commit -q -m "journal : naissance de la branche"
                 git -C "$RESULTS" remote add origin "$JOURNAL_REMOTE"
-                git -C "$RESULTS" -c "http.extraheader=$auth" push -q origin "HEAD:$JOURNAL_BRANCH"
+                if ! git -C "$RESULTS" -c "http.extraheader=$auth" push -q origin "HEAD:$JOURNAL_BRANCH"; then
+                  exists
+                  rm -rf "$RESULTS"
+                  clone
+                fi
               fi
             HOOK: |
               #!/bin/sh
@@ -661,6 +851,8 @@ Renovate le suivra.
           run: |
             docker pull -q "ghcr.io/trivoallan/regis:$REGIS_VERSION-full"
             docker pull -q "ghcr.io/trivoallan/knock:$KNOCK_VERSION"
+            # Toujours lancé, même sans transit : une politique à `transform:` est reconstruite
+            # et placée sans être réparée.
             docker run -d --name buildkitd --privileged -p 127.0.0.1:1234:1234 \
               "moby/buildkit:$BUILDKIT_VERSION" --addr tcp://0.0.0.0:1234
         - id: grype-date
@@ -816,7 +1008,8 @@ Renovate le suivra.
   ```
 - [x] 5.2 Copier les playbooks : `cp -R tests/fixtures/repo/playbooks examples/github/playbooks`.
   Vérifier : `uske resolve --policy examples/github/policies/alpine.yaml --playbooks examples/github/playbooks`
-  doit imprimer un chemin qui finit par `playbook.yaml`.
+  doit imprimer un chemin qui finit par `standard.yaml` (disposition d'uske 0.10 : un
+  fichier `<régime>.yaml` à la racine).
 - [x] 5.3 Créer `.github/workflows/extra-screen-example.yml` :
   ```yaml
   # Banc du workflow réutilisable (change github-action, D7) : appelle extra-screen.yml par son
@@ -926,3 +1119,21 @@ Renovate le suivra.
 - [x] 8.3 Revenir à `review.md` : marquer traités les findings 12, 14 et 17.
 - [x] 8.4 Titre de la PR, en Conventional Commit sans portée :
   `feat: cribler une politique depuis GitHub Actions par un workflow réutilisable`.
+
+## 9. Revue finale (2026-10-17)
+
+- [x] 9.1 Rebaser sur `main` 0.10.0, qui contient #60 (playbooks d'un autre dépôt).
+- [x] 9.2 Aligner sur uske 0.10 : `USKE_VERSION: 0.10.0`, `REGIS_VERSION: 0.42.0` (écrit `tier_id`),
+  playbooks d'exemple à la racine (`standard.yaml`…, tiers à `id`, règles `curable`), copiés de
+  `tests/fixtures/repo/playbooks`. Le guide dit l'échec d'un répertoire absent ou invalide (exit 1)
+  et `uske/unknown-track`. Tests : `Example` dans `tests/test_screen_workflow.py`.
+- [x] 9.3 Étiquette mobile des docs : `@v0.11`, première release qui porte le workflow ; la
+  règle est dite une fois, dans la référence.
+- [x] 9.4 Naissance perdue : le perdant reprend la branche du gagnant (D4). Tests :
+  `test_a_lost_birth_clones_the_winner`, `test_a_refused_birth_without_a_winner_fails`.
+- [x] 9.5 Le workflow ne se connecte qu'à `ghcr.io` : le guide, la référence et arc42 le disent.
+- [x] 9.6 Job `name` : l'erreur d'`uske list` arrête le job par elle-même ; tests `Name` par
+  doublures. BuildKit reste lancé sans transit, car `transform:` reconstruit sans réparer (test
+  `Tools`). `cosign-key` marqué non éprouvé (RISK-11) dans la référence.
+- [ ] 9.7 Réprouver sur GitHub : alpine (verdicts réels, pas `uske/unknown-track`), réparation
+  promue, entrée hostile.

@@ -11,8 +11,8 @@ The file name and the inputs are a public interface: renaming or removing one is
 | `policy` | string | required | Path of the policy in the calling repository. |
 | `registries` | string | required | `KNOCK_REGISTRIES`: JSON, without credentials. |
 | `transit` | string | empty | Name, in `registries`, of the transit registry. Empty, no source is repaired. |
-| `registry-username` | string | empty | User for the registry login. Empty, the actor of the run. |
-| `playbooks` | string | `playbooks` | Directory of the playbooks in the calling repository. |
+| `registry-username` | string | empty | User for the login to `ghcr.io`. Empty, the actor of the run. |
+| `playbooks` | string | `playbooks` | Directory of the playbooks in the calling repository, one `<track>.yaml` per track. Missing, or holding a playbook `uske` cannot read, the job fails before anything is judged. A track with no file is recorded `inconclusive` (`uske/unknown-track`). |
 | `journal-branch` | string | `uske-journal` | Branch of the calling repository that holds the journal. |
 | `report-retention-days` | number | `90` | Lifetime of the reports artifact, in days. |
 | `package-mirrors` | string | empty | `KNOCK_TRANSFORM_PACKAGE_MIRRORS`: JSON of the mirrors that `rewritePackageSources` names. Empty, a source to repair ends in quarantine (`uske/remediation-undeclared`). |
@@ -22,9 +22,14 @@ The file name and the inputs are a public interface: renaming or removing one is
 
 | Name | Required | Meaning |
 | --- | --- | --- |
-| `registry-token` | no | Token for the registry login. Absent, `GITHUB_TOKEN`. |
-| `cosign-key` | no | Cosign key for the placer. Absent, the placer signs without a key. |
+| `registry-token` | no | Token for the login to `ghcr.io`. Absent, `GITHUB_TOKEN`. |
+| `cosign-key` | no | Cosign key for the placer. Absent, the placer signs without a key. Not yet proven on the bench (RISK-11). |
 | `cosign-password` | no | Password of `cosign-key`. |
+
+## Registries
+
+The workflow logs in to `ghcr.io` only. Destinations on another registry, and sources that need a
+login (a private registry, or Docker Hub beyond its anonymous pull limits), are not supported yet.
 
 ## Permissions
 
@@ -65,6 +70,9 @@ journal (<metadata.name>) : <step>, <run URL>
 new branch reads `journal : naissance de la branche`.
 
 ## Tags
+
+Pin the moving tag `v0.<minor>` of the `uske` release you want, for example `@v0.11`. The workflow
+exists from `v0.11`.
 
 | Tag | Moves to | Use |
 | --- | --- | --- |

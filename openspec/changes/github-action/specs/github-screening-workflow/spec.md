@@ -115,6 +115,13 @@ workflow SHALL la faire naître orpheline, sans autre fichier qu'un `.gitignore`
 - **THEN** la branche `uske-journal` existe, sans ancêtre commun avec la branche par défaut
 - **AND** elle porte le journal de la politique, et aucun rapport
 
+#### Scenario: Deux premiers runs simultanés
+
+- **GIVEN** un dépôt sans branche `uske-journal`, et deux runs qui la font naître en même temps
+- **WHEN** le push de naissance du second est refusé parce que la branche existe désormais
+- **THEN** le second jette sa racine locale, clone la branche du premier, et poursuit son screening
+- **AND** si la branche n'existe toujours pas, il échoue avant de rien placer
+
 #### Scenario: Une empreinte déjà décidée
 
 - **GIVEN** une branche `uske-journal` dont le journal porte déjà une décision pour une empreinte

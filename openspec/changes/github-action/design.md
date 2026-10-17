@@ -45,7 +45,8 @@ artefacts OpenSpec en français). Aucun n'est à réviser.
 - Planifier 10 000 politiques : `DEBT-07` reste ouvert, et Argo reste le candidat.
 - Le contrôle de demande de fusion (`judge_only`), laissé au change suivant.
 - Le runner auto-hébergé et le Harbor interne : la page how-to les documente comme un écart, sans
-  les éprouver ici.
+  les éprouver ici. Le workflow ne se connecte qu'à `ghcr.io` : une autre destination, ou une
+  source qui demande une connexion, n'est pas prise en charge dans cette version (revue finale).
 - Toute modification du code d'`uske`, ou d'un fichier du socle.
 
 ## Decisions
@@ -230,7 +231,7 @@ que le Markdown (le comportement d'`uske` changerait).
 
 - Le workflow `extra-major-tag.yml`, déclenché sur `release: published`, déplace une étiquette
   mobile vers le commit de la version. En 0.x, une mineure peut casser (SemVer), donc l'étiquette
-  mobile est `v0.9`, `v0.10`… ; à partir de 1.0, ce sera `v1`. `release.yml`, qui fait partie du
+  mobile est `v0.11`, `v0.12`… (le workflow paraît en 0.11) ; à partir de 1.0, ce sera `v1`. `release.yml`, qui fait partie du
   socle, ne change pas.
 - Le workflow appelé doit installer son propre `uske`. Or le contexte `github` d'un workflow
   réutilisable est celui de l'appelant. La version est donc **écrite dans `extra-screen.yml` par
@@ -277,8 +278,8 @@ tient lieu.
   entrée est un changement cassant, noté dans le CHANGELOG.
 - [La variante `-full` de `regis` est lourde à tirer] → Elle est tirée une fois par run. La mesure
   de la tâche 1 compare avec la variante slim plus un cache.
-- [Deux premiers runs simultanés] → Le second échoue avant de placer quoi que ce soit, et une
-  relance suffit (D4).
+- [Deux premiers runs simultanés] → La naissance du perdant est refusée ; il reprend la branche du
+  gagnant et continue (D4).
 
 ## Migration Plan
 

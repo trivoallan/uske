@@ -565,7 +565,7 @@ flowchart LR
   res -->|"push after each write, and at the end"| jb[("Branch <code>uske-journal</code><br>of the policy repository")]
   sj -->|"<code>reports.tar</code>"| art[("Run artifact<br><code>uske-reports-&lt;name&gt;</code>")]
   sj <-->|"<code>grype-db-&lt;day&gt;</code>"| cache[("Actions cache")]
-  kn -->|"HTTPS"| reg[("Registry<br>GHCR, or a Harbor the runner reaches")]
+  kn -->|"HTTPS"| reg[("Registry<br>GHCR, the only one the workflow logs in to")]
   rg -->|"HTTPS"| reg
   kn -->|"keyless signing"| sig["Sigstore Fulcio and Rekor<br>public"]
 ```
@@ -575,11 +575,11 @@ flowchart LR
 | Job `name` | The policy's `metadata.name`, read by `uske list` | `contents: read`; fails if the path names no policy, or more than one |
 | Job `screen` | A whole screening of one policy, by `uske screen` | `contents`, `packages` and `id-token: write`, granted by the caller; one lock per policy name (`concurrency`), at most one run waiting |
 | `regis` and `knock` containers | The judge and the placer, each in its image, started by `uske` through `USKE_REGIS_CMD` and `USKE_KNOCK_CMD` | Versions pinned in the workflow, followed by Renovate; host network, runner uid, the work directory under `$RUNNER_TEMP` mounted at the same path |
-| `buildkitd` container | Rebuilds for remediation | Privileged, published on `127.0.0.1` only; acceptable on a throwaway hosted runner |
+| `buildkitd` container | Rebuilds, by `transform:` and by remediation | Privileged, published on `127.0.0.1` only; acceptable on a throwaway hosted runner |
 | Branch `uske-journal` | The journal, one file per policy | Born orphan, written only by the hook (`USKE_AFTER_RECORD`) and the final push, three rebases at most; never protected against the workflow |
 | Run artifact | The reports, as one `reports.tar` that keeps the paths the journal lines cite | `report-retention-days`, 90 by default and at most on a public repository |
 | Actions cache | The `grype` database, one per UTC day, shared by the judgements of a run | Filled once by `grype db update` when empty; `GRYPE_DB_AUTO_UPDATE=false` in `regis` |
-| Credentials | The registry token (secret `registry-token`, else `GITHUB_TOKEN`) in `config.json`, mounted read-only in `regis` and `knock`; the journal token only in the hook's git calls; the signing identity (the run's OpenID Connect token, which Sigstore's certificate authority, Fulcio, turns into a certificate, logged in its public transparency log, Rekor) or the `cosign-key`, in `knock` only | No input is interpolated into a script; secrets cross into a container by name only |
+| Credentials | The registry token (secret `registry-token`, else `GITHUB_TOKEN`) for `ghcr.io`, the only registry the workflow logs in to, in `config.json`, mounted read-only in `regis` and `knock`; the journal token only in the hook's git calls; the signing identity (the run's OpenID Connect token, which Sigstore's certificate authority, Fulcio, turns into a certificate, logged in its public transparency log, Rekor) or the `cosign-key`, in `knock` only | No input is interpolated into a script; secrets cross into a container by name only |
 
 **Block mapping.** *Screen* runs in the `screen` job, and through it the *Subcommands*, *Outcomes*,
 the *Gate*, the *Policies* and the *Journal*, in one process installed from the tag of the called

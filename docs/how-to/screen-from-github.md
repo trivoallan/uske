@@ -10,7 +10,8 @@ To run the same screening on a workstation, see [Screen locally](operate.md#scre
 ## Before you start
 
 - A repository that holds your policies and playbooks.
-- A destination registry. The example below uses GHCR.
+- A destination on GHCR. In this version the workflow logs in to `ghcr.io` only (see
+  [Authenticate to the registry](#authenticate-to-the-registry)).
 - A policy whose `metadata.name` is a valid name (see [operate uske](operate.md)).
 
 ## Call the workflow
@@ -34,7 +35,7 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    uses: trivoallan/uske/.github/workflows/extra-screen.yml@v0.9
+    uses: trivoallan/uske/.github/workflows/extra-screen.yml@v0.11
     with:
       policy: policies/x.yaml
       registries: '{"ghcr": {"host": "ghcr.io"}, "transit": {"host": "ghcr.io/<owner>/uske-transit"}}'
@@ -70,7 +71,7 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    uses: trivoallan/uske/.github/workflows/extra-screen.yml@v0.9
+    uses: trivoallan/uske/.github/workflows/extra-screen.yml@v0.11
     with:
       policy: ${{ matrix.policy }}
       registries: '{"ghcr": {"host": "ghcr.io"}}'
@@ -135,27 +136,41 @@ it. Without this input, such a source ends in quarantine (`uske/remediation-unde
 
 ## Use your own playbooks
 
-The workflow reads playbooks from `playbooks/` in your repository, laid out as
-[`examples/github/playbooks`](../../examples/github/playbooks) is (`version/playbook.yaml` for the
-`standard` track). Set `playbooks` to use another directory:
+The workflow reads playbooks from `playbooks/` in your repository. Set `playbooks` to use another
+directory:
 
 ```yaml
       playbooks: ci/playbooks
 ```
 
-The tree under `playbooks` is the one in the example directory:
+A policy's track names its playbook: a policy labelled `admission-track: standard` is judged with
+`<playbooks>/standard.yaml`. Each file at the root of the directory is one track, as in
+[`examples/github/playbooks`](../../examples/github/playbooks):
 
 ```text
 playbooks/
-  version/playbook.yaml          # track standard
-  version/playbook-allege.yaml   # tracks derogation and redistribution
+  standard.yaml         # track standard
+  derogation.yaml       # track derogation
+  redistribution.yaml   # track redistribution
 ```
 
-The policy picks the track with its label `admission-track`. If the directory or the playbook file is missing, regis fails on each digest. The run stays green,
-each digest is recorded `inconclusive` with the reason `regis/exit-<N>`, and nothing is placed (see
-[journal states and reasons](../reference/reasons.md)).
+To add a track, add its file. In a playbook, `uske` reads only the `id` of each tier
+(`direct-placement`, `transformation-required` or `quarantine`) and the rules tagged `curable`, the
+ones a remediation can fix (see [how it works](../explanation/how-it-works.md)).
+
+When the playbooks are wrong:
+
+- If the directory is missing, or a file at its root is not a `kind: Playbook` or has a tier
+  without one of these `id`s, the job fails (exit 1) before anything is judged or placed.
+- If a policy names a track that has no file, its images are not evaluated. Each one is recorded
+  `inconclusive` with the reason `uske/unknown-track`, nothing is placed, and the run stays green
+  (see [journal states and reasons](../reference/reasons.md)).
 
 ## Authenticate to the registry
+
+In this version the workflow logs in to `ghcr.io` only. Destinations on another registry, and
+sources that need a login (a private registry, or Docker Hub beyond its anonymous pull limits), are
+not supported yet.
 
 By default the workflow logs in to `ghcr.io` as the user who started the run, with `GITHUB_TOKEN`.
 That works for a demonstration.
@@ -206,7 +221,8 @@ step then adds a commit, and the workflow pushes it before the next placement.
 The branch is append-only, so do not protect it in a way that blocks the workflow: no required pull
 request, no required status checks. Let `github-actions` push to it.
 
-If two first runs start together, the second fails before it places anything. Run it again.
+If two first runs start together, both try to create the branch. The one that loses takes the
+branch the other created and goes on.
 
 ## Know what success looks like
 
@@ -238,10 +254,11 @@ run that never started places nothing.
 
 ## Pin a version
 
-Reference the workflow by a moving tag, currently `v0.9`. While `uske` is in 0.x, a minor version can break callers, so
-the tag follows the minor version: `@v0.9`, then `@v0.10`. From 1.0 on, it will be `@v1`. The tag
-also selects the versions of `regis`, `knock` and BuildKit that the run uses: you cannot override
-them.
+Reference the workflow by the moving tag of the `uske` release you want, as the
+[reference](../reference/screen-workflow.md#tags) describes. The examples in this guide use `@v0.11`.
+While `uske` is in 0.x, a minor version can break callers, so move to the next tag on purpose. The
+tag also selects the versions of `regis`, `knock` and BuildKit that the run uses: you cannot
+override them.
 
 ## Run on a self-hosted runner
 
@@ -250,6 +267,6 @@ The workflow is tested on GitHub-hosted runners only. A self-hosted runner diffe
 - **Docker.** The runner needs Docker, because the judge, the placer and BuildKit run as containers.
 - **BuildKit.** The workflow starts BuildKit as a privileged container. On a shared runner, replace
   it with rootless BuildKit.
-- **Internal Harbor.** Describe it in `registries`, and give the runner network access to it and to
-  the sources.
+- **Other registries.** The workflow logs in to `ghcr.io` only. An internal registry, such as a
+  Harbor, is not supported yet, even if the runner can reach it.
 - **Keyless signing.** It needs the runner to reach Fulcio and Rekor. If it cannot, sign with a key.
