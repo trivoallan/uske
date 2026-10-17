@@ -49,13 +49,13 @@
 
 ## 3. Glossaire
 
-- [ ] 3.1 Relever les termes métier de `docs/architecture/arc42.md` (section *Glossary*) et de
+- [x] 3.1 Relever les termes métier de `docs/architecture/arc42.md` (section *Glossary*) et de
   `uske/outcomes.py`. Pour chacun, chercher l'équivalent déjà employé par `regis` et `knock` :
   `grep -rniw "<terme anglais candidat>" ../regis/docs ../knock/docs`.
-- [ ] 3.2 Ajouter une colonne `English` au tableau *Glossary* de l'arc42, une ligne par terme, avant
+- [x] 3.2 Ajouter une colonne `English` au tableau *Glossary* de l'arc42, une ligne par terme, avant
   toute autre traduction. Un terme absent de `regis` et `knock` prend le mot du code `uske`
   (`screening`, `transit`, `quarantine`, `inconclusive`, `direct-placement`…).
-- [ ] 3.3 Commit : `docs(architecture): fixer l'anglais des termes du métier`.
+- [x] 3.3 Commit : `docs(architecture): fixer l'anglais des termes du métier`.
 
 ## 4. Sortie de `uske decisions`
 

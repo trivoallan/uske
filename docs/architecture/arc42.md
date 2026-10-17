@@ -705,27 +705,34 @@ la même façon : le journal des décisions ne dit pas ce que le dépôt fait.
 > rencontre dans ce document. Les noms de blocs sont définis dans la table de *Building Block
 > View*.
 
-| Terme | Définition |
-|-------|------------|
-| Juge | L'outil qui dit si une image peut entrer : `regis`. Il rend un verdict, il ne place rien. |
-| Placeur | L'outil qui fait entrer les images dans le registre, par copie ou par reconstruction, et qui atteste ce qu'il a fait : `knock`. Il ne juge rien. |
-| Politique | Un fichier du dépôt des politiques : une source à faire entrer au registre, sa destination et son régime (le label `admission-track`). Le placeur la lit pour écrire son plan. |
-| Régime | Le niveau d'exigence d'une politique. Il désigne le jeu de règles avec lequel le juge l'évalue (`playbooks.py`). |
-| Jeu de règles, *playbook* | Les règles qu'applique le juge, et les tiers auxquels elles mènent. |
-| Empreinte, *digest* | L'identifiant d'une image par son contenu. Un verdict porte sur une empreinte, pas sur une étiquette. |
-| Issue | Ce qu'un verdict décide pour une image : placement direct, transformation requise, quarantaine ou non concluant. |
-| Tier | Le nom que le jeu de règles donne à son verdict ; `uske` le ramène à une issue. |
-| Quarantaine | L'issue d'une image refusée : rien n'est placé. |
-| Non concluant, `inconclusive` | L'issue d'une évaluation qui n'a pas abouti : rien n'est décidé, rien n'est placé, et le screening suivant rejuge. |
-| Réparation, *remediation* | Une reconstruction ordonnée par `uske` pour une source refusée sur des règles que son régime déclare réparables. L'image réparée est jugée avant d'être placée. |
-| Transit | Le lieu où le placeur retient une image reconstruite tant qu'elle n'a pas son propre verdict. Les consommateurs ne doivent pas pouvoir y tirer. |
-| Seconde porte | Le jugement d'une image retenue dans le transit, par sa propre empreinte. |
-| Contournement | Ce qui est au registre sans être passé par `uske` : le recensement le compte. |
-| `D-nn` | Une décision du dossier de référence de l'espace de travail, pas de ce dépôt. Citée dans le code (`D-23`, `D-30`). |
-| `IF-nn` | Une interface de *Context and Scope*. Un `IF-nn` cité dans le code vient du dossier de référence, et n'est pas le même. |
-| `SDR-nnnn` | Un ADR de ce dépôt, numéroté par la méthode `surdesrails` ; les trous sont expliqués en *Architecture Decisions*. |
-| `QS-nn`, `RISK-nn`, `DEBT-nn` | Un scénario de qualité, un risque, une dette de ce document. Stables. |
-| ADR, MADR | *Architecture Decision Record* ; MADR en est le format, imposé par la méthode. |
-| JSON Lines | Un objet JSON par ligne : le format du journal. |
-| SBOM, CycloneDX | L'inventaire des composants d'une image ; CycloneDX en est le format, que le placeur signe et que le suivi des vulnérabilités reçoit. |
-| `ReadWriteOnce` | Un volume Kubernetes qu'un seul nœud monte à la fois. |
+| English | Terme | Définition |
+|---------|-------|------------|
+| judge | Juge | L'outil qui dit si une image peut entrer : `regis`. Il rend un verdict, il ne place rien. |
+| placer | Placeur | L'outil qui fait entrer les images dans le registre, par copie ou par reconstruction, et qui atteste ce qu'il a fait : `knock`. Il ne juge rien. |
+| policy | Politique | Un fichier du dépôt des politiques : une source à faire entrer au registre, sa destination et son régime (le label `admission-track`). Le placeur la lit pour écrire son plan. |
+| track | Régime | Le niveau d'exigence d'une politique. Il désigne le jeu de règles avec lequel le juge l'évalue (`playbooks.py`). |
+| playbook | Jeu de règles, *playbook* | Les règles qu'applique le juge, et les tiers auxquels elles mènent. |
+| digest | Empreinte, *digest* | L'identifiant d'une image par son contenu. Un verdict porte sur une empreinte, pas sur une étiquette. |
+| outcome | Issue | Ce qu'un verdict décide pour une image : placement direct, transformation requise, quarantaine ou non concluant. |
+| tier | Tier | Le nom que le jeu de règles donne à son verdict ; `uske` le ramène à une issue. |
+| quarantine | Quarantaine | L'issue d'une image refusée : rien n'est placé. |
+| inconclusive | Non concluant, `inconclusive` | L'issue d'une évaluation qui n'a pas abouti : rien n'est décidé, rien n'est placé, et le screening suivant rejuge. |
+| remediation | Réparation, *remediation* | Une reconstruction ordonnée par `uske` pour une source refusée sur des règles que son régime déclare réparables. L'image réparée est jugée avant d'être placée. |
+| transit | Transit | Le lieu où le placeur retient une image reconstruite tant qu'elle n'a pas son propre verdict. Les consommateurs ne doivent pas pouvoir y tirer. |
+| second gate | Seconde porte | Le jugement d'une image retenue dans le transit, par sa propre empreinte. |
+| bypass | Contournement | Ce qui est au registre sans être passé par `uske` : le recensement le compte. |
+| screening | Screening | Un passage de `uske` sur une politique : le plan du placeur, les verdicts du juge, puis le placement de ce qui est accepté. |
+| journal | Journal | Le fichier de résultats d'une politique, en ajout seul : une ligne par décision. |
+| rebuild | Reconstruction | Une image refaite par le placeur depuis sa source, au lieu d'une copie. |
+| direct placement | Placement direct | L'issue d'une image acceptée telle quelle : le placeur la copie. |
+| transformation required | Transformation requise | L'issue d'une image qui n'entre qu'après une reconstruction. |
+| census | Recensement | Le décompte de ce qui est au registre, qui mesure le contournement. |
+| arbitration | Arbitrage | La personne et le motif d'une décision prise à la main : placement par exception, abandon, réouverture. |
+| `D-nn` | — | Une décision du dossier de référence de l'espace de travail, pas de ce dépôt. Citée dans le code (`D-23`, `D-30`). |
+| `IF-nn` | — | Une interface de *Context and Scope*. Un `IF-nn` cité dans le code vient du dossier de référence, et n'est pas le même. |
+| `SDR-nnnn` | — | Un ADR de ce dépôt, numéroté par la méthode `surdesrails` ; les trous sont expliqués en *Architecture Decisions*. |
+| `QS-nn`, `RISK-nn`, `DEBT-nn` | — | Un scénario de qualité, un risque, une dette de ce document. Stables. |
+| ADR, MADR | — | *Architecture Decision Record* ; MADR en est le format, imposé par la méthode. |
+| JSON Lines | — | Un objet JSON par ligne : le format du journal. |
+| SBOM, CycloneDX | — | L'inventaire des composants d'une image ; CycloneDX en est le format, que le placeur signe et que le suivi des vulnérabilités reçoit. |
+| `ReadWriteOnce` | — | Un volume Kubernetes qu'un seul nœud monte à la fois. |
