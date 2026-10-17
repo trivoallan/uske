@@ -2,7 +2,7 @@
 adr: SDR-0021
 slug: screen-et-repartition
 title: Un verbe qui lance les deux outils, et un Workflow par politique
-status: proposed
+status: accepted
 date: 2026-10-17
 authors: [Tristan Rivoallan]
 supersedes: []
@@ -10,10 +10,12 @@ supersedes: []
 
 # Un verbe qui lance les deux outils, et un Workflow par politique
 
-> `proposed` : écrit par le change `screen-and-policy-fan-out`, il attend son verdict. Le
+> Verdict `accepted` reçu de Tristan Rivoallan le 2026-10-17, décision par décision : le verbe
+> `uske screen` qui lance les deux outils, et la répartition par politique sans volume partagé.
+> Le code du change `screen-and-policy-fan-out` s'y conforme, éprouvé sur le banc `kind`. Le
 > raisonnement complet, les alternatives et les risques vivent dans
-> `openspec/changes/screen-and-policy-fan-out/design.md`, décisions D1, D2, D4 et D7. Cet ADR
-> n'en retient que ce qui engage les changes suivants.
+> `openspec/changes/archive/2026-10-17-screen-and-policy-fan-out/design.md`, décisions D1, D2,
+> D4, D7, D9 et D12. Cet ADR n'en retient que ce qui engage les changes suivants.
 
 ## Context and Problem Statement
 
@@ -55,7 +57,7 @@ de plus de 10 000 politiques.
 * Bon : une politique se rejoue seule, et sa trace est à elle.
 * Coût : `uske` grossit d'un module qui lance des processus (objectif Minceur).
 * Coût : un droit de plus pour le compte `uske`, créer des `Workflow`, et un dépôt d'artefacts
-  (S3, MinIO) à fournir.
+  (S3) à fournir.
 * Coût : entre le placement et la fusion, le journal du volume retarde ; la décision est durable
   dans le dépôt d'artefacts.
 * Ne décide ni le planificateur (`DEBT-07`) ni le support du journal (`DEBT-08`).

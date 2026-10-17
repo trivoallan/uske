@@ -195,7 +195,7 @@ its own image, at its own step of the child Workflow, and the steps pass files t
 between the steps*). When this document says that `uske` calls the judge or the placer, it means
 this: its workflow runs the tool, and a following subcommand reads what it left. **Outside the
 cluster, `uske screen` runs them itself**, by the same command lines, and reads the same files and
-exit codes (`SDR-0021`, `proposed`). `uske` speaks HTTP only to the two APIs it knows by name.
+exit codes (`SDR-0021`). `uske` speaks HTTP only to the two APIs it knows by name.
 
 | ID | Channel | Format | Authentication |
 |----|---------|--------|----------------|
@@ -226,8 +226,8 @@ nothing; it is `inconclusive` — not refused, judged again at the next screenin
 | Topic | Choice | Rationale | Where |
 |-------|--------|-----------|-------|
 | Language | Python ≥ 3.12 | One of the three that the method recommends; the one used by `regis` and `knock`, so one toolchain for all three repositories | [`SDR-0004`](../adr/SDR-0004-languages.md) |
-| Chaining | Argo Workflows: one `CronWorkflow`, a parent Workflow that creates one child Workflow per policy, one subcommand per step; outside the cluster, the `uske screen` verb | Replay, retries and the trace of each step come from the tool, not from `uske`; a policy replays alone; a workstation or a CI judges without copying the steps | the scheduler: **no ADR** — `DEBT-07`; the fan-out and the verb: [`SDR-0021`](../adr/SDR-0021-screen-et-repartition.md), `proposed` |
-| Integration | `regis` and `knock` at their own workflow steps, through files; in `uske screen` only, started by `uske` by their command line, which a prefix can move (`USKE_REGIS_CMD`, `USKE_KNOCK_CMD`); Harbor and Dependency-Track over HTTP, with the standard library | Share neither code nor image with the chained tools; a single runtime dependency (`pyyaml`) | *Architecture Constraints*; `SDR-0021`, `proposed` |
+| Chaining | Argo Workflows: one `CronWorkflow`, a parent Workflow that creates one child Workflow per policy, one subcommand per step; outside the cluster, the `uske screen` verb | Replay, retries and the trace of each step come from the tool, not from `uske`; a policy replays alone; a workstation or a CI judges without copying the steps | the scheduler: **no ADR** — `DEBT-07`; the fan-out and the verb: [`SDR-0021`](../adr/SDR-0021-screen-et-repartition.md) |
+| Integration | `regis` and `knock` at their own workflow steps, through files; in `uske screen` only, started by `uske` by their command line, which a prefix can move (`USKE_REGIS_CMD`, `USKE_KNOCK_CMD`); Harbor and Dependency-Track over HTTP, with the standard library | Share neither code nor image with the chained tools; a single runtime dependency (`pyyaml`) | *Architecture Constraints*; `SDR-0021` |
 | Persistence | One JSON Lines file per policy, append-only, on a volume that only the merge writes | A file can be read, copied and contested without a server; append-only can be checked in its history | [`SDR-0016`](../adr/SDR-0016-journal-et-transit.md), [`SDR-0018`](../adr/SDR-0018-journal-run.md); the storage itself: **no ADR** — `DEBT-08` |
 | Code structure | Hexagonal: the domain without input/output | An agent changes and tests a rule without a running environment | [`SDR-0003`](../adr/SDR-0003-architecture.md) — not met, `DEBT-01` |
 | Validation | `pydantic` at the boundaries, JSON Schema for files | A missing field becomes a named error, not a silent default | [`SDR-0005`](../adr/SDR-0005-validation.md) — not met, `DEBT-02` |
@@ -606,9 +606,8 @@ MADR format. This section is their **log**: it points to them, and copies neithe
 nor their options, nor their values — each ADR says that its values are written in it "and nowhere
 else", and that is what keeps them from being contradicted here.
 
-Eighteen ADRs to date. Seventeen are decided, of which five are superseded — two by `SDR-0017`,
-one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; twelve are therefore in force. One is
-`proposed`: `SDR-0021`, which awaits its verdict. Eleven are inherited from the method — see *Architecture
+Eighteen ADRs to date, all decided, of which five are superseded — two by `SDR-0017`,
+one each by `SDR-0019`, `SDR-0020` and `SDR-0022`; thirteen are therefore in force. Eleven are inherited from the method — see *Architecture
 Constraints*: ten questions that it asks every repository adopting it, and the rule that says how
 to answer them. Seven are specific to `uske`: `SDR-0016` to `SDR-0022`. A new decision is written
 when a choice is expensive to undo, touches several blocks, arbitrates between two quality goals,
@@ -655,7 +654,7 @@ supersedes `SDR-0020`.
 | [SDR-0018](../adr/SDR-0018-journal-run.md) | A journal line names the screening that wrote it (`run` key) | accepted | 2026-10-16 | Contestability, Operability | yes — `classify --run` receives `{{workflow.name}}` from the `WorkflowTemplate` |
 | [SDR-0019](../adr/SDR-0019-documentation-publique.md) | Documentation audience: `public` | accepted | 2026-10-17 | Contestability | yes — pages reviewed on 2026-10-17 |
 | [SDR-0020](../adr/SDR-0020-readme-en-anglais.md) | The README in English, like those of `regis` and `knock` | accepted — superseded by SDR-0022 | 2026-10-17 | Contestability | not applicable — superseded |
-| [SDR-0021](../adr/SDR-0021-screen-et-repartition.md) | A verb that runs both tools, and one Workflow per policy | proposed | 2026-10-17 | Operability, against Thinness | not applicable — awaiting its verdict |
+| [SDR-0021](../adr/SDR-0021-screen-et-repartition.md) | A verb that runs both tools, and one Workflow per policy | accepted | 2026-10-17 | Operability, against Thinness | yes — `uske screen`, and the parent and child templates proven on the `kind` bench on 2026-10-17 |
 | [SDR-0022](../adr/SDR-0022-documentation-en-anglais.md) | Documentation in English; ADRs, discovery and commits in French | accepted | 2026-10-17 | Contestability | yes |
 
 ## Open gaps
