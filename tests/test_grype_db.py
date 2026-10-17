@@ -358,8 +358,9 @@ class RegisAnalyze(unittest.TestCase):
         if archive is not None:
             (root / "grype" / "current.tar.zst").write_bytes(archive)
         script = (
-            self.script.replace("/grype/", f"{root}/grype/")
-            .replace("/tmp/", f"{root}/")
+            # `/tmp/` first: on Linux the temp dir is itself under /tmp/, and would be rewritten twice.
+            self.script.replace("/tmp/", f"{root}/")
+            .replace("/grype/", f"{root}/grype/")
             .replace("{{inputs.parameters.target}}", "reg.test/app@sha256:aa")
             .replace("{{inputs.parameters.playbook}}", "playbook.yaml")
         )
