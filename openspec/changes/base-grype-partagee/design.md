@@ -195,6 +195,13 @@ banc prêt. Après une pause du banc de plus de 48 h, on relance ce remplissage 
   accepté : on préfère ne pas juger plutôt que juger sur une base vieille.
 - [La somme de contrôle disparaît à l'emballage] → la tâche 1 vérifie que `descriptor.db.status.from`
   porte encore l'URL et sa somme après déballage dans un autre pod.
+- [Le bucket du dépôt d'artefacts n'existe pas encore] → Argo ne le crée qu'à la première
+  écriture, et un artefact d'entrée facultatif dans un bucket absent est une erreur, pas une
+  absence (trouvé sur le banc le 2026-10-17). Le bucket doit exister avant le premier
+  rafraîchissement ; sur le banc, `up.sh` le crée.
+- [Argo écrit les artefacts d'entrée en `0600 root`, et l'image regis tourne en non-root] → le
+  pointeur et l'archive étaient illisibles (trouvé sur le banc) ; les deux entrées portent
+  `mode: 0444`.
 
 ## Migration Plan
 

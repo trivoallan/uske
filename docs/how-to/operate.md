@@ -209,7 +209,7 @@ and an absent or unreadable one. `regis` still exits 0, with an error in `result
 
 | Regime | Effect |
 |--------|--------|
-| Full (`cve-critical` is `critical`) | The decision is `inconclusive`, with the reason `cve-critical`: nothing is placed |
+| Full (`cve-critical` is `critical`) | The decision is `inconclusive`, with the reason of the `cve-critical` rule (its criterion, `cve/cve-count`): nothing is placed |
 | Light (D-05, CVEs informative) | The decision does not change |
 
 - **After you upgrade the `regis` image**, refresh by hand: a new `grype` can change the database

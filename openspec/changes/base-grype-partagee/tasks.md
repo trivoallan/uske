@@ -136,19 +136,30 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
   `wf=$(kubectl -n $NS create -f $HERE/grype-db.yaml -o name)` puis
   `kubectl -n $NS wait --for=jsonpath='{.status.phase}'=Succeeded "$wf" --timeout=15m`.
   Attendu sur un banc neuf : `condition met`. Un ancien Workflow en échec ne bloque pas l'attente.
-- [ ] 4.2 Sur le banc, lancer un screening (`kubectl -n uske create -f deploy/kind/screening.yaml`),
+- [x] 4.2 Sur le banc, lancer un screening (`kubectl -n uske create -f deploy/kind/screening.yaml`),
   puis vérifier qu'un rapport porte la base distribuée :
   `jq '.results.cve.source.checksum' <rapport json d'une évaluation>`. Attendu : la somme de
   `grype-db/current.json`. Vérifier ensuite, dans le journal du pod `regis-analyze`, que le
   déballage et l'analyseur `cve` prennent ensemble bien moins que ~140 s. Scénario : *Deux
   évaluations entre deux rafraîchissements jugent avec la même base*.
-- [ ] 4.3 Preuve de la chaîne du refus sur le banc (D3) : poser, le temps du test,
+  Fait le 2026-10-17 sur le banc : screening de 9 politiques, toutes `Succeeded` ; le rapport de
+  `a-4711-redis-7` porte `sha256:9985d2b3…`, la somme de `grype-db/current.json` ; le pas
+  `regis-analyze` dure 53 s en tout (téléchargement, déballage et 14 analyseurs), dont 24,6 s pour
+  `cve`. Le remplissage a révélé deux défauts, corrigés : le bucket absent sur un banc neuf, et des
+  artefacts d'entrée illisibles par l'utilisateur non root de l'image regis (`mode: 0444`).
+- [x] 4.3 Preuve de la chaîne du refus sur le banc (D3) : poser, le temps du test,
   `GRYPE_DB_MAX_ALLOWED_BUILT_AGE=1s` sur `regis-analyze`, puis lancer un screening avec une
   politique au régime complet et une au régime allégé (`deploy/kind/policies`). Attendu dans le
-  journal : `inconclusive` avec la raison `cve-critical` pour la première ; pour la seconde, la
+  journal : `inconclusive` avec la raison de `cve-critical` (`cve/cve-count`) pour la première ; pour la seconde, la
   décision donnée par les règles de secrets et de licences ; dans les deux rapports, une erreur
   dans `results.cve`. Retirer le réglage. Scénarios : *Une base de 50 h, régime complet*, *Une base
   de 50 h, régime allégé*.
+  Fait le 2026-10-17 autrement que prévu : un second screening ne rejuge rien (chaque empreinte a
+  déjà sa décision). La chaîne a été prouvée avec les mêmes outils, hors journal : regis 0.41.0
+  dans son image, base déballée, `GRYPE_DB_MAX_ALLOWED_BUILT_AGE=1s`, sur `redis:7.4`, puis
+  `uske classify`. Playbook complet : erreur `cve`, regis en 0, `cve-critical` critical
+  *incomplete*, état `inconclusive`, raison `cve/cve-count`. Playbook allégé : même erreur,
+  `cve-critical` warning *incomplete*, état `direct-placement`.
 - [x] 4.4 Rédiger, en anglais, les lignes du *Plan de documentation* : `docs/how-to/operate.md`
   (rafraîchissement, rafraîchissement manuel après une montée de version de regis, `grype-db`
   comme première piste d'un *inconclusive* sur `cve-critical`, banc) et
