@@ -6,11 +6,11 @@ metadata:
     admission-track: standard
 spec:
   artifactType: image
-  source: {registry: docker.io, repository: library/nginx}
+  source: {registry: docker.io, repository: library/alpine}
   imports:
-    - name: v1-29
-      tags: {includeRegex: "^1\\.29$"}
+    - name: v3-22-0
+      tags: {includeRegex: "^3\\.22\\.0$"}
       remediate:
         - rewritePackageSources: {mirror: public}
         - upgradePackages: {}
-      destinations: [{registry: ghcr, project: trivoallan, repository: uske-example/nginx}]
+      destinations: [{registry: ghcr, project: trivoallan, repository: uske-example/alpine-repaired}]
