@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>docker.io/library/busybox:sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e — regis report</title>
+  <style>
+    :root {
+      --bg:#fff; --fg:#18181b; --muted:#71717a; --line:#e4e4e7; --panel:#fafafa;
+      --crit:#991b1b; --crit-bg:#fef2f2; --high:#c2410c; --high-bg:#fff7ed;
+      --med:#a16207; --low:#166534; --low-bg:#f0fdf4; --accent:#18181b;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:system-ui,-apple-system,sans-serif; font-size:14px; line-height:1.5; color:var(--fg); background:var(--bg); }
+    .mono { font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+    .muted { color:var(--muted); }
+    a { color:inherit; }
+    .layout { display:grid; grid-template-columns:200px 1fr; max-width:1200px; margin:0 auto; min-height:100vh; }
+    .sidebar { position:sticky; top:0; align-self:start; max-height:100vh; overflow:auto; background:var(--panel); border-right:1px solid var(--line); padding:1.25rem 1rem; }
+    .brand { font-weight:800; letter-spacing:.05em; margin-bottom:1rem; }
+    .toc a { display:flex; justify-content:space-between; gap:.5rem; text-decoration:none; color:var(--muted); padding:.2rem 0; font-size:13px; }
+    .toc a:hover { color:var(--fg); }
+    .st-fail { color:var(--crit); font-weight:700; }
+    .st-pass { color:var(--low); }
+    main { padding:1.5rem 2rem; min-width:0; }
+    header.rep { border-bottom:1px solid var(--line); padding-bottom:1rem; margin-bottom:1.25rem; }
+    header.rep h1 { font-size:1.3rem; word-break:break-all; }
+    header.rep .meta { display:grid; grid-template-columns:max-content 1fr; gap:.1rem .75rem; font-size:13px; margin-top:.5rem; }
+    header.rep .meta dt { font-weight:600; color:var(--muted); }
+    header.rep .meta dd { color:var(--fg); word-break:break-all; }
+    .verdict { margin:1rem 0 1.25rem; }
+    .hero { display:flex; align-items:center; gap:1rem; }
+    .ring { width:64px; height:64px; border-radius:50%; border:5px solid var(--accent); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.3rem; flex:0 0 auto; }
+    .verdict-headline { font-size:1.2rem; margin:0; }
+    .counts { color:var(--muted); font-size:13px; margin-top:.15rem; }
+    .verdict-badges { margin-top:.5rem; }
+    .pill, .badge { display:inline-block; padding:.12rem .5rem; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; }
+    .badge { border-radius:3px; }
+    .badge-critical { background:var(--crit-bg); color:var(--crit); }
+    .badge-high { background:var(--high-bg); color:var(--high); }
+    .badge-medium { background:#fefce8; color:var(--med); }
+    .badge-low { background:var(--low-bg); color:var(--low); }
+    .badge-pass, .badge-passed { background:var(--low-bg); color:var(--low); }
+    .badge-fail, .badge-failed { background:var(--crit-bg); color:var(--crit); }
+    .badge-warn, .badge-warning, .badge-incomplete { background:var(--high-bg); color:var(--high); }
+    .badge-none { background:var(--panel); color:var(--muted); }
+    .triage { border:1px solid var(--line); border-left:3px solid var(--high); border-radius:6px; background:var(--panel); padding:.75rem 1rem; margin:1rem 0; }
+    .triage.clear { border-left-color:var(--low); }
+    .triage h2 { font-size:.95rem; margin-bottom:.4rem; }
+    .triage table { width:100%; border-collapse:collapse; font-size:13px; margin:0; }
+    .triage td { padding:.25rem .4rem; border:none; border-top:1px solid var(--line); vertical-align:top; background:transparent; }
+    .triage-source { font-size:12px; margin:0 0 .4rem; }
+    .triage th { padding:.25rem .4rem; border:none; border-bottom:1px solid var(--line); text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); background:transparent; }
+    .sev { display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin:1rem 0; }
+    .sev .cell { border:1px solid var(--line); border-radius:6px; text-align:center; padding:.5rem; }
+    .sev .n { display:block; font-size:1.4rem; font-weight:800; line-height:1; }
+    .sev .l { font-size:11px; text-transform:uppercase; color:var(--muted); }
+    .sev .critical .n { color:var(--crit); } .sev .high .n { color:var(--high); }
+    .sev .medium .n { color:var(--med); } .sev .low .n { color:var(--low); }
+    h2.section-title { font-size:1rem; margin:1.5rem 0 .5rem; }
+    details.an { border:1px solid var(--line); border-radius:6px; margin:.75rem 0; }
+    details.an > summary { cursor:pointer; padding:.5rem .75rem; font-weight:700; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+    details.an > summary::-webkit-details-marker { display:none; }
+    details.an > summary::before { content:"▸"; margin-right:.5rem; color:var(--muted); }
+    details.an[open] > summary::before { content:"▾"; }
+    details.an .an-body { padding:.25rem .75rem .75rem; }
+    details.an:target { border-color:var(--accent); }
+    table { border-collapse:collapse; width:100%; margin:.5rem 0; font-size:13px; }
+    th { background:var(--panel); text-align:left; padding:.4rem .75rem; border:1px solid var(--line); font-weight:600; color:#52525b; }
+    td { padding:.35rem .75rem; border:1px solid var(--line); vertical-align:top; }
+    ul { padding-left:1.2rem; } li { margin:.1rem 0; }
+    dl.scalars { display:grid; grid-template-columns:max-content 1fr; gap:.15rem .75rem; font-size:13px; }
+    dl.scalars dt { font-weight:600; color:var(--muted); }
+    em { color:var(--muted); font-style:normal; }
+    footer { margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    @media (max-width:720px) {
+      .layout { grid-template-columns:1fr; }
+      .sidebar { position:sticky; top:0; max-height:none; height:auto; border-right:none; border-bottom:1px solid var(--line); padding:.6rem .75rem; z-index:5; }
+      .brand { display:inline-block; margin:0 .5rem 0 0; }
+      .toc { display:flex; gap:.4rem; overflow-x:auto; white-space:nowrap; }
+      .toc a { flex:0 0 auto; border:1px solid var(--line); border-radius:999px; padding:.2rem .6rem; }
+      .sev { grid-template-columns:repeat(2,1fr); }
+      main { padding:1rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">regis</div>
+    <nav class="toc">
+      <a href="#verdict"><span>Verdict</span></a>
+      <a href="#triage"><span>Triage</span></a>
+      
+      <a href="#endoflife"><span>endoflife</span><span class="st-pass">✓</span></a>
+      
+      <a href="#dockle"><span>dockle</span><span class="st-pass">✓</span></a>
+      
+      <a href="#hadolint"><span>hadolint</span><span class="st-pass">✓</span></a>
+      
+      <a href="#popularity"><span>popularity</span><span class="st-pass">✓</span></a>
+      
+      <a href="#cve"><span>cve</span><span class="st-pass">✓</span></a>
+      
+      <a href="#freshness"><span>freshness</span><span class="st-fail">✗</span></a>
+      
+      <a href="#provenance"><span>provenance</span><span class="st-pass">✓</span></a>
+      
+      <a href="#sbom"><span>sbom</span><span class="st-pass">✓</span></a>
+      
+      <a href="#oci"><span>oci</span><span class="st-pass">✓</span></a>
+      
+      <a href="#size"><span>size</span><span class="st-pass">✓</span></a>
+      
+      <a href="#versioning"><span>versioning</span><span class="st-pass">✓</span></a>
+      
+      <a href="#scorecarddev"><span>scorecarddev</span><span class="st-pass">✓</span></a>
+      
+      <a href="#secrets"><span>secrets</span><span class="st-pass">✓</span></a>
+      
+      <a href="#metadata"><span>metadata</span><span class="st-pass">✓</span></a>
+      
+    </nav>
+  </aside>
+
+  <main>
+    <header class="rep" id="top">
+      <h1>docker.io/library/busybox:sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</h1>
+      <dl class="meta">
+        <dt>Registry</dt><dd>docker.io</dd>
+        <dt>Repository</dt><dd>library/busybox</dd>
+        <dt>Tag</dt><dd class="mono">sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</dd>
+        
+        <dt>Digest</dt><dd class="mono">sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</dd>
+        
+        
+        <dt>Analysis date</dt><dd>2026-10-17T11:26:21.745415+00:00</dd>
+        
+      </dl>
+    </header>
+
+    
+    <section id="verdict" class="verdict">
+      <div class="hero">
+        <div class="ring" aria-label="Score 89 out of 100">89</div>
+        <div>
+          <h2 class="verdict-headline">🏷️ Transformation requise puis placement · 89/100</h2>
+          <p class="counts">8/9 rules · 1 failed · worst: 🟧 warning</p>
+        </div>
+      </div>
+      
+    </section>
+    
+
+    
+    
+    <section id="triage" class="triage ">
+      <h2>⚠ Attention required</h2>
+      
+      
+      <p class="triage-source">
+        Playbook <strong>Évaluation d&#39;une version</strong> <span class="muted">1.0.0</span>
+        · ruleset <span class="mono">sha256:25cc16106e1395387c0596a67e3000c0f7aeb88e56df6adc42e990b4bedf59ad</span>
+      </p>
+      <table>
+        <thead><tr><th></th><th>Rule</th><th>Severity</th><th>Observed</th><th>Threshold</th><th>Detail</th></tr></thead>
+        <tbody>
+          
+          <tr class="rule-failed">
+            <td>✗</td>
+            <td><span class="mono">freshness</span><br><span class="muted">Image should be less than expected days old.</span></td>
+            <td>warning</td>
+            <td><span class="mono">results.freshness.age_days</span> = <strong>750</strong><br><span class="mono">results.freshness.reproducible_build</span> = <strong>False</strong></td>
+            <td><span class="mono">max_days</span> = <strong>90</strong></td>
+            <td>Image is older than 90 days (750 days).</td>
+          </tr>
+          
+          
+        </tbody>
+      </table>
+      
+    </section>
+    
+
+    
+    <section class="sev">
+      
+      <div class="cell critical"><span class="n">0</span><span class="l">critical</span></div>
+      
+      <div class="cell high"><span class="n">0</span><span class="l">high</span></div>
+      
+      <div class="cell medium"><span class="n">1</span><span class="l">medium</span></div>
+      
+      <div class="cell low"><span class="n">2</span><span class="l">low</span></div>
+      
+    </section>
+    
+
+    
+    <section id="playbooks">
+      <h2 class="section-title">Playbook results</h2>
+      <table>
+        <thead>
+          <tr><th>Playbook</th><th>Tier</th><th>Score</th><th>Failing rules</th></tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Évaluation d&#39;une version <span class="muted">1.0.0</span></td>
+            <td>None Transformation requise puis placement</td>
+            <td>89%</td>
+            <td>1</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </section>
+    
+
+    
+    
+    <details class="an" id="endoflife">
+      <summary>
+        <span>endoflife</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>endoflife</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>product</th><td>busybox</td></tr>
+        
+        <tr><th>product_found</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>matched_cycle</th><td><em>—</em></td></tr>
+        
+        <tr><th>is_eol</th><td><em>—</em></td></tr>
+        
+        <tr><th>active_cycles_count</th><td><em>—</em></td></tr>
+        
+        <tr><th>eol_cycles_count</th><td><em>—</em></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="dockle">
+      <summary>
+        <span>dockle</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>dockle</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>passed</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+        <tr><th>issues_count</th><td>3</td></tr>
+        
+        <tr><th>issues_by_level</th><td><table>
+      <tbody>
+        
+        <tr><th>FATAL</th><td>0</td></tr>
+        
+        <tr><th>WARN</th><td>1</td></tr>
+        
+        <tr><th>INFO</th><td>2</td></tr>
+        
+        <tr><th>SKIP</th><td>0</td></tr>
+        
+        <tr><th>PASS</th><td>0</td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>issues</th><td><table>
+    <thead><tr><th>code</th><th>level</th><th>title</th><th>alerts</th></tr></thead>
+    <tbody>
+      
+      <tr><td>CIS-DI-0001</td><td>WARN</td><td>Create a user for the container</td><td>[&#39;Last user should not be root&#39;]</td></tr>
+      
+      <tr><td>CIS-DI-0005</td><td>INFO</td><td>Enable Content trust for Docker</td><td>[&#39;export DOCKER_CONTENT_TRUST=1 before docker pull/build&#39;]</td></tr>
+      
+      <tr><td>CIS-DI-0006</td><td>INFO</td><td>Add HEALTHCHECK instruction to the container image</td><td>[&#39;not found HEALTHCHECK statement&#39;]</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="hadolint">
+      <summary>
+        <span>hadolint</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>hadolint</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>passed</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>issues_count</th><td>1</td></tr>
+        
+        <tr><th>issues_by_level</th><td><table>
+      <tbody>
+        
+        <tr><th>error</th><td>1</td></tr>
+        
+        <tr><th>warning</th><td>0</td></tr>
+        
+        <tr><th>info</th><td>0</td></tr>
+        
+        <tr><th>style</th><td>0</td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>issues</th><td><table>
+    <thead><tr><th>code</th><th>level</th><th>message</th><th>line</th></tr></thead>
+    <tbody>
+      
+      <tr><td>SC1088</td><td>error</td><td>Parsing stopped here. Invalid use of parentheses?</td><td>2</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+        <tr><th>dockerfile</th><td>FROM scratch
+RUN BusyBox 1.37.0 (glibc), Debian 13</td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="popularity">
+      <summary>
+        <span>popularity</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>popularity</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>available</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+        <tr><th>pull_count</th><td>12919157978</td></tr>
+        
+        <tr><th>star_count</th><td>3523</td></tr>
+        
+        <tr><th>description</th><td>Busybox base image.</td></tr>
+        
+        <tr><th>date_registered</th><td>2013-04-30T20:54:42Z</td></tr>
+        
+        <tr><th>is_official</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+        <tr><th>source</th><td><table>
+      <tbody>
+        
+        <tr><th>fetched_at</th><td>2026-10-17T11:26:15.623785+00:00</td></tr>
+        
+        <tr><th>built_at</th><td>2026-09-23T07:58:38.938888Z</td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="cve">
+      <summary>
+        <span>cve</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>cve</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>scanner_version</th><td>0.112.0</td></tr>
+        
+        <tr><th>vulnerability_count</th><td>3</td></tr>
+        
+        <tr><th>critical_count</th><td>0</td></tr>
+        
+        <tr><th>high_count</th><td>0</td></tr>
+        
+        <tr><th>medium_count</th><td>1</td></tr>
+        
+        <tr><th>low_count</th><td>2</td></tr>
+        
+        <tr><th>negligible_count</th><td>0</td></tr>
+        
+        <tr><th>unknown_count</th><td>0</td></tr>
+        
+        <tr><th>fixed_count</th><td>0</td></tr>
+        
+        <tr><th>targets</th><td><table>
+    <thead><tr><th>Target</th><th>Vulnerabilities</th></tr></thead>
+    <tbody>
+      
+      <tr><td>binary</td><td>[{&#39;VulnerabilityID&#39;: &#39;CVE-2025-60876&#39;, &#39;PkgName&#39;: &#39;busybox&#39;, &#39;InstalledVersion&#39;: &#39;1.37.0&#39;, &#39;FixedVersion&#39;: &#39;&#39;, &#39;Severity&#39;: &#39;MEDIUM&#39;, &#39;Title&#39;: &#39;CVE-2025-60876&#39;, &#39;Description&#39;: &#39;BusyBox wget thru 1.3.7 accepted raw CR (0x0D)/LF (0x0A) and other C0 control bytes in the HTTP request-target (path/query), allowing the request line to be split and attacker-controlled headers to be injected. To preserve the HTTP/1.1 request-line shape METHOD SP request-target SP HTTP/1.1, a raw space (0x20) in the request-target must also be rejected (clients should use %20).&#39;}, {&#39;VulnerabilityID&#39;: &#39;CVE-2025-46394&#39;, &#39;PkgName&#39;: &#39;busybox&#39;, &#39;InstalledVersion&#39;: &#39;1.37.0&#39;, &#39;FixedVersion&#39;: &#39;&#39;, &#39;Severity&#39;: &#39;LOW&#39;, &#39;Title&#39;: &#39;CVE-2025-46394&#39;, &#39;Description&#39;: &#39;In tar in BusyBox through 1.37.0, a TAR archive can have filenames hidden from a listing through the use of terminal escape sequences.&#39;}, {&#39;VulnerabilityID&#39;: &#39;CVE-2024-58251&#39;, &#39;PkgName&#39;: &#39;busybox&#39;, &#39;InstalledVersion&#39;: &#39;1.37.0&#39;, &#39;FixedVersion&#39;: &#39;&#39;, &#39;Severity&#39;: &#39;LOW&#39;, &#39;Title&#39;: &#39;CVE-2024-58251&#39;, &#39;Description&#39;: &#39;In netstat in BusyBox through 1.37.0, local users can launch of network application with an argv[0] containing an ANSI terminal escape sequence, leading to a denial of service (terminal locked up) when netstat is used by a victim.&#39;}]</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+        <tr><th>source</th><td><table>
+      <tbody>
+        
+        <tr><th>fetched_at</th><td>2026-10-17T11:26:16.880974+00:00</td></tr>
+        
+        <tr><th>built_at</th><td>2026-10-17T06:27:09Z</td></tr>
+        
+        <tr><th>version</th><td>v6.1.10</td></tr>
+        
+        <tr><th>checksum</th><td>sha256:4c2b8b0cd02313f74a50c81c457796660c4997565cc2ff211e09cc1880205c10</td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="freshness" open>
+      <summary>
+        <span>freshness</span>
+        <span class="st-fail">✗</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>freshness</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>tag_created</th><td>2024-09-26T21:31:42Z</td></tr>
+        
+        <tr><th>latest_created</th><td>2026-05-13T02:21:49Z</td></tr>
+        
+        <tr><th>age_days</th><td>750</td></tr>
+        
+        <tr><th>behind_latest_days</th><td>593</td></tr>
+        
+        <tr><th>reproducible_build</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>is_latest</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="provenance">
+      <summary>
+        <span>provenance</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>provenance</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>has_provenance</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>has_cosign_signature</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>source_tracked</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>indicators_count</th><td>0</td></tr>
+        
+        <tr><th>indicators</th><td><em>none</em></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="sbom">
+      <summary>
+        <span>sbom</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>sbom</td></tr>
+        
+        <tr><th>scanner_version</th><td>1.44.0</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>has_sbom</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+        <tr><th>sbom_format</th><td>CycloneDX</td></tr>
+        
+        <tr><th>sbom_version</th><td>1.6</td></tr>
+        
+        <tr><th>total_components</th><td>3</td></tr>
+        
+        <tr><th>component_types</th><td><table>
+      <tbody>
+        
+        <tr><th>application</th><td>1</td></tr>
+        
+        <tr><th>operating-system</th><td>1</td></tr>
+        
+        <tr><th>file</th><td>1</td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>total_dependencies</th><td>0</td></tr>
+        
+        <tr><th>licenses</th><td><em>none</em></td></tr>
+        
+        <tr><th>copyleft_licenses</th><td><em>none</em></td></tr>
+        
+        <tr><th>components</th><td><table>
+    <thead><tr><th>name</th><th>version</th><th>type</th><th>purl</th><th>licenses</th></tr></thead>
+    <tbody>
+      
+      <tr><td>busybox</td><td>1.37.0</td><td>application</td><td>pkg:generic/busybox@1.37.0</td><td>[]</td></tr>
+      
+      <tr><td>busybox</td><td>1.37.0</td><td>operating-system</td><td><em>—</em></td><td>[]</td></tr>
+      
+      <tr><td>/bin/[</td><td><em>—</em></td><td>file</td><td><em>—</em></td><td>[]</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="oci">
+      <summary>
+        <span>oci</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>oci</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>platforms</th><td><table>
+    <thead><tr><th>architecture</th><th>os</th><th>created</th><th>labels</th><th>user</th><th>env</th><th>exposed_ports</th><th>layers_count</th><th>size</th><th>digest</th></tr></thead>
+    <tbody>
+      
+      <tr><td>amd64</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>2211973</td><td>sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4</td></tr>
+      
+      <tr><td>arm</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>1824648</td><td>sha256:88132f86ce62d9462471f3758c3080ee2709b782ece90f847f8c09b6fafc2bf7</td></tr>
+      
+      <tr><td>arm</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>954893</td><td>sha256:80ddcd89e4e9e4eda71e4e5d9c9442d6a8156eb9da7b2b0c7bf91248784a17ba</td></tr>
+      
+      <tr><td>arm</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>1592897</td><td>sha256:91aa2a66a996afa9821eed6758ed0489ee891c50f4b8940b7b3db500b79f029f</td></tr>
+      
+      <tr><td>arm64</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>1901250</td><td>sha256:d82c2ab94640ded77cf76514ce6a84870761105058a4a9e51b05a8a79be97a6c</td></tr>
+      
+      <tr><td>386</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>2286956</td><td>sha256:a88c21a22c5ddc9dada27459a93cfa69dd1d155578f8e8664d451854accb3e79</td></tr>
+      
+      <tr><td>ppc64le</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>2525141</td><td>sha256:025d95c7d9b648f6202fabbd9a33182fcbac04164069078e6fe3702bd2450283</td></tr>
+      
+      <tr><td>riscv64</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>1941940</td><td>sha256:be2e8702261d743f7b1ba1b1cb4499927664d7a82baedf87564306426dda680a</td></tr>
+      
+      <tr><td>s390x</td><td>linux</td><td>2024-09-26T21:31:42Z</td><td>{}</td><td></td><td>[&#39;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&#39;]</td><td>[]</td><td>1</td><td>2048267</td><td>sha256:7f0d4675ec87f3f46c04f2285079906361c789390de0917d850a9d253fffd2aa</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+        <tr><th>platforms_supported</th><td><ul><li>linux/amd64</li><li>linux/arm/v5</li><li>linux/arm/v6</li><li>linux/arm/v7</li><li>linux/arm64/v8</li><li>linux/386</li><li>linux/ppc64le</li><li>linux/riscv64</li><li>linux/s390x</li></ul></td></tr>
+        
+        <tr><th>tags</th><td><ul><li>1</li><li>1-glibc</li><li>1-musl</li><li>1-ubuntu</li><li>1-uclibc</li><li>1.21-ubuntu</li><li>1.21.0-ubuntu</li><li>1.23</li><li>1.23.2</li><li>1.24</li><li>1.24-glibc</li><li>1.24-musl</li><li>1.24-uclibc</li><li>1.24.0</li><li>1.24.1</li><li>1.24.1-glibc</li><li>1.24.1-musl</li><li>1.24.1-uclibc</li><li>1.24.2</li><li>1.24.2-glibc</li><li>1.24.2-musl</li><li>1.24.2-uclibc</li><li>1.25</li><li>1.25-glibc</li><li>1.25-musl</li><li>1.25-uclibc</li><li>1.25.0</li><li>1.25.0-glibc</li><li>1.25.0-musl</li><li>1.25.0-uclibc</li><li>1.25.1</li><li>1.25.1-glibc</li><li>1.25.1-musl</li><li>1.25.1-uclibc</li><li>1.26</li><li>1.26-glibc</li><li>1.26-musl</li><li>1.26-uclibc</li><li>1.26.0</li><li>1.26.0-glibc</li><li>1.26.0-musl</li><li>1.26.0-uclibc</li><li>1.26.1</li><li>1.26.1-glibc</li><li>1.26.1-musl</li><li>1.26.1-uclibc</li><li>1.26.2</li><li>1.26.2-glibc</li><li>1.26.2-musl</li><li>1.26.2-uclibc</li><li>1.27</li><li>1.27-glibc</li><li>1.27-musl</li><li>1.27-uclibc</li><li>1.27.0</li><li>1.27.0-glibc</li><li>1.27.0-musl</li><li>1.27.0-uclibc</li><li>1.27.1</li><li>1.27.1-glibc</li><li>1.27.1-musl</li><li>1.27.1-uclibc</li><li>1.27.2</li><li>1.27.2-glibc</li><li>1.27.2-musl</li><li>1.27.2-uclibc</li><li>1.28</li><li>1.28-glibc</li><li>1.28-musl</li><li>1.28-uclibc</li><li>1.28.0</li><li>1.28.0-glibc</li><li>1.28.0-musl</li><li>1.28.0-uclibc</li><li>1.28.1</li><li>1.28.1-glibc</li><li>1.28.1-musl</li><li>1.28.1-uclibc</li><li>1.28.2</li><li>1.28.2-glibc</li><li>1.28.2-musl</li><li>1.28.2-uclibc</li><li>1.28.3</li><li>1.28.3-glibc</li><li>1.28.3-musl</li><li>1.28.3-uclibc</li><li>1.28.4</li><li>1.28.4-glibc</li><li>1.28.4-musl</li><li>1.28.4-uclibc</li><li>1.29</li><li>1.29-glibc</li><li>1.29-musl</li><li>1.29-uclibc</li><li>1.29.1</li><li>1.29.1-glibc</li><li>1.29.1-musl</li><li>1.29.1-uclibc</li><li>1.29.2</li><li>1.29.2-glibc</li><li>1.29.2-musl</li><li>1.29.2-uclibc</li><li>1.29.3</li><li>1.29.3-glibc</li><li>1.29.3-musl</li><li>1.29.3-uclibc</li><li>1.30</li><li>1.30-glibc</li><li>1.30-musl</li><li>1.30-uclibc</li><li>1.30.0</li><li>1.30.0-glibc</li><li>1.30.0-musl</li><li>1.30.0-uclibc</li><li>1.30.1</li><li>1.30.1-glibc</li><li>1.30.1-musl</li><li>1.30.1-uclibc</li><li>1.31</li><li>1.31-glibc</li><li>1.31-musl</li><li>1.31-uclibc</li><li>1.31.0</li><li>1.31.0-glibc</li><li>1.31.0-musl</li><li>1.31.0-uclibc</li><li>1.31.1</li><li>1.31.1-glibc</li><li>1.31.1-musl</li><li>1.31.1-uclibc</li><li>1.32</li><li>1.32-glibc</li><li>1.32-musl</li><li>1.32-uclibc</li><li>1.32.0</li><li>1.32.0-glibc</li><li>1.32.0-musl</li><li>1.32.0-uclibc</li><li>1.32.1</li><li>1.32.1-glibc</li><li>1.32.1-musl</li><li>1.32.1-uclibc</li><li>1.33</li><li>1.33-glibc</li><li>1.33-musl</li><li>1.33-uclibc</li><li>1.33.0</li><li>1.33.0-glibc</li><li>1.33.0-musl</li><li>1.33.0-uclibc</li><li>1.33.1</li><li>1.33.1-glibc</li><li>1.33.1-musl</li><li>1.33.1-uclibc</li><li>1.34</li><li>1.34-glibc</li><li>1.34-musl</li><li>1.34-uclibc</li><li>1.34.0</li><li>1.34.0-glibc</li><li>1.34.0-musl</li><li>1.34.0-uclibc</li><li>1.34.1</li><li>1.34.1-glibc</li><li>1.34.1-musl</li><li>1.34.1-uclibc</li><li>1.35</li><li>1.35-glibc</li><li>1.35-musl</li><li>1.35-uclibc</li><li>1.35.0</li><li>1.35.0-glibc</li><li>1.35.0-musl</li><li>1.35.0-uclibc</li><li>1.36</li><li>1.36-glibc</li><li>1.36-musl</li><li>1.36-uclibc</li><li>1.36.0</li><li>1.36.0-glibc</li><li>1.36.0-musl</li><li>1.36.0-uclibc</li><li>1.36.1</li><li>1.36.1-glibc</li><li>1.36.1-musl</li><li>1.36.1-uclibc</li><li>1.37</li><li>1.37-glibc</li><li>1.37-musl</li><li>1.37-uclibc</li><li>1.37.0</li><li>1.37.0-glibc</li><li>1.37.0-musl</li><li>1.37.0-uclibc</li><li>1.38</li><li>1.38-glibc</li><li>1.38-musl</li><li>1.38-uclibc</li><li>1.38.0</li><li>1.38.0-glibc</li><li>1.38.0-musl</li><li>1.38.0-uclibc</li><li>buildroot-2013.08.1</li><li>buildroot-2014.02</li><li>glibc</li><li>latest</li><li>musl</li><li>stable</li><li>stable-glibc</li><li>stable-musl</li><li>stable-uclibc</li><li>ubuntu</li><li>ubuntu-12.04</li><li>ubuntu-14.04</li><li>uclibc</li><li>unstable</li><li>unstable-glibc</li><li>unstable-musl</li><li>unstable-uclibc</li></ul></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="size">
+      <summary>
+        <span>size</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>size</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>multi_arch</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+        <tr><th>total_compressed_bytes</th><td>2211973</td></tr>
+        
+        <tr><th>total_compressed_human</th><td>2.1 MB</td></tr>
+        
+        <tr><th>layer_count</th><td>1</td></tr>
+        
+        <tr><th>config_size_bytes</th><td>0</td></tr>
+        
+        <tr><th>layers</th><td><em>none</em></td></tr>
+        
+        <tr><th>platforms</th><td><table>
+    <thead><tr><th>platform</th><th>compressed_bytes</th><th>compressed_human</th><th>layer_count</th></tr></thead>
+    <tbody>
+      
+      <tr><td>linux/amd64</td><td>2211973</td><td>2.1 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/arm/v5</td><td>1824648</td><td>1.7 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/arm/v6</td><td>954893</td><td>932.5 KB</td><td>1</td></tr>
+      
+      <tr><td>linux/arm/v7</td><td>1592897</td><td>1.5 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/arm64/v8</td><td>1901250</td><td>1.8 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/386</td><td>2286956</td><td>2.2 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/ppc64le</td><td>2525141</td><td>2.4 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/riscv64</td><td>1941940</td><td>1.9 MB</td><td>1</td></tr>
+      
+      <tr><td>linux/s390x</td><td>2048267</td><td>2.0 MB</td><td>1</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="versioning">
+      <summary>
+        <span>versioning</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>versioning</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>total_tags</th><td>219</td></tr>
+        
+        <tr><th>dominant_pattern</th><td>semver-variant</td></tr>
+        
+        <tr><th>semver_compliant_percentage</th><td>92.2</td></tr>
+        
+        <tr><th>patterns</th><td><table>
+    <thead><tr><th>pattern</th><th>count</th><th>percentage</th><th>examples</th></tr></thead>
+    <tbody>
+      
+      <tr><td>named</td><td>17</td><td>7.8</td><td>[&#39;buildroot-2013.08.1&#39;, &#39;buildroot-2014.02&#39;, &#39;glibc&#39;, &#39;latest&#39;, &#39;musl&#39;, &#39;stable&#39;, &#39;stable-glibc&#39;, &#39;stable-musl&#39;, &#39;stable-uclibc&#39;, &#39;ubuntu&#39;]</td></tr>
+      
+      <tr><td>numeric</td><td>17</td><td>7.8</td><td>[&#39;1&#39;, &#39;1.23&#39;, &#39;1.24&#39;, &#39;1.25&#39;, &#39;1.26&#39;, &#39;1.27&#39;, &#39;1.28&#39;, &#39;1.29&#39;, &#39;1.30&#39;, &#39;1.31&#39;]</td></tr>
+      
+      <tr><td>numeric-variant</td><td>50</td><td>22.8</td><td>[&#39;1-glibc&#39;, &#39;1-musl&#39;, &#39;1-ubuntu&#39;, &#39;1-uclibc&#39;, &#39;1.21-ubuntu&#39;, &#39;1.24-glibc&#39;, &#39;1.24-musl&#39;, &#39;1.24-uclibc&#39;, &#39;1.25-glibc&#39;, &#39;1.25-musl&#39;]</td></tr>
+      
+      <tr><td>semver</td><td>35</td><td>16.0</td><td>[&#39;1.23.2&#39;, &#39;1.24.0&#39;, &#39;1.24.1&#39;, &#39;1.24.2&#39;, &#39;1.25.0&#39;, &#39;1.25.1&#39;, &#39;1.26.0&#39;, &#39;1.26.1&#39;, &#39;1.26.2&#39;, &#39;1.27.0&#39;]</td></tr>
+      
+      <tr><td>semver-variant</td><td>100</td><td>45.7</td><td>[&#39;1.21.0-ubuntu&#39;, &#39;1.24.1-glibc&#39;, &#39;1.24.1-musl&#39;, &#39;1.24.1-uclibc&#39;, &#39;1.24.2-glibc&#39;, &#39;1.24.2-musl&#39;, &#39;1.24.2-uclibc&#39;, &#39;1.25.0-glibc&#39;, &#39;1.25.0-musl&#39;, &#39;1.25.0-uclibc&#39;]</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+        <tr><th>variants</th><td><table>
+    <thead><tr><th>name</th><th>count</th><th>percentage</th><th>examples</th></tr></thead>
+    <tbody>
+      
+      <tr><td>glibc</td><td>52</td><td>23.7</td><td>[&#39;1-glibc&#39;, &#39;1.24-glibc&#39;, &#39;1.24.1-glibc&#39;, &#39;1.24.2-glibc&#39;, &#39;1.25-glibc&#39;, &#39;1.25.0-glibc&#39;, &#39;1.25.1-glibc&#39;, &#39;1.26-glibc&#39;, &#39;1.26.0-glibc&#39;, &#39;1.26.1-glibc&#39;]</td></tr>
+      
+      <tr><td>musl</td><td>52</td><td>23.7</td><td>[&#39;1-musl&#39;, &#39;1.24-musl&#39;, &#39;1.24.1-musl&#39;, &#39;1.24.2-musl&#39;, &#39;1.25-musl&#39;, &#39;1.25.0-musl&#39;, &#39;1.25.1-musl&#39;, &#39;1.26-musl&#39;, &#39;1.26.0-musl&#39;, &#39;1.26.1-musl&#39;]</td></tr>
+      
+      <tr><td>uclibc</td><td>52</td><td>23.7</td><td>[&#39;1-uclibc&#39;, &#39;1.24-uclibc&#39;, &#39;1.24.1-uclibc&#39;, &#39;1.24.2-uclibc&#39;, &#39;1.25-uclibc&#39;, &#39;1.25.0-uclibc&#39;, &#39;1.25.1-uclibc&#39;, &#39;1.26-uclibc&#39;, &#39;1.26.0-uclibc&#39;, &#39;1.26.1-uclibc&#39;]</td></tr>
+      
+      <tr><td>ubuntu</td><td>6</td><td>2.7</td><td>[&#39;1-ubuntu&#39;, &#39;1.21-ubuntu&#39;, &#39;1.21.0-ubuntu&#39;, &#39;ubuntu&#39;, &#39;ubuntu-12.04&#39;, &#39;ubuntu-14.04&#39;]</td></tr>
+      
+    </tbody>
+  </table></td></tr>
+        
+        <tr><th>aliases</th><td><ul><li>1</li><li>1-glibc</li><li>1-musl</li><li>1-ubuntu</li><li>1-uclibc</li><li>1.21-ubuntu</li><li>1.21.0-ubuntu</li><li>1.23</li><li>1.23.2</li><li>1.24</li><li>1.24-glibc</li><li>1.24-musl</li><li>1.24-uclibc</li><li>1.24.0</li><li>1.24.1</li><li>1.24.1-glibc</li><li>1.24.1-musl</li><li>1.24.1-uclibc</li><li>1.24.2</li><li>1.24.2-glibc</li><li>1.24.2-musl</li><li>1.24.2-uclibc</li><li>1.25</li><li>1.25-glibc</li><li>1.25-musl</li><li>1.25-uclibc</li><li>1.25.0</li><li>1.25.0-glibc</li><li>1.25.0-musl</li><li>1.25.0-uclibc</li><li>1.25.1</li><li>1.25.1-glibc</li><li>1.25.1-musl</li><li>1.25.1-uclibc</li><li>1.26</li><li>1.26-glibc</li><li>1.26-musl</li><li>1.26-uclibc</li><li>1.26.0</li><li>1.26.0-glibc</li><li>1.26.0-musl</li><li>1.26.0-uclibc</li><li>1.26.1</li><li>1.26.1-glibc</li><li>1.26.1-musl</li><li>1.26.1-uclibc</li><li>1.26.2</li><li>1.26.2-glibc</li><li>1.26.2-musl</li><li>1.26.2-uclibc</li><li>1.27</li><li>1.27-glibc</li><li>1.27-musl</li><li>1.27-uclibc</li><li>1.27.0</li><li>1.27.0-glibc</li><li>1.27.0-musl</li><li>1.27.0-uclibc</li><li>1.27.1</li><li>1.27.1-glibc</li><li>1.27.1-musl</li><li>1.27.1-uclibc</li><li>1.27.2</li><li>1.27.2-glibc</li><li>1.27.2-musl</li><li>1.27.2-uclibc</li><li>1.28</li><li>1.28-glibc</li><li>1.28-musl</li><li>1.28-uclibc</li><li>1.28.0</li><li>1.28.0-glibc</li><li>1.28.0-musl</li><li>1.28.0-uclibc</li><li>1.28.1</li><li>1.28.1-glibc</li><li>1.28.1-musl</li><li>1.28.1-uclibc</li><li>1.28.2</li><li>1.28.2-glibc</li><li>1.28.2-musl</li><li>1.28.2-uclibc</li><li>1.28.3</li><li>1.28.3-glibc</li><li>1.28.3-musl</li><li>1.28.3-uclibc</li><li>1.28.4</li><li>1.28.4-glibc</li><li>1.28.4-musl</li><li>1.28.4-uclibc</li><li>1.29</li><li>1.29-glibc</li><li>1.29-musl</li><li>1.29-uclibc</li><li>1.29.1</li><li>1.29.1-glibc</li><li>1.29.1-musl</li><li>1.29.1-uclibc</li><li>1.29.2</li><li>1.29.2-glibc</li><li>1.29.2-musl</li><li>1.29.2-uclibc</li><li>1.29.3</li><li>1.29.3-glibc</li><li>1.29.3-musl</li><li>1.29.3-uclibc</li><li>1.30</li><li>1.30-glibc</li><li>1.30-musl</li><li>1.30-uclibc</li><li>1.30.0</li><li>1.30.0-glibc</li><li>1.30.0-musl</li><li>1.30.0-uclibc</li><li>1.30.1</li><li>1.30.1-glibc</li><li>1.30.1-musl</li><li>1.30.1-uclibc</li><li>1.31</li><li>1.31-glibc</li><li>1.31-musl</li><li>1.31-uclibc</li><li>1.31.0</li><li>1.31.0-glibc</li><li>1.31.0-musl</li><li>1.31.0-uclibc</li><li>1.31.1</li><li>1.31.1-glibc</li><li>1.31.1-musl</li><li>1.31.1-uclibc</li><li>1.32</li><li>1.32-glibc</li><li>1.32-musl</li><li>1.32-uclibc</li><li>1.32.0</li><li>1.32.0-glibc</li><li>1.32.0-musl</li><li>1.32.0-uclibc</li><li>1.32.1</li><li>1.32.1-glibc</li><li>1.32.1-musl</li><li>1.32.1-uclibc</li><li>1.33</li><li>1.33-glibc</li><li>1.33-musl</li><li>1.33-uclibc</li><li>1.33.0</li><li>1.33.0-glibc</li><li>1.33.0-musl</li><li>1.33.0-uclibc</li><li>1.33.1</li><li>1.33.1-glibc</li><li>1.33.1-musl</li><li>1.33.1-uclibc</li><li>1.34</li><li>1.34-glibc</li><li>1.34-musl</li><li>1.34-uclibc</li><li>1.34.0</li><li>1.34.0-glibc</li><li>1.34.0-musl</li><li>1.34.0-uclibc</li><li>1.34.1</li><li>1.34.1-glibc</li><li>1.34.1-musl</li><li>1.34.1-uclibc</li><li>1.35</li><li>1.35-glibc</li><li>1.35-musl</li><li>1.35-uclibc</li><li>1.35.0</li><li>1.35.0-glibc</li><li>1.35.0-musl</li><li>1.35.0-uclibc</li><li>1.36</li><li>1.36-glibc</li><li>1.36-musl</li><li>1.36-uclibc</li><li>1.36.0</li><li>1.36.0-glibc</li><li>1.36.0-musl</li><li>1.36.0-uclibc</li><li>1.36.1</li><li>1.36.1-glibc</li><li>1.36.1-musl</li><li>1.36.1-uclibc</li><li>1.37</li><li>1.37-glibc</li><li>1.37-musl</li><li>1.37-uclibc</li><li>1.37.0</li><li>1.37.0-glibc</li><li>1.37.0-musl</li><li>1.37.0-uclibc</li><li>1.38</li><li>1.38-glibc</li><li>1.38-musl</li><li>1.38-uclibc</li><li>1.38.0</li><li>1.38.0-glibc</li><li>1.38.0-musl</li><li>1.38.0-uclibc</li><li>buildroot-2013.08.1</li><li>buildroot-2014.02</li><li>glibc</li><li>latest</li><li>musl</li><li>stable</li><li>stable-glibc</li><li>stable-musl</li><li>stable-uclibc</li><li>ubuntu</li><li>ubuntu-12.04</li><li>ubuntu-14.04</li><li>uclibc</li><li>unstable</li><li>unstable-glibc</li><li>unstable-musl</li><li>unstable-uclibc</li></ul></td></tr>
+        
+        <tr><th>release_lines</th><td><ul><li>1</li><li>1.38</li><li>1.38.0</li></ul></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="scorecarddev">
+      <summary>
+        <span>scorecarddev</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>scorecarddev</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>source_repo</th><td>https://github.com/docker-library/busybox</td></tr>
+        
+        <tr><th>scorecard_available</th><td><span class="badge badge-fail">no</span></td></tr>
+        
+        <tr><th>score</th><td><em>—</em></td></tr>
+        
+        <tr><th>checks</th><td><em>none</em></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="secrets">
+      <summary>
+        <span>secrets</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>secrets</td></tr>
+        
+        <tr><th>repository</th><td>library/busybox</td></tr>
+        
+        <tr><th>tag</th><td>sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e</td></tr>
+        
+        <tr><th>scanner_version</th><td>trufflehog 3.95.3</td></tr>
+        
+        <tr><th>secrets_count</th><td>0</td></tr>
+        
+        <tr><th>verified_count</th><td>0</td></tr>
+        
+        <tr><th>findings</th><td><em>none</em></td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+    
+    <details class="an" id="metadata">
+      <summary>
+        <span>metadata</span>
+        <span class="st-pass">✓</span>
+      </summary>
+      <div class="an-body">
+        
+          <table>
+      <tbody>
+        
+        <tr><th>analyzer</th><td>metadata</td></tr>
+        
+        <tr><th>metadata</th><td><table>
+      <tbody>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>metadata_validation</th><td><table>
+      <tbody>
+        
+        <tr><th>ci.platform</th><td><table>
+      <tbody>
+        
+        <tr><th>valid</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>ci.job.id</th><td><table>
+      <tbody>
+        
+        <tr><th>valid</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>ci.job.url</th><td><table>
+      <tbody>
+        
+        <tr><th>valid</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+      </tbody>
+    </table></td></tr>
+        
+        <tr><th>valid</th><td><span class="badge badge-pass">yes</span></td></tr>
+        
+        <tr><th>schema_sources</th><td><em>none</em></td></tr>
+        
+        <tr><th>enforcement</th><td>enforcing</td></tr>
+        
+      </tbody>
+    </table>
+        
+      </div>
+    </details>
+    
+    
+
+    <footer>Generated by regis 0.42.0 on 2026-10-17 11:26 UTC</footer>
+  </main>
+</div>
+</body>
+</html>
