@@ -249,7 +249,7 @@ wheels = [
 
 [[package]]
 name = "uske"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },

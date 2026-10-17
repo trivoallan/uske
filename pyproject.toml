@@ -1,6 +1,6 @@
 [project]
 name = "uske"
-version = "0.9.0"
+version = "0.9.1"
 description = "Beats time between regis, which says whether, and knock, which does — and records."
 readme = "README.md"
 license = "Apache-2.0"
