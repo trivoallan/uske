@@ -129,7 +129,7 @@
 
 - [x] 5.1 Écrire les pages du plan de documentation. Lancer la vérification des ADR et l'aligner
   sur `docs/adr/SDR-0021-screen-et-repartition.md` une fois son verdict reçu.
-- [ ] 5.2 Relire `review.md` : chaque finding de sévérité haute a sa tâche cochée.
-- [ ] 5.3 `openspec validate screen-and-policy-fan-out --type change --strict`. Attendu :
+- [x] 5.2 Relire `review.md` : chaque finding de sévérité haute a sa tâche cochée.
+- [x] 5.3 `openspec validate screen-and-policy-fan-out --type change --strict`. Attendu :
   `Change 'screen-and-policy-fan-out' is valid`.
-- [ ] 5.4 Commit : `docs: dire le verbe screen et la répartition par politique`.
+- [x] 5.4 Commit : `docs: dire le verbe screen et la répartition par politique`.
