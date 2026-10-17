@@ -120,25 +120,40 @@ regis. *Écarté* : une fois par jour à 03:17 UTC (revue, D6).
 
 ### D4 — Ce que fait `regis-analyze`
 
-Avant regis, le conteneur déballe l'archive s'il l'a reçue, puis la supprime :
+Le pod porte un seul volume, un `emptyDir` de 6 Gi monté en `/grype` (ce n'est pas un volume
+persistant : SDR-0021 tient). L'archive y arrive à `/grype/current.tar.zst`. Hors d'un volume, un
+artefact d'entrée est monté par `subPath` depuis le disque de l'init container : `rm` échouerait
+(EBUSY) et ne libérerait rien. Avant regis, le conteneur déballe l'archive s'il l'a reçue, puis la
+supprime ; un déballage raté n'arrête pas l'étape :
 
 ```sh
-if [ -f /tmp/grype-db.tar.zst ]; then
-  python3 -c "import tarfile; tarfile.open('/tmp/grype-db.tar.zst', 'r:zst').extractall('/tmp/grype-db', filter='data')"
-  rm -f /tmp/grype-db.tar.zst
+if [ -f /grype/current.tar.zst ]; then   # -f, pas -e : un artefact facultatif absent peut devenir un dossier vide
+  python3 - <<'PY' || rm -rf /grype/db
+import sys, tarfile
+try:
+    tarfile.open('/grype/current.tar.zst', 'r:zst').extractall('/grype/db', filter='data')
+except Exception as e:
+    print(f"grype-db: the database could not be unpacked: {type(e).__name__}: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+  rm -f /grype/current.tar.zst
 fi
 ```
+
+Le téléchargement de ~500 Mo est fait par l'init container : `regis-analyze` a sa propre
+`retryStrategy` (`retryPolicy: Always`, même limite et même attente), car `OnFailure` ne rejoue
+pas un échec d'init.
 
 Puis regis tourne avec quatre variables :
 
 | Variable | Valeur | Effet |
 |---|---|---|
-| `GRYPE_DB_CACHE_DIR` | `/tmp/grype-db` | lire la base déballée |
+| `GRYPE_DB_CACHE_DIR` | `/grype/db` | lire la base déballée |
 | `GRYPE_DB_AUTO_UPDATE` | `false` | ne jamais télécharger pendant une évaluation |
 | `GRYPE_DB_MAX_ALLOWED_BUILT_AGE` | `48h` | refuser de scanner avec une base trop vieille |
 | `GRYPE_CHECK_FOR_APP_UPDATE` | `false` | ne pas demander à Anchore si grype a une version plus récente (revue, D8) |
 
-Sans archive, `/tmp/grype-db` reste vide. grype échoue alors faute de base, comme avec une base
+Sans archive, `/grype/db` reste vide. grype échoue alors faute de base, comme avec une base
 trop vieille : regis range l'erreur dans le résultat `cve` et sort en 0. La règle `cve-critical`
 reste *incomplete* ; dans le régime complet, `uske` consigne *inconclusive* (D-23). Dans le régime
 allégé, la décision ne lit pas la CVE (D-05). `uske` n'ajoute aucune vérification.
@@ -160,8 +175,9 @@ banc prêt. Après une pause du banc de plus de 48 h, on relance ce remplissage 
 
 - [Chaque pod `regis-analyze` occupe ~3,8 Go de stockage éphémère, l'archive puis la base] → les
   deux plafonds de `uske-screening` bornent le nombre de pods simultanés. L'overlay de production
-  doit vérifier que ses nœuds ont ce disque par pod en parallèle. L'archive est supprimée dès
-  qu'elle est déballée.
+  doit vérifier que ses nœuds ont ce disque par pod en parallèle. Le volume est un `emptyDir`
+  borné à 6 Gi ; l'archive y est supprimée dès qu'elle est déballée (c'est possible parce qu'elle
+  est sur ce volume).
 - [Chaque évaluation lit ~531 Mo du dépôt d'artefacts, puis déballe 3,25 Go (13 s mesurées sur un
   poste)] → c'est le prix de SDR-0021. Le gain reste net : ~20 s au lieu de ~140 s.
 - [Une base altérée dans le dépôt d'artefacts produit de faux verdicts sains dans toute la flotte]

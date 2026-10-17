@@ -132,8 +132,21 @@ class Manifests(unittest.TestCase):
         """review I3, M5: per-child archives; no policy named `out` or `done` meets another key."""
         name = "{{workflow.parameters.name}}"
         found = keys(self.base["uske-policy"]) + keys(self.base["uske-screening"])
-        # the one key outside `runs/`: the database the refresh distributes, read by every step
-        shared = "grype-db/current.tar.zst"
+        # the one key outside `runs/`: the database the refresh distributes, read by regis-analyze
+        refresh = yaml.safe_load(
+            (ROOT / "deploy" / "base" / "grype-db.yaml").read_text().split("\n---\n")[0]
+        )
+        (shared,) = [k for k in keys(refresh) if k.endswith(".tar.zst")]
+        readers = [
+            t["name"]
+            for doc in ("uske-policy", "uske-screening")
+            for t in self.base[doc]["spec"]["templates"]
+            if shared in keys(t.get("inputs"))
+        ]
+        self.assertEqual(readers, ["regis-analyze"])
+        for doc in ("uske-policy", "uske-screening"):
+            for t in self.base[doc]["spec"]["templates"]:
+                self.assertNotIn(shared, keys(t.get("outputs")))
         for key in (k for k in found if k != shared):
             with self.subTest(key=key):
                 self.assertTrue(key.startswith("runs/{{workflow."), key)

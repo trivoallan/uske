@@ -265,7 +265,7 @@ class RegisAnalyze(unittest.TestCase):
             for a in self.template["inputs"]["artifacts"]
             if a.get("name") == "grype-db"
         ]
-        self.assertEqual(db["path"], "/tmp/grype-db.tar.zst")
+        self.assertEqual(db["path"], "/grype/current.tar.zst")
         self.assertTrue(db["optional"])
         self.assertEqual(db["archive"], {"none": {}})
         self.assertEqual(db["s3"], {"key": ARCHIVE})
@@ -276,7 +276,7 @@ class RegisAnalyze(unittest.TestCase):
         self.assertEqual(
             env,
             {
-                "GRYPE_DB_CACHE_DIR": "/tmp/grype-db",
+                "GRYPE_DB_CACHE_DIR": "/grype/db",
                 "GRYPE_DB_AUTO_UPDATE": "false",
                 "GRYPE_DB_MAX_ALLOWED_BUILT_AGE": "48h",
                 "GRYPE_CHECK_FOR_APP_UPDATE": "false",
@@ -290,8 +290,24 @@ class RegisAnalyze(unittest.TestCase):
         resources = self.container["resources"]
         self.assertEqual(resources["requests"]["ephemeral-storage"], "5Gi")
         self.assertEqual(resources["limits"]["ephemeral-storage"], "6Gi")
-        self.assertNotIn("volumes", self.template)
-        self.assertNotIn("volumeMounts", self.container)
+        self.assertEqual(
+            self.template["volumes"],
+            [{"name": "grype", "emptyDir": {"sizeLimit": "6Gi"}}],
+        )
+        self.assertEqual(
+            self.container["volumeMounts"], [{"name": "grype", "mountPath": "/grype"}]
+        )
+
+    def test_a_failed_artifact_fetch_is_retried(self) -> None:
+        """OnFailure would not retry the init container that downloads the archive."""
+        self.assertEqual(
+            self.template["retryStrategy"],
+            {
+                "limit": "2",
+                "retryPolicy": "Always",
+                "backoff": {"duration": "10s", "factor": "2"},
+            },
+        )
 
     def test_the_archive_is_unpacked_with_the_safe_filter_before_regis(self) -> None:
         self.assertIn("r:zst", self.script)
@@ -299,13 +315,15 @@ class RegisAnalyze(unittest.TestCase):
         self.assertLess(self.script.index("r:zst"), self.script.index("regis analyze"))
 
     def run_step(self, archive: bytes | None):
-        """The script with `/tmp` redirected to a temp dir, regis being the fake."""
+        """The script with `/grype` and `/tmp` redirected to a temp dir, regis being the fake."""
         root = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: shutil.rmtree(root, ignore_errors=True))
+        (root / "grype").mkdir()
         if archive is not None:
-            (root / "grype-db.tar.zst").write_bytes(archive)
+            (root / "grype" / "current.tar.zst").write_bytes(archive)
         script = (
-            self.script.replace("/tmp/", f"{root}/")
+            self.script.replace("/grype/", f"{root}/grype/")
+            .replace("/tmp/", f"{root}/")
             .replace("{{inputs.parameters.target}}", "reg.test/app@sha256:aa")
             .replace("{{inputs.parameters.playbook}}", "playbook.yaml")
         )
@@ -321,31 +339,12 @@ class RegisAnalyze(unittest.TestCase):
         )
         return proc, root
 
-    def assertRegisRan(self, proc, root: Path) -> None:
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertTrue((root / "report" / "report.json").exists())
-        self.assertIn("regis analyze", (root / "calls").read_text().replace("'", ""))
-
-    def test_without_an_archive_regis_still_runs(self) -> None:
-        """*Aucune base distribuée*: regis reports the missing database itself."""
-        proc, root = self.run_step(None)
-        self.assertRegisRan(proc, root)
-        self.assertFalse((root / "grype-db").exists())
-
-    def test_a_corrupt_archive_is_removed_and_regis_still_runs(self) -> None:
-        proc, root = self.run_step(b"not a zstd archive")
-        self.assertRegisRan(proc, root)
-        self.assertFalse((root / "grype-db").exists())
-        self.assertFalse((root / "grype-db.tar.zst").exists())
-        self.assertIn("could not be unpacked", proc.stderr)
-
-    @needs_zstd
-    def test_a_valid_archive_is_unpacked_then_deleted_before_regis(self) -> None:
-        """*Deux évaluations entre deux rafraîchissements jugent avec la même base*."""
+    def pack(self) -> bytes:
+        """A database archive (`6/vulnerability.db`, incompressible), packed by the PATH's python3."""
         src = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: shutil.rmtree(src, ignore_errors=True))
         (src / "6").mkdir()
-        (src / "6" / "vulnerability.db").write_text("db")
+        (src / "6" / "vulnerability.db").write_bytes(os.urandom(300_000))
         packed = src.parent / f"{src.name}.tar.zst"
         self.addCleanup(lambda: packed.unlink(missing_ok=True))
         subprocess.run(
@@ -361,17 +360,48 @@ class RegisAnalyze(unittest.TestCase):
             ],
             check=True,
         )
-        proc, root = self.run_step(packed.read_bytes())
+        return packed.read_bytes()
+
+    def assertRegisRan(self, proc, root: Path) -> None:
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue((root / "report" / "report.json").exists())
+        self.assertIn("regis analyze", (root / "calls").read_text().replace("'", ""))
+
+    def test_without_an_archive_regis_still_runs(self) -> None:
+        """*Aucune base distribuée*: regis reports the missing database itself."""
+        proc, root = self.run_step(None)
         self.assertRegisRan(proc, root)
-        self.assertEqual(
-            (root / "grype-db" / "6" / "vulnerability.db").read_text(), "db"
-        )
-        self.assertFalse((root / "grype-db.tar.zst").exists())
+        self.assertFalse((root / "grype" / "db").exists())
+
+    def test_a_corrupt_archive_is_removed_and_regis_still_runs(self) -> None:
+        proc, root = self.run_step(b"not a zstd archive")
+        self.assertRegisRan(proc, root)
+        self.assertFalse((root / "grype" / "db").exists())
+        self.assertFalse((root / "grype" / "current.tar.zst").exists())
+        self.assertIn("grype-db: the database could not be unpacked: ", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
+    @needs_zstd
+    def test_a_truncated_archive_leaves_no_partial_database(self) -> None:
+        archive = self.pack()
+        proc, root = self.run_step(archive[: len(archive) * 2 // 3])
+        self.assertRegisRan(proc, root)
+        self.assertFalse((root / "grype" / "db").exists())
+        self.assertFalse((root / "grype" / "current.tar.zst").exists())
+        self.assertNotIn("Traceback", proc.stderr)
+
+    @needs_zstd
+    def test_a_valid_archive_is_unpacked_then_deleted_before_regis(self) -> None:
+        """*Deux évaluations entre deux rafraîchissements jugent avec la même base*."""
+        proc, root = self.run_step(self.pack())
+        self.assertRegisRan(proc, root)
+        self.assertTrue((root / "grype" / "db" / "6" / "vulnerability.db").exists())
+        self.assertFalse((root / "grype" / "current.tar.zst").exists())
         seen = json.loads((root / "env.json").read_text())
         self.assertEqual(seen["GRYPE_DB_AUTO_UPDATE"], "false")
         self.assertEqual(seen["GRYPE_DB_MAX_ALLOWED_BUILT_AGE"], "48h")
         self.assertEqual(seen["GRYPE_CHECK_FOR_APP_UPDATE"], "false")
-        self.assertEqual(seen["GRYPE_DB_CACHE_DIR"], "/tmp/grype-db")
+        self.assertEqual(seen["GRYPE_DB_CACHE_DIR"], "/grype/db")
 
 
 if __name__ == "__main__":
