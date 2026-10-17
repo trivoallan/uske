@@ -612,10 +612,10 @@ Renovate le suivra.
 
 ## 4. Version écrite par Release Please, et étiquette mobile
 
-- [ ] 4.1 Dans `release-please-config.json`, ajouter au paquet `"."` :
+- [x] 4.1 Dans `release-please-config.json`, ajouter au paquet `"."` :
   `"extra-files": [{"type": "generic", "path": ".github/workflows/extra-screen.yml"}]`. Le
   marqueur `# x-release-please-version` de la ligne `USKE_VERSION` fait le reste.
-- [ ] 4.2 Créer `.github/workflows/extra-major-tag.yml` :
+- [x] 4.2 Créer `.github/workflows/extra-major-tag.yml` :
   ```yaml
   # Déplace l'étiquette mobile vers chaque version publiée (change github-action, D6) :
   # v<majeure>.<mineure> en 0.x, v<majeure> à partir de 1.0. Hors du socle : release.yml ne change pas.
@@ -654,10 +654,10 @@ Renovate le suivra.
             git tag -f "$TAG" "$SHA"
             git -c "http.extraheader=$auth" push -f origin "refs/tags/$TAG"
   ```
-- [ ] 4.3 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
+- [x] 4.3 Lancer : `uv run python -m pytest --no-cov -q tests/test_screen_workflow.py`.
   Attendu : `21 passed`.
-- [ ] 4.4 Lancer : `actionlint .github/workflows/extra-major-tag.yml`. Attendu : aucune sortie.
-- [ ] 4.5 Commit : `feat: suivre chaque version par une étiquette mobile du workflow GitHub`.
+- [x] 4.4 Lancer : `actionlint .github/workflows/extra-major-tag.yml`. Attendu : aucune sortie.
+- [x] 4.5 Commit : `feat: suivre chaque version par une étiquette mobile du workflow GitHub`.
 
 ## 5. Le banc : un appelant d'exemple, rejoué sur GitHub
 
