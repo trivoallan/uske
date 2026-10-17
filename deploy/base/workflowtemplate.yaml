@@ -11,9 +11,18 @@
 #
 # The children share no volume: a child's work travels from step to step as the artifact `work`,
 # in the namespace's artifact repository, and it judges on a copy of its policy's journal. Only
-# the merge mounts `uske-results` to write it (the parent's snapshot reads it), so the storage
-# stays ReadWriteOnce. Two ceilings, set by the overlay: the parent's `parallelism` (policies at
-# a time) and the child's (steps at a time, so judgements).
+# the parent's snapshot and merge mount `uske-results`: the merge appends the lines, the snapshot
+# only leaves its mark, `.pending-merge/<run>`, which the merge clears. So the storage stays
+# ReadWriteOnce. Two ceilings, set by the overlay: the parent's `parallelism` (policies at a time)
+# and the child's (steps at a time, so judgements).
+#
+# Keys in the artifact repository, under `runs/<run>/`: a policy's name always comes after a fixed
+# directory, so no name collides with another key: `snapshot.tgz`, `listed.json` and
+# `expected.json` (the parent's), `out/<policy>/<created>-<child>.tgz` (each child's new lines,
+# read whole by the merge), `done/<policy>` (each succeeded child, read whole by the summary), and
+# `policies/<policy>/<child>/…` (what a child passes between its own steps).
+#
+# No token ever reaches a disk: git gets it as a header for one command, never in a remote URL.
 # Change `socle-amorce-orchestrateur`, design decisions 3 and 6 to 10.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
@@ -24,6 +33,11 @@ spec:
   entrypoint: screening
   parallelism: 1  # ceiling: policies at a time
   artifactRepositoryRef: {configMap: artifact-repositories, key: default-v1}
+  # The snapshot, the list and the expected names go with the parent. The children's lines and
+  # done marks are kept (`strategy: Never`): a bucket lifecycle rule on `runs/` removes them.
+  artifactGC:
+    strategy: OnWorkflowDeletion
+    serviceAccountName: uske
   arguments:
     parameters:
       - name: repository  # host/path of this repository, set by the overlay
@@ -54,16 +68,15 @@ spec:
         - - name: checkout
             template: checkout
         - - name: list
-            template: uske
-            arguments:
-              parameters:
-                - name: args
-                  value: list --policies /work/repo/{{workflow.parameters.policies}}
-        - - name: snapshot
+            template: list
+        - - name: snapshot  # fails while another screening's merge is pending
             template: snapshot
             arguments:
-              parameters:
-                - {name: policies, value: "{{steps.list.outputs.result}}"}
+              artifacts:
+                - {name: listed, from: "{{steps.list.outputs.artifacts.listed}}"}
+        # withParam needs the list as a parameter; the parent's node status at 10,000 policies
+        # is for the spike to measure. No other step gets a list as a parameter: past ~1,300
+        # policies, it would outgrow what an environment variable holds.
         - - name: policy
             template: policy
             withParam: "{{steps.snapshot.outputs.result}}"
@@ -86,10 +99,9 @@ spec:
             when: "{{steps.policy.status}} != Skipped"
             arguments:
               parameters:
-                - {name: expected, value: "{{steps.snapshot.outputs.result}}"}
-                # Succeeded children only: a failed one has no outputs, so it is missing here.
-                - {name: done, value: "{{steps.policy.outputs.parameters}}"}
                 - {name: merge, value: "{{steps.merge.status}}"}
+              artifacts:
+                - {name: expected, from: "{{steps.snapshot.outputs.artifacts.expected}}"}
           - name: merge-failed  # no policy, so no summary: the merge must still be seen
             template: fail
             when: "{{steps.policy.status}} == Skipped && {{steps.merge.status}} != Succeeded"
@@ -109,10 +121,13 @@ spec:
         image: git
         command: [sh, -c]
         # The commit, not the branch: every child judges with this screening's policies (D7).
+        # The token goes as a header to this one command: never in the remote URL, so never in
+        # /work/repo/.git/config.
         args:
           - >-
             rm -rf /work/repo &&
-            git clone --depth 1 "https://oauth2:${TOKEN}@{{workflow.parameters.repository}}" /work/repo &&
+            git -c http.extraHeader="Authorization: Basic $(printf 'oauth2:%s' "$TOKEN" | base64 | tr -d '\n')"
+            clone -q --depth 1 "https://{{workflow.parameters.repository}}" /work/repo &&
             git -C /work/repo rev-parse HEAD > /tmp/commit
         env:
           - name: TOKEN
@@ -125,62 +140,63 @@ spec:
           - name: commit
             valueFrom: {path: /tmp/commit}
 
-    - name: uske
+    - name: list  # to a file: the list grows with the policies, past what a parameter holds
       retryStrategy: *retry
-      inputs:
-        parameters:
-          - name: args
       container:
         image: uske
         command: [sh, -c]
-        args: ["python -m uske {{inputs.parameters.args}}"]
+        args: ["python -m uske list --policies /work/repo/{{workflow.parameters.policies}} > /tmp/listed.json"]
         workingDir: /app
         volumeMounts:
           - {name: work, mountPath: /work}
+      outputs:
+        artifacts:
+          - name: listed
+            path: /tmp/listed.json
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.name}}/listed.json"}
 
-    # The journals as they stand, for the children to judge on (D9), and each policy's line
-    # count, which `uske export` skips. Under the merge's lock: never a half-merged journal.
+    # The journals as they stand, for the children to judge on (D9), each policy's line count,
+    # which `uske export` skips, and the names the summary expects. It leaves the mark
+    # `.pending-merge/<run>` beside the journals and fails on another run's: the next screening
+    # never judges on a journal whose merge failed (D12). Under the merge's lock: never a
+    # half-merged journal.
     - name: snapshot
       retryStrategy: *retry
       synchronization:
         mutexes:
           - name: uske-journal
       inputs:
-        parameters:
-          - name: policies  # uske list's output
+        artifacts:
+          - {name: listed, path: /tmp/listed.json}
       volumes:
         - name: results
           persistentVolumeClaim: {claimName: uske-results}
-      script:
+      container:
         image: uske
-        command: [python]
-        env:
-          - {name: POLICIES, value: "{{inputs.parameters.policies}}"}
-        source: |
-          import json, os, shutil
-          from pathlib import Path
-
-          out = Path("/tmp/snapshot")
-          out.mkdir(parents=True, exist_ok=True)
-          for journal in Path("/results").glob("*.jsonl"):
-              shutil.copyfile(journal, out / journal.name)
-          listed = json.loads(os.environ["POLICIES"])
-          for policy in listed:
-              copy = out / f"{policy['name']}.jsonl"
-              # Non-blank lines, as results.read counts them: what the child's export skips.
-              text = copy.read_text("utf-8") if copy.exists() else ""
-              policy["lines"] = sum(1 for line in text.split("\n") if line.strip())
-          print(json.dumps(listed))
+        command: [python, -m, uske]
+        args:
+          - snapshot
+          - --listed=/tmp/listed.json
+          - --results=/results
+          - --out=/tmp/snapshot
+          - --expected=/tmp/expected.json
+          - --run={{workflow.name}}
+        workingDir: /app
         volumeMounts:
-          - {name: results, mountPath: /results, readOnly: true}
+          - {name: results, mountPath: /results}  # written: the mark only
       outputs:
         artifacts:
           - name: snapshot
             path: /tmp/snapshot
             s3: {key: "runs/{{workflow.name}}/snapshot.tgz"}
+          - name: expected
+            path: /tmp/expected.json
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.name}}/expected.json"}
 
     # One child per policy, owned by this screening: deleting it deletes them (D7). The resource
-    # step fails with its child; the child's name is an output only when it succeeded.
+    # step fails with its child.
     - name: policy
       inputs:
         parameters: [{name: name}, {name: path}, {name: snapshot-lines}, {name: commit}]
@@ -212,13 +228,10 @@ spec:
                 - {name: run, value: "{{workflow.name}}"}
                 - {name: snapshot-lines, value: "{{inputs.parameters.snapshot-lines}}"}
                 - {name: merge, value: "false"}
-      outputs:
-        parameters:
-          - name: name
-            valueFrom: {jsonPath: '{.metadata.labels.uske\.io/policy}'}
 
-    # The only writer of the journals: every child's last `lines` artifact, appended by the
-    # rule of `uske record`. Replayed by `argo retry`, it appends nothing (D12).
+    # The only writer of the journals: every child's `lines` archives, a policy's in the order its
+    # children were created, appended by the rule of `uske record`; then the snapshot's mark goes.
+    # Replayed by `argo retry`, it appends nothing (D12).
     - name: merge
       retryStrategy: *retry
       synchronization:
@@ -226,7 +239,7 @@ spec:
           - name: uske-journal
       inputs:
         artifacts:
-          - name: lines  # one <policy>.tgz per child that wrote a line; none at all is fine
+          - name: lines  # <policy>/<created>-<child>.tgz per child that wrote; none at all is fine
             path: /tmp/out
             optional: true
             archive: {none: {}}
@@ -237,26 +250,35 @@ spec:
       container:
         image: uske
         command: [sh, -c]
-        args: ["python -m uske merge --results /results --from /tmp/out"]
+        args: ["python -m uske merge --results /results --from /tmp/out --pending {{workflow.name}}"]
         workingDir: /app
         volumeMounts:
           - {name: results, mountPath: /results}
 
-    - name: summary  # fails naming the failed policies, or a failed merge
+    # Fails naming the failed policies, or a failed merge. A policy is done when its child left
+    # `runs/<run>/done/<policy>`: a child that failed, erred or was never created left nothing.
+    - name: summary
       inputs:
-        parameters: [{name: expected}, {name: done}, {name: merge}]
+        parameters: [{name: merge}]
+        artifacts:
+          - {name: expected, path: /tmp/expected.json}  # the snapshot's list of names
+          - name: done
+            path: /tmp/done
+            optional: true
+            archive: {none: {}}
+            s3: {key: "runs/{{workflow.name}}/done/"}
       script:
         image: uske
         command: [python]
         env:
-          - {name: EXPECTED, value: "{{inputs.parameters.expected}}"}
-          - {name: DONE, value: "{{inputs.parameters.done}}"}
           - {name: MERGE, value: "{{inputs.parameters.merge}}"}
         source: |
           import json, os, sys
+          from pathlib import Path
 
-          done = {child.get("name") for child in json.loads(os.environ["DONE"])}
-          expected = [policy["name"] for policy in json.loads(os.environ["EXPECTED"])]
+          marks = Path("/tmp/done")
+          done = {p.name for p in marks.iterdir() if p.is_file()} if marks.is_dir() else set()
+          expected = json.loads(Path("/tmp/expected.json").read_text("utf-8"))
           failed = [name for name in expected if name not in done]
           merge = os.environ["MERGE"]
           print(json.dumps({"policies": len(expected), "failed": failed, "merge": merge}))
@@ -286,6 +308,11 @@ spec:
   entrypoint: main
   parallelism: 1  # ceiling: steps at a time in a child, so judgements at a time
   artifactRepositoryRef: {configMap: artifact-repositories, key: default-v1}
+  # A child's work goes with it, a day after it ends (ttlStrategy). What the parent still reads,
+  # its `lines` archives and its done mark, is kept (`strategy: Never` on those outputs).
+  artifactGC:
+    strategy: OnWorkflowDeletion
+    serviceAccountName: uske
   # One writer per policy, across every screening of the namespace.
   synchronization:
     mutexes:
@@ -328,8 +355,12 @@ spec:
             arguments:
               parameters:
                 - {name: message, value: "the policy {{workflow.parameters.name}} failed"}
+          - name: done  # what the parent's summary counts: no mark, a failed policy
+            template: done
+            when: "{{steps.policy.status}} == Succeeded"
 
-    # Every step takes the artifact `work` from the one before and hands its own on. The steps
+    # Every step takes the artifact `work` from the last step that changed it and hands its own on;
+    # `pending` and `resolve` only read it, and hand nothing on. The steps
     # that write lines also return `lines`, uploaded before the next step starts: a decision is
     # durable before the placement it allows, and a failed upload fails the step (D9).
     - name: policy
@@ -357,7 +388,7 @@ spec:
               artifacts:
                 - {name: work, from: "{{steps.prepare.outputs.artifacts.work}}"}
         - - name: pending
-            template: uske
+            template: uske-read
             arguments:
               parameters:
                 - name: args
@@ -367,7 +398,7 @@ spec:
               artifacts:
                 - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
           - name: resolve
-            template: uske
+            template: uske-read
             arguments:
               parameters:
                 - name: args
@@ -387,7 +418,7 @@ spec:
                 - {name: key, value: "{{item.key}}"}
                 - {name: track, value: "{{=jsonpath(steps.resolve.outputs.result, '$.track') ?? ''}}"}
               artifacts:
-                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+                - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
           - name: unevaluated  # unknown regime: never sent to regis (D-21)
             template: classify
             withParam: "{{steps.pending.outputs.result}}"
@@ -399,7 +430,7 @@ spec:
                 - {name: key, value: "{{item.key}}"}
                 - {name: digest, value: "{{item.digest}}"}
               artifacts:
-                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+                - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
         - - name: record
             template: record-judged
             arguments:
@@ -409,7 +440,7 @@ spec:
                     record --policy {{workflow.parameters.path}} --results /work/results
                     --lines /tmp/judged/lines
               artifacts:
-                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+                - {name: work, from: "{{steps.plan.outputs.artifacts.work}}"}
         - - name: approve
             template: uske
             arguments:
@@ -481,7 +512,7 @@ spec:
                     --run "{{workflow.parameters.run}}"
               artifacts:
                 - name: work  # whichever apply ran left it there; a failed one too
-                  s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/placed.tgz"}
+                  s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/placed.tgz"}
         - - name: second-gate  # ordered > 0 implies approved > 0: record-applied ran
             template: staged
             when: "{{=jsonpath(steps.approve.outputs.result, '$.ordered') > 0}}"
@@ -560,7 +591,7 @@ spec:
           - name: work
       steps:
         - - name: pending
-            template: uske
+            template: uske-read
             arguments:
               parameters:
                 - name: args
@@ -584,7 +615,7 @@ spec:
                 - {name: epoch, value: "{{item.epoch}}"}
                 - {name: lines, value: staged-lines}
               artifacts:
-                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+                - {name: work, from: "{{inputs.artifacts.work}}"}
         - - name: record
             template: record-judged
             arguments:
@@ -595,7 +626,7 @@ spec:
                     --lines /tmp/judged/lines
                 - {name: lines, value: staged-lines}
               artifacts:
-                - {name: work, from: "{{steps.pending.outputs.artifacts.work}}"}
+                - {name: work, from: "{{inputs.artifacts.work}}"}
         - - name: approve
             template: uske
             arguments:
@@ -650,14 +681,17 @@ spec:
       container:
         image: git
         command: [sh, -c]
-        # The parent's commit, not the branch head (D7). .git goes: it holds the token, and
-        # every step would carry it to the artifact repository.
+        # The parent's commit, not the branch head (D7). The token goes as a header to the fetch
+        # alone, never into .git/config; and .git goes whatever the exit code, since Argo saves
+        # `work` to the artifact repository even when this step fails.
         args:
           - >-
+            trap 'rm -rf /work/repo/.git' EXIT;
             git init -q /work/repo && cd /work/repo &&
-            git remote add origin "https://oauth2:${TOKEN}@{{workflow.parameters.repository}}" &&
-            git fetch -q --depth 1 origin "{{workflow.parameters.commit}}" &&
-            git checkout -q FETCH_HEAD && rm -rf /work/repo/.git &&
+            git remote add origin "https://{{workflow.parameters.repository}}" &&
+            git -c http.extraHeader="Authorization: Basic $(printf 'oauth2:%s' "$TOKEN" | base64 | tr -d '\n')"
+            fetch -q --depth 1 origin "{{workflow.parameters.commit}}" &&
+            git checkout -q FETCH_HEAD &&
             mkdir -p /work/results &&
             if [ -f "/tmp/snapshot/{{workflow.parameters.name}}.jsonl" ]; then
               cp "/tmp/snapshot/{{workflow.parameters.name}}.jsonl" /work/results/;
@@ -690,7 +724,8 @@ spec:
           - *work-out
 
     # A step that appends to the journal's copy, then exports every line past the snapshot with
-    # the reports they cite. The key is fixed, so the last export holds all of them (D9).
+    # the reports they cite. The key is this child's, so its last export holds all its lines, and a
+    # re-created or resubmitted child adds its own archive, after this one by creation time (D9).
     - name: record
       retryStrategy: *child-retry
       inputs:
@@ -714,7 +749,8 @@ spec:
             name: lines
             path: /tmp/lines.tgz
             archive: {none: {}}  # already an archive, read as such by `uske merge`
-            s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}.tgz"}
+            artifactGC: {strategy: Never}  # the parent's merge reads it after this child is gone
+            s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}/{{workflow.creationTimestamp.Y}}{{workflow.creationTimestamp.m}}{{workflow.creationTimestamp.d}}T{{workflow.creationTimestamp.H}}{{workflow.creationTimestamp.M}}{{workflow.creationTimestamp.S}}Z-{{workflow.name}}.tgz"}
 
     # `record` after a fan-out: its lines and reports, read back by prefix as directories. The
     # child's own name in the key keeps a resubmitted child from reading the first one's lines.
@@ -730,12 +766,12 @@ spec:
             path: /tmp/judged/lines
             optional: true
             archive: {none: {}}
-            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/"}
+            s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/"}
           - name: reports
             path: /tmp/judged/reports
             optional: true
             archive: {none: {}}
-            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/reports/"}
+            s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/reports/"}
       container:
         image: uske
         command: [sh, -c]
@@ -788,12 +824,12 @@ spec:
           - name: line
             path: /work/{{inputs.parameters.lines}}/{{workflow.parameters.name}}/{{inputs.parameters.key}}.json
             archive: {none: {}}
-            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/{{inputs.parameters.key}}.json"}
+            s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/{{inputs.parameters.lines}}/{{inputs.parameters.key}}.json"}
           - name: report
             path: /work/results/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html
             optional: true
             archive: {none: {}}
-            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html"}
+            s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/reports/{{workflow.parameters.name}}/{{inputs.parameters.digest}}/{{workflow.parameters.run}}.html"}
 
     - name: regis-analyze
       retryStrategy: *child-retry
@@ -854,9 +890,10 @@ spec:
           # whether place or place-staged ran.
           - name: work
             path: /work
-            s3: {key: "runs/{{workflow.parameters.run}}/{{workflow.parameters.name}}/{{workflow.name}}/placed.tgz"}
+            s3: {key: "runs/{{workflow.parameters.run}}/policies/{{workflow.parameters.name}}/{{workflow.name}}/placed.tgz"}
 
-    # A child resubmitted alone merges its own lines, under the parent merge's lock (D12).
+    # A child resubmitted alone merges its policy's lines, every child's of the screening, under
+    # the parent merge's lock (D12). The parent's mark is the parent's to clear.
     - name: merge
       retryStrategy: *child-retry
       synchronization:
@@ -865,10 +902,10 @@ spec:
       inputs:
         artifacts:
           - name: lines
-            path: "/tmp/out/{{workflow.parameters.name}}.tgz"
+            path: "/tmp/out/{{workflow.parameters.name}}"
             optional: true
             archive: {none: {}}
-            s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}.tgz"}
+            s3: {key: "runs/{{workflow.parameters.run}}/out/{{workflow.parameters.name}}/"}
       volumes:
         - name: results
           persistentVolumeClaim: {claimName: uske-results}
@@ -888,3 +925,31 @@ spec:
         image: uske
         command: [sh, -c]
         args: ["echo '{{inputs.parameters.message}}' >&2; exit 1"]
+
+    # Appended last: deploy/kind patches the templates above by index.
+    - name: uske-read  # a step that reads `work` and changes nothing: it hands no `work` on
+      retryStrategy: *child-retry
+      inputs:
+        parameters:
+          - name: args
+        artifacts:
+          - *work-in
+      container:
+        image: uske
+        command: [sh, -c]
+        args: ["python -m uske {{inputs.parameters.args}}"]
+        workingDir: /app
+
+    - name: done  # the parent's summary counts this mark; its absence names a failed policy
+      retryStrategy: *child-retry
+      container:
+        image: uske
+        command: [sh, -c]
+        args: ["echo '{{workflow.name}}' > /tmp/done"]
+      outputs:
+        artifacts:
+          - name: done
+            path: /tmp/done
+            archive: {none: {}}
+            artifactGC: {strategy: Never}  # read by the parent's summary
+            s3: {key: "runs/{{workflow.parameters.run}}/done/{{workflow.parameters.name}}"}

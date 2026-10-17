@@ -7,6 +7,7 @@ it after `argo lint`.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import unittest
@@ -18,19 +19,44 @@ ROOT = Path(__file__).resolve().parent.parent
 JOURNAL = "uske-results"
 
 
-def render(overlay: str) -> dict[str, dict]:
-    """The overlay's WorkflowTemplates, by name."""
+def render_all(overlay: str) -> list[dict]:
     out = subprocess.run(
         ["kubectl", "kustomize", str(ROOT / "deploy" / overlay)],
         check=True,
         capture_output=True,
         text=True,
     ).stdout
+    return [doc for doc in yaml.safe_load_all(out) if doc]
+
+
+def render(overlay: str, kind: str = "WorkflowTemplate") -> dict[str, dict]:
+    """The overlay's objects of `kind`, by name."""
     return {
         doc["metadata"]["name"]: doc
-        for doc in yaml.safe_load_all(out)
-        if doc and doc.get("kind") == "WorkflowTemplate"
+        for doc in render_all(overlay)
+        if doc.get("kind") == kind
     }
+
+
+def shell(template: dict) -> str:
+    """What a template runs: its command, args and script source, as one text."""
+    pod = template.get("container") or template.get("script") or {}
+    parts = pod.get("command", []) + pod.get("args", []) + [pod.get("source", "")]
+    return "\n".join(str(part) for part in parts)
+
+
+def keys(node: object) -> list[str]:
+    """Every `s3.key` under `node`."""
+    if isinstance(node, dict):
+        found = [node["s3"]["key"]] if isinstance(node.get("s3"), dict) else []
+        return found + [k for value in node.values() for k in keys(value)]
+    if isinstance(node, list):
+        return [k for value in node for k in keys(value)]
+    return []
+
+
+# a token in a URL: git writes the remote URL to .git/config, a disk Argo may upload
+TOKEN_IN_URL = re.compile(r"://[^\s\"']*\$\{?TOKEN\b")
 
 
 def mounts(spec: dict, claim: str) -> dict[str, list[dict]]:
@@ -58,14 +84,122 @@ class Manifests(unittest.TestCase):
         cls.kind = render("kind")
 
     def test_only_the_merge_writes_the_journal(self) -> None:
-        """*Le rendu des manifestes*: the merges write uske-results, the snapshot only reads it."""
+        """*Le rendu des manifestes*: only the parent's snapshot and merge mount uske-results."""
         parent = mounts(self.base["uske-screening"]["spec"], JOURNAL)
         child = mounts(self.base["uske-policy"]["spec"], JOURNAL)
         self.assertEqual(set(child), {"merge"})
         self.assertEqual(set(parent), {"merge", "snapshot"})
-        self.assertTrue(all(m.get("readOnly") for m in parent["snapshot"]))
+        # the snapshot writes its mark there (.pending-merge/<run>), the merge clears it
         self.assertFalse(
-            any(m.get("readOnly") for m in parent["merge"] + child["merge"])
+            any(
+                m.get("readOnly")
+                for m in parent["snapshot"] + parent["merge"] + child["merge"]
+            )
+        )
+        templates = {
+            t["name"]: t for t in self.base["uske-screening"]["spec"]["templates"]
+        }
+        self.assertIn("snapshot", templates["snapshot"]["container"]["args"])
+        self.assertIn("--pending {{workflow.name}}", shell(templates["merge"]))
+        child_merge = {
+            t["name"]: t for t in self.base["uske-policy"]["spec"]["templates"]
+        }
+        self.assertNotIn("--pending", shell(child_merge["merge"]))
+
+    def test_no_token_on_disk(self) -> None:
+        """review C1: no remote URL carries the token; the child's .git always goes."""
+        for overlay in (self.base, self.kind):
+            for wt in overlay.values():
+                for template in wt["spec"]["templates"]:
+                    with self.subTest(
+                        template=f"{wt['metadata']['name']}/{template['name']}"
+                    ):
+                        self.assertIsNone(TOKEN_IN_URL.search(shell(template)))
+        templates = {
+            t["name"]: t for t in self.base["uske-policy"]["spec"]["templates"]
+        }
+        checkout = shell(templates["checkout"])
+        self.assertLess(
+            checkout.index("trap 'rm -rf /work/repo/.git' EXIT"), checkout.index("git ")
+        )
+        self.assertIn("http.extraHeader", checkout)
+        parent = {
+            t["name"]: t for t in self.base["uske-screening"]["spec"]["templates"]
+        }
+        self.assertIn("http.extraHeader", shell(parent["checkout"]))
+
+    def test_a_policy_name_always_follows_a_fixed_directory(self) -> None:
+        """review I3, M5: per-child archives; no policy named `out` or `done` meets another key."""
+        name = "{{workflow.parameters.name}}"
+        found = keys(self.base["uske-policy"]) + keys(self.base["uske-screening"])
+        for key in found:
+            with self.subTest(key=key):
+                self.assertTrue(key.startswith("runs/{{workflow."), key)
+                if name in key:
+                    before = key.split(name)[0].rstrip("/").rsplit("/", 1)[-1]
+                    self.assertIn(before, {"out", "done", "policies"})
+        lines = [
+            k for k in found if k.startswith("runs/{{workflow.parameters.run}}/out/")
+        ]
+        self.assertTrue(lines)
+        for key in lines:
+            self.assertTrue(key.endswith(("/", "Z-{{workflow.name}}.tgz")), key)
+
+    def test_artifact_gc(self) -> None:
+        """review I6: a child's work goes with it, what the parent reads is kept."""
+        for name in ("uske-policy", "uske-screening"):
+            gc = self.base[name]["spec"]["artifactGC"]
+            self.assertEqual(gc["strategy"], "OnWorkflowDeletion")
+        kept = {}
+        for template in self.base["uske-policy"]["spec"]["templates"]:
+            for artifact in template.get("outputs", {}).get("artifacts", []):
+                if artifact.get("artifactGC"):
+                    kept[artifact["name"]] = artifact["artifactGC"]["strategy"]
+        self.assertEqual(kept, {"lines": "Never", "done": "Never"})
+        templates = {
+            t["name"]: t for t in self.base["uske-policy"]["spec"]["templates"]
+        }
+        self.assertNotIn("outputs", templates["uske-read"])
+        steps = {
+            step["name"]: step
+            for group in templates["policy"]["steps"] + templates["staged"]["steps"]
+            for step in group
+        }
+        self.assertEqual(steps["pending"]["template"], "uske-read")
+        self.assertEqual(steps["resolve"]["template"], "uske-read")
+        for template in self.base["uske-policy"]["spec"]["templates"]:
+            for group in template.get("steps", []):
+                for step in group:
+                    for art in step.get("arguments", {}).get("artifacts", []):
+                        self.assertNotIn("steps.pending.", art.get("from", ""))
+                        self.assertNotIn("steps.resolve.", art.get("from", ""))
+
+    def test_no_list_is_passed_as_a_parameter(self) -> None:
+        """review I5: an environment string stops at 128 KiB, ~1,300 policies."""
+        aggregate = re.compile(r"\{\{steps\.[^.}]+\.outputs\.(result|parameters)\}\}")
+        for wt in self.base.values():
+            for template in wt["spec"]["templates"]:
+                for group in template.get("steps", []):
+                    for step in group:
+                        for param in step.get("arguments", {}).get("parameters", []):
+                            with self.subTest(step=step["name"], param=param["name"]):
+                                self.assertIsNone(
+                                    aggregate.search(str(param.get("value", "")))
+                                )
+                pod = template.get("container") or template.get("script") or {}
+                for env in pod.get("env", []):
+                    self.assertNotIn("POLICIES", env["name"])
+
+    def test_the_children_role(self) -> None:
+        """review I4: blockOwnerDeletion needs the owner's finalizers."""
+        rules = render("base", "Role")["uske-children"]["rules"]
+        self.assertIn(
+            {
+                "apiGroups": ["argoproj.io"],
+                "resources": ["workflows/finalizers"],
+                "verbs": ["update"],
+            },
+            rules,
         )
 
     def test_no_child_template_holds_a_persistent_volume(self) -> None:
