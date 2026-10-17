@@ -20,6 +20,12 @@ patches:
       - op: add
         path: /spec/suspend
         value: true
+  # The grype database is refilled by hand too (up.sh does it once, grype-db.yaml again after a pause).
+  - target: {kind: CronWorkflow, name: grype-db}
+    patch: |-
+      - op: add
+        path: /spec/suspend
+        value: true
   # JSON 6902 patches reach templates by index only; each one names its template.
   - target: {kind: WorkflowTemplate, name: uske-screening}
     patch: |-

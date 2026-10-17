@@ -278,6 +278,15 @@ class Manifests(unittest.TestCase):
         found = {m["name"] for m in parent["checkout"]["container"]["volumeMounts"]}
         self.assertEqual(found, {"work", "repository"})
 
+    def test_the_bench_suspends_the_grype_db_refresh_and_fills_it_by_hand(self) -> None:
+        crons = render("kind", "CronWorkflow")
+        self.assertTrue(crons["grype-db"]["spec"]["suspend"])
+        hand = yaml.safe_load((ROOT / "deploy" / "kind" / "grype-db.yaml").read_text())
+        self.assertEqual(hand["kind"], "Workflow")
+        self.assertEqual(hand["metadata"]["generateName"], "grype-db-")
+        self.assertEqual(hand["spec"]["workflowTemplateRef"]["name"], "grype-db")
+        self.assertIn("grype-db", self.kind)
+
 
 if __name__ == "__main__":
     unittest.main()

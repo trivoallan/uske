@@ -128,7 +128,7 @@ Dans l'image regis épinglée par `deploy/kind/kustomization.yaml`
 
 ## 4. Le banc kind et la documentation
 
-- [ ] 4.1 Créer `deploy/kind/grype-db.yaml`, un `Workflow` (`generateName: grype-db-`,
+- [x] 4.1 Créer `deploy/kind/grype-db.yaml`, un `Workflow` (`generateName: grype-db-`,
   `workflowTemplateRef: grype-db`) sur le modèle de `deploy/kind/screening.yaml`. Dans
   `deploy/kind/kustomization.yaml`, suspendre le `CronWorkflow` `grype-db` par le même patch que
   le `CronWorkflow` `uske` (D9). Dans `deploy/kind/up.sh`, avant `echo "Ready. Start a screening:"`,
