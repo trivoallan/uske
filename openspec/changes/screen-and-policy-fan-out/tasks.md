@@ -127,7 +127,7 @@
 
 ## 5. Documentation et clôture
 
-- [ ] 5.1 Écrire les pages du plan de documentation. Lancer la vérification des ADR et l'aligner
+- [x] 5.1 Écrire les pages du plan de documentation. Lancer la vérification des ADR et l'aligner
   sur `docs/adr/SDR-0021-screen-et-repartition.md` une fois son verdict reçu.
 - [ ] 5.2 Relire `review.md` : chaque finding de sévérité haute a sa tâche cochée.
 - [ ] 5.3 `openspec validate screen-and-policy-fan-out --type change --strict`. Attendu :

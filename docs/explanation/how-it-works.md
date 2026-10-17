@@ -4,8 +4,10 @@ What uske knows, how rebuilds and repairs flow, where decisions live, and where 
 
 ## What it knows
 
-`uske` is not generic glue. It never runs `regis` or `knock` itself: the workflow runs each in its
-own image, by its command line, and `uske` reads the files they write. It knows **Harbor** by its
+`uske` is not generic glue. Its step subcommands never run `regis` or `knock`: the workflow runs
+each in its own image, by its command line, and `uske` reads the files they write. Only
+`uske screen`, which runs a whole screening outside the cluster, runs them itself, by their command
+lines too, and reads nothing else from them than their files and exit codes. It knows **Harbor** by its
 API (`census`: enumerate the registry, subtract what was admitted, count the bypass) and
 **Dependency-Track** (`dt-*`: send the SBOMs `knock` signed, retire what left the registry). The
 track-to-playbook table lives in [`uske/playbooks.py`](../../uske/playbooks.py), and nowhere else.
@@ -44,7 +46,16 @@ An overlay must provide:
   cluster only: elsewhere, restrict who can reach it (mTLS, a NetworkPolicy).
 
 A source is repaired once per plan: if `knock` replans a repaired tag because its transform
-changed, the order is renewed and the new image is judged; the source is not judged again. A
+changed, the order is renewed and the new image is judged; the source is not judged again.
+
+A repair is also renewed on the tag it repaired. When `knock`'s plan marks an operation
+`remediated: true` (the destination tag it replaces carries a repair), `uske` orders a remediation
+again, even when the new source is sound: placed as is, the next upstream patch would silently
+undo the repair, and an image repaired to run without root would run as root again. Without a
+transit, the operation is withheld and its source recorded `inconclusive` (`uske/no-transit`). A
+refused or closed source stays withheld. `uske` never reads the destination to guess: it trusts
+the mark. That needs a `knock` that writes `remediated` in its plan (its current `main`); an older
+one does not write the key, and nothing is renewed. A
 repaired image that is judged and refused closes its source: the
 journal gets a `quarantine` line on the source digest, reason `uske/remediation-refused` (older
 lines say `uske/rebuild-refused`), and that source is not ordered again. An order on an import
@@ -64,7 +75,8 @@ To reopen a source, append one line to the policy's results file, dated when you
 
 The next screening judges it again. The date must be in exactly that format and not older than
 the source's last line, or `uske record` refuses or drops it. The file lives on a volume: writing
-to it takes a throwaway pod.
+to it takes a throwaway pod. A line written while a screening runs can make a child's line on the
+same digest stale: the merge drops that line and says so on stderr.
 
 ## Decisions
 
